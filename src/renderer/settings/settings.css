@@ -110,4 +110,6 @@ input[type=range] { accent-color: var(--accent); width: 170px; }
 .about h1 { font-size: 20px; margin: 0; }
 .about p { color: var(--muted); margin: 4px 0; font-size: 12px; }
 .about .links { display: flex; gap: 8px; justify-content: center; margin: 14px 0 6px; }
+.about p.update { min-height: 16px; }
+.about p.update.available { color: var(--text); font-weight: 600; }
 .about code { font-family: ui-monospace, Menlo, monospace; font-size: 11px; user-select: text; }

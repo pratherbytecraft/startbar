@@ -22,6 +22,7 @@
     ['systemSettings', 'System Settings', '#778ca3'],
     ['settings', 'Startbar Settings', '#4b6584'],
     null,
+    ['update', 'Update Available', '#26de81'],
     ['about', 'About Startbar', '#45aaf2']
   ];
   const POWER = [['sleep', 'Sleep', '#f7b731'], ['logout', 'Log Out', '#e8942a'], ['shutdown', 'Shut Down', '#d9412c']];
@@ -81,6 +82,8 @@
       if (!r) { const s = document.createElement('div'); s.className = 'sep'; rightEl.append(s); continue; }
       const [key, name, color] = r;
       if (key in cols && !cols[key]) continue;
+      // Shown once a check finds a newer version. Opens the About page.
+      if (key === 'update' && !(state.update && state.update.state === 'available')) continue;
       const d = document.createElement('div');
       d.className = 'item';
       const ico = document.createElement('span'); ico.className = 'ico'; ico.style.background = color;

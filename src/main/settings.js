@@ -49,6 +49,9 @@ const DEFAULTS = Object.freeze({
     shortcut: 'Control+Space'
   },
   menuBarIcon: 'hidden', // hidden (only while the bar is hidden) | always
+  updates: {
+    auto: true // check npm for a newer version now and then, never installs
+  },
   accessibilityAsked: false, // the one time Accessibility dialog has been shown
   hideNoteShown: false // the one time note on how to bring a hidden bar back
 });
@@ -97,13 +100,39 @@ function update(patch) {
   return current;
 }
 
-// Back to the defaults. The one time dialogs stay answered.
-function reset() {
+// Only the keys Startbar knows, each with the same kind of value as its
+// default. Guards an imported file.
+function clean(saved, base) {
+  const out = {};
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return out;
+  for (const key of Object.keys(base)) {
+    const b = base[key];
+    const v = saved[key];
+    if (v === undefined) continue;
+    if (Array.isArray(b)) {
+      if (Array.isArray(v)) out[key] = v.filter((x) => typeof x === 'string');
+    } else if (b && typeof b === 'object') {
+      out[key] = clean(v, b);
+    } else if (typeof v === typeof b) {
+      out[key] = v;
+    }
+  }
+  return out;
+}
+
+// Everything from saved, the rest from the defaults, for an import. The one
+// time dialogs stay answered.
+function replace(saved) {
   const { accessibilityAsked, hideNoteShown } = current;
-  current = merge(DEFAULTS, { accessibilityAsked, hideNoteShown });
+  current = merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, hideNoteShown });
   fs.writeFileSync(file, JSON.stringify(current, null, 2) + '\n');
   for (const fn of listeners) fn(current);
   return current;
+}
+
+// Back to the defaults.
+function reset() {
+  return replace({});
 }
 
 function onChange(fn) {
@@ -111,4 +140,4 @@ function onChange(fn) {
   return () => listeners.delete(fn);
 }
 
-module.exports = { DEFAULTS, init, get, update, reset, onChange, dataDir };
+module.exports = { DEFAULTS, init, get, update, replace, reset, onChange, dataDir };

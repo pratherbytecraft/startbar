@@ -452,11 +452,12 @@ function toggleMenu() {
 }
 
 // The settings window is made when it's opened and dropped when it's
-// closed. onClosed runs once it's gone. Startbar comes forward with it:
+// closed, on the page asked for (or the last one). onClosed runs once it's gone. Startbar comes forward with it:
 // without that the window can open in front while another app stays
 // active, and sheets on it (the file pickers) wait until Startbar is.
-function showSettings(onClosed) {
+function showSettings(onClosed, page) {
   if (settingsWin) {
+    if (page) settingsWin.webContents.send('settings:page', page);
     settingsWin.show();
     app.focus({ steal: true });
     settingsWin.focus();
@@ -476,7 +477,7 @@ function showSettings(onClosed) {
     show: false,
     webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
-  settingsWin.loadFile(renderer('settings'));
+  settingsWin.loadFile(renderer('settings'), page ? { hash: page } : undefined);
   settingsWin.once('ready-to-show', () => {
     settingsWin.show();
     app.focus({ steal: true });

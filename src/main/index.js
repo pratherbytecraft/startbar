@@ -2,6 +2,7 @@
 // everything that touches the Mac. Renderers only draw.
 const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu, nativeTheme } = require('electron');
 const { execFile, execFileSync } = require('child_process');
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const settings = require('./settings');
@@ -14,6 +15,7 @@ const tray = require('./tray');
 const pins = require('./pins');
 const dock = require('./dock');
 const files = require('./files');
+const updates = require('./updates');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
@@ -49,6 +51,8 @@ function state() {
     settings: settings.get(),
     pins: pins.get(),
     dock: dockStatus,
+    loginItem: loginItem(),
+    update: updates.get(),
     shortcutError,
     system: system.snapshot(),
     user: userName(),
@@ -87,14 +91,87 @@ function applyAppearance() {
 
 // While the settings window is open Startbar is in the Dock and the app
 // switcher, so the window can't get lost behind other windows.
-function openSettings() {
+function openSettings(page) {
   windows.hideMenu();
   app.setActivationPolicy('regular');
   const fresh = !windows.settings;
-  const win = windows.showSettings(() => app.setActivationPolicy('accessory'));
-  if (fresh) win.on('focus', refreshDock); // the Dock may have changed in System Settings
+  const win = windows.showSettings(() => app.setActivationPolicy('accessory'), typeof page === 'string' ? page : undefined);
+  // The Dock and the login item may have changed in System Settings.
+  if (fresh) win.on('focus', refreshDock);
   app.focus({ steal: true });
   refreshDock();
+}
+
+// Open at login, through macOS's own login items. The switch shows what
+// macOS has, so a change made in System Settings shows here too.
+function loginItem() {
+  try {
+    const { status } = app.getLoginItemSettings({ type: 'mainAppService' });
+    return { on: status === 'enabled' || status === 'requires-approval', needsApproval: status === 'requires-approval' };
+  } catch {
+    return { on: false, needsApproval: false };
+  }
+}
+
+function setLoginItem(on) {
+  try {
+    app.setLoginItemSettings({ openAtLogin: !!on, type: 'mainAppService' });
+  } catch (err) {
+    console.log(`Startbar: could not change the login item: ${err.message}`);
+  }
+  pushState();
+}
+
+// Settings and pins to a file and back. The one time dialogs aren't part of it.
+async function exportSettings() {
+  app.focus({ steal: true });
+  const { canceled, filePath } = await dialog.showSaveDialog(windows.settings, {
+    title: 'Export Settings and Pins',
+    buttonLabel: 'Export',
+    defaultPath: path.join(os.homedir(), 'Documents', 'Startbar Settings.json'),
+    filters: [{ name: 'Startbar settings', extensions: ['json'] }]
+  });
+  if (canceled || !filePath) return;
+  const { accessibilityAsked, hideNoteShown, ...saved } = settings.get();
+  fs.writeFileSync(filePath, JSON.stringify({ startbar: VERSION, settings: saved, pins: pins.get() }, null, 2) + '\n');
+}
+
+async function importSettings() {
+  app.focus({ steal: true });
+  const { canceled, filePaths } = await dialog.showOpenDialog(windows.settings, {
+    title: 'Import Settings and Pins',
+    buttonLabel: 'Import',
+    defaultPath: path.join(os.homedir(), 'Documents'),
+    properties: ['openFile'],
+    filters: [{ name: 'Startbar settings', extensions: ['json'] }]
+  });
+  if (canceled || !filePaths.length) return;
+  let data = null;
+  try {
+    data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
+  } catch {
+    data = null;
+  }
+  if (!data || typeof data.settings !== 'object' || Array.isArray(data.settings)) {
+    await dialog.showMessageBox(windows.settings, {
+      type: 'warning',
+      message: "That file isn't a Startbar settings file",
+      detail: 'Pick a file made with Export on this page.',
+      buttons: ['OK']
+    });
+    return;
+  }
+  const { response } = await dialog.showMessageBox(windows.settings, {
+    type: 'warning',
+    message: 'Replace your settings and pins?',
+    detail: 'Every page here and the pinned apps will match the file. Export first if you want to keep what you have now.',
+    buttons: ['Replace', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1
+  });
+  if (response !== 0) return;
+  settings.replace(data.settings);
+  if (Array.isArray(data.pins)) pins.set(data.pins);
 }
 
 async function refreshDock() {
@@ -398,6 +475,7 @@ function wireIpc() {
       systemSettings: '/System/Applications/System Settings.app'
     };
     if (target === 'about') return showAbout();
+    if (target === 'update') return openSettings('about');
     if (target === 'settings') return openSettings();
     if (places[target]) shell.openPath(places[target]);
   });
@@ -435,6 +513,10 @@ function wireIpc() {
   ipcMain.on('pins:add', () => addPins());
   ipcMain.on('dock:hidden', (_e, hide) => setDockHidden(!!hide));
   ipcMain.on('folders:add', () => addFolders());
+  ipcMain.on('login:set', (_e, on) => setLoginItem(on));
+  ipcMain.on('updates:check', () => updates.check(VERSION));
+  ipcMain.on('settings:export', () => exportSettings());
+  ipcMain.on('settings:import', () => importSettings());
   ipcMain.on('folders:set', (_e, list) => setFolders(list));
   // The shortcut field records keys, so the global shortcut steps aside.
   ipcMain.on('shortcut:pause', () => globalShortcut.unregisterAll());
@@ -496,6 +578,8 @@ app.whenReady().then(() => {
     pushState();
   });
   pins.onChange(pushState);
+  updates.onChange(pushState);
+  updates.schedule(VERSION, () => settings.get().updates.auto);
   system.watch(pushState);
   const relayout = () => {
     windows.layout(settings.get());

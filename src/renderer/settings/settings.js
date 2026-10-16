@@ -162,6 +162,14 @@
       id: 'general', title: 'General', color: '#8e8e93',
       groups: [
         {
+          title: 'Startup',
+          rows: [
+            { label: 'Open Startbar at login', control: { type: 'login' } },
+            { label: 'Check for updates automatically', note: 'Startbar only checks, it never installs anything on its own.',
+              control: { type: 'toggle', key: 'updates.auto' } }
+          ]
+        },
+        {
           title: 'Permissions',
           rows: [
             { label: 'Accessibility', note: 'Needed to read window titles and to bring a window forward when you click its button. Without it the bar shows app icons only.',
@@ -171,6 +179,8 @@
         {
           title: 'Settings',
           rows: [
+            { label: 'Export settings and pins to a file', note: 'Import replaces everything here with what the file has.',
+              control: { type: 'buttons', list: [{ text: 'Export…', click: () => api.exportSettings() }, { text: 'Import…', click: () => api.importSettings() }] } },
             { label: 'Reset everything to the defaults', control: { type: 'button', text: 'Reset…', click: () => api.resetSettings() } }
           ]
         }
@@ -299,6 +309,27 @@
     return b;
   }
 
+  function buttons(c) {
+    const box = node('div', 'ctl-inner');
+    box.style.display = 'contents';
+    box.append(...c.list.map(button));
+    return box;
+  }
+
+  // The login item as macOS has it. A new login item can wait for the
+  // person to allow it in System Settings, which the row says.
+  function login(c, rowEl) {
+    const t = node('div', 'toggle');
+    t.addEventListener('click', () => api.setLoginItem(!state.loginItem.on));
+    const warn = node('small', 'warn hidden', 'macOS is waiting for you to allow Startbar in System Settings, General, Login Items.');
+    rowEl.querySelector('.lbl').append(warn);
+    syncs.push(() => {
+      t.classList.toggle('on', !!state.loginItem.on);
+      warn.classList.toggle('hidden', !state.loginItem.needsApproval);
+    });
+    return t;
+  }
+
   function accessibility() {
     const box = node('div', 'ctl-inner');
     box.style.display = 'contents';
@@ -415,7 +446,7 @@
     return k;
   }
 
-  const CONTROLS = { toggle, seg, select, swatches, range, stepper, button, accessibility, dock, shortcut };
+  const CONTROLS = { toggle, seg, select, swatches, range, stepper, button, buttons, login, accessibility, dock, shortcut };
 
   // Lists of paths drawn inside a group, one row each, drag to reorder:
   // the pinned apps and the folders added to the Start menu.
@@ -520,10 +551,21 @@
     const links = node('div', 'links');
     const kofi = button({ text: 'Support on Ko-fi', click: () => api.openLink('kofi') });
     kofi.classList.add('primary');
-    links.append(kofi, button({ text: 'Report an Issue', click: () => api.openLink('issues') }));
+    links.append(kofi, button({ text: 'Report an Issue', click: () => api.openLink('issues') }), button({ text: 'Check for Updates', click: () => api.checkUpdates() }));
+    const update = node('p', 'update');
+    syncs.push(() => {
+      const u = state.update || { state: 'idle' };
+      update.textContent = {
+        checking: 'Checking…',
+        current: 'Startbar is up to date.',
+        available: `Version ${u.latest} is available. Run the line below, then quit Startbar and open it again.`,
+        failed: "Couldn't reach npm to check. Try again later."
+      }[u.state] || '';
+      update.classList.toggle('available', u.state === 'available');
+    });
     const install = node('p', null, 'Install or update with ');
     install.append(node('code', null, 'npm install -g startbar'));
-    box.append(icon, node('h1', null, 'Startbar'), version, node('p', null, 'A taskbar for macOS. Free to use. Prather Bytecraft.'), links, install);
+    box.append(icon, node('h1', null, 'Startbar'), version, node('p', null, 'A taskbar for macOS. Free to use. Prather Bytecraft.'), links, update, install);
     return box;
   }
 
@@ -635,7 +677,15 @@
 
   pv.addEventListener('load', pushPreview);
   drawNav();
+  // Opened on a page, for example About from the Start menu's update item.
+  const asked = location.hash.slice(1);
+  if (PAGES.some((p) => p.id === asked)) page = asked;
   show(page);
+  api.onSettingsPage((id) => {
+    if (!PAGES.some((p) => p.id === id)) return;
+    queryEl.value = '';
+    show(id);
+  });
   api.getState().then(apply);
   api.onState(apply);
   // The task list comes in a few times a second. Only the permission row uses it.
