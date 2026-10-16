@@ -676,14 +676,14 @@ async function showTaskMenu(target, sender) {
       items.push(
         win.minimized
           ? { label: 'Restore', click: () => send('unminimize', { id: win.id }) }
-          : { label: 'Minimize', click: () => send('minimize', { id: win.id }) },
+          : { label: 'Minimize', click: () => minimize({ cmd: 'minimize', id: win.id }) },
         { label: 'Close', click: () => send('close', { id: win.id }) },
         { type: 'separator' }
       );
     }
   } else if (target.kind === 'group' && Array.isArray(target.ids)) {
     items.push(
-      { label: 'Minimize All', click: () => target.ids.forEach((id) => send('minimize', { id })) },
+      { label: 'Minimize All', click: () => target.ids.forEach((id) => minimize({ cmd: 'minimize', id })) },
       { label: 'Close All', click: () => target.ids.forEach((id) => send('close', { id })) },
       { type: 'separator' }
     );
@@ -693,27 +693,37 @@ async function showTaskMenu(target, sender) {
   popupOnBar(Menu.buildFromTemplate(items), sender);
 }
 
-// Window pictures for the hover previews, from the window helper. Kept a
-// few seconds, so moving back and forth between buttons is quick.
+// Window pictures for the hover previews, from the window helper. A fresh
+// one is taken after a few seconds; until then the kept one is shown, so
+// moving back and forth between buttons is quick. A minimized window can't
+// be pictured, so it shows the last one taken, and Startbar takes one
+// right before it minimizes a window itself.
 const PREVIEW_SIZE = { width: 190, height: 120 };
 const pictures = new Map(); // window id -> { image, at }
+function takePicture(id) {
+  return tasks.send({ cmd: 'thumb', id, ...PREVIEW_SIZE }).then((reply) => {
+    if (!reply.ok || !reply.image) return null;
+    pictures.delete(id);
+    pictures.set(id, { image: reply.image, at: Date.now() });
+    if (pictures.size > 60) pictures.delete(pictures.keys().next().value);
+    return reply.image;
+  });
+}
+async function minimize(command) {
+  if (settings.get().taskbar.previews && screenNow === 'allowed') {
+    await Promise.race([takePicture(command.id), new Promise((r) => setTimeout(r, 400))]);
+  }
+  return tasks.send(command);
+}
 function showPreview(payload, sender) {
   const bar = windows.barOf(sender);
   windows.showPreview(payload, bar);
   if (screenNow !== 'allowed') return;
   for (const w of payload.windows) {
-    if (w.minimized) continue;
     const kept = pictures.get(w.id);
-    if (kept && Date.now() - kept.at < 3000) {
-      windows.sendPreview('preview:image', { id: w.id, image: kept.image });
-      continue;
-    }
-    tasks.send({ cmd: 'thumb', id: w.id, ...PREVIEW_SIZE }).then((reply) => {
-      if (!reply.ok || !reply.image) return;
-      pictures.set(w.id, { image: reply.image, at: Date.now() });
-      if (pictures.size > 40) pictures.delete(pictures.keys().next().value);
-      windows.sendPreview('preview:image', { id: w.id, image: reply.image });
-    });
+    if (kept) windows.sendPreview('preview:image', { id: w.id, image: kept.image, minimized: w.minimized });
+    if (w.minimized || (kept && Date.now() - kept.at < 3000)) continue;
+    takePicture(w.id).then((image) => image && windows.sendPreview('preview:image', { id: w.id, image }));
   }
 }
 
@@ -796,7 +806,7 @@ function wireIpc() {
     pushState();
   });
   ipcMain.handle('tasks:get', () => tasks.get());
-  ipcMain.handle('tasks:command', (_e, command) => tasks.send(command));
+  ipcMain.handle('tasks:command', (_e, command) => (command && command.cmd === 'minimize' ? minimize(command) : tasks.send(command)));
   ipcMain.handle('tasks:icons', (_e, paths) => apps.icons(Array.isArray(paths) ? paths : []));
   ipcMain.on('tasks:menu', (e, target) => showTaskMenu(target || {}, e.sender));
   ipcMain.on('tip:show', (e, { text, rect }) => windows.showTip(String(text), rect, windows.barOf(e.sender)));

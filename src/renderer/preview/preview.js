@@ -58,7 +58,9 @@
     api.previewSize({ width: Math.ceil(r.width), height: Math.ceil(r.height) });
   });
 
-  api.onPreviewImage(({ id, image }) => {
+  // A minimized window's picture is the last one taken, faded, and keeps
+  // its Minimized note.
+  api.onPreviewImage(({ id, image, minimized }) => {
     const d = [...pv.children].find((c) => c.dataset.id === id);
     if (!d) return;
     const shot = d.querySelector('.shot');
@@ -66,7 +68,14 @@
     pic.className = 'pic';
     pic.alt = '';
     pic.src = image;
-    shot.replaceChildren(pic);
+    const parts = [pic];
+    if (minimized) {
+      shot.classList.add('was');
+      const note = document.createElement('small');
+      note.textContent = 'Minimized';
+      parts.push(note);
+    }
+    shot.replaceChildren(...parts);
   });
 
   document.documentElement.addEventListener('mouseenter', () => api.previewHover(true));
