@@ -113,6 +113,10 @@ func axElement(_ element: AXUIElement, _ name: String) -> AXUIElement? {
     return (value as! AXUIElement)
 }
 
+func axChildren(_ element: AXUIElement) -> [AXUIElement] {
+    (axValue(element, kAXChildrenAttribute) as? [AXUIElement]) ?? []
+}
+
 func axBool(_ element: AXUIElement, _ name: String) -> Bool {
     (axValue(element, name) as? Bool) ?? false
 }
@@ -177,6 +181,7 @@ final class WindowWatcher {
     var nudgeTried: [String: CGRect] = [:] // window id -> its frame after a move that didn't clear the bar
     var emitPending = false
     var allSpaces = false
+    var replyExtra: [String: Any] = [:] // more fields for the reply to the command being run
     var desktopHid: [pid_t] = [] // apps hidden by Show Desktop, to bring back on the next click
     var desktopFront: pid_t? = nil // the app that was in front then
     var desktopMinimized: [AXUIElement] = [] // Finder windows minimized by Show Desktop
@@ -533,7 +538,9 @@ final class WindowWatcher {
         }
         var reply: [String: Any] = ["type": "reply", "cmd": name]
         if let seq = command["seq"] { reply["seq"] = seq }
+        replyExtra = [:]
         let error = run(name, command)
+        reply.merge(replyExtra) { _, extra in extra }
         reply["ok"] = error == nil
         if let error { reply["error"] = error }
         jsonLine(reply)
@@ -577,8 +584,19 @@ final class WindowWatcher {
             activateApp(app)
             if name == "newWindow" {
                 guard trusted else { return "no accessibility permission" }
-                newWindow(pid_t(pid))
+                if let found = newWindowItem(pid_t(pid)) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        AXUIElementPerformAction(found.item, kAXPressAction as CFString)
+                    }
+                } else {
+                    newWindow(pid_t(pid))
+                }
             }
+            return nil
+        case "newWindowItem":
+            guard trusted else { return "no accessibility permission" }
+            guard let pid = command["pid"] as? Int, let found = newWindowItem(pid_t(pid)) else { return "no new window item" }
+            replyExtra["title"] = found.title
             return nil
         case "activate", "minimize", "unminimize", "close":
             guard trusted else { return "no accessibility permission" }
@@ -668,8 +686,34 @@ final class WindowWatcher {
         }
     }
 
-    // Command N, sent straight to the app so it lands even if another app
-    // is still in front. Waits a moment for the app to come forward first.
+    // The app's own New Window menu item (Safari's New Window, Finder's New
+    // Finder Window, Terminal's under Shell), leaving out private and
+    // incognito ones. An item with a submenu (Terminal's profiles) gives the
+    // first item in it.
+    func newWindowItem(_ pid: pid_t) -> (title: String, item: AXUIElement)? {
+        guard let bar = axElement(AXUIElementCreateApplication(pid), kAXMenuBarAttribute) else { return nil }
+        for top in axChildren(bar).dropFirst() { // past the Apple menu
+            for menu in axChildren(top) {
+                for item in axChildren(menu) {
+                    guard let title = axValue(item, kAXTitleAttribute) as? String else { continue }
+                    let lower = title.lowercased()
+                    guard lower.hasPrefix("new"), lower.contains("window"),
+                          !lower.contains("private"), !lower.contains("incognito"),
+                          axBool(item, kAXEnabledAttribute) else { continue }
+                    if let sub = axChildren(item).first {
+                        guard let first = axChildren(sub).first(where: { axBool($0, kAXEnabledAttribute) }) else { continue }
+                        return (title, first)
+                    }
+                    return (title, item)
+                }
+            }
+        }
+        return nil
+    }
+
+    // Command N, for apps without a New Window menu item, sent straight to
+    // the app so it lands even if another app is still in front. Waits a
+    // moment for the app to come forward first.
     func newWindow(_ pid: pid_t) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             let source = CGEventSource(stateID: .hidSystemState)

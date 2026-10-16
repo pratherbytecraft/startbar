@@ -590,11 +590,15 @@ async function addPins() {
 }
 
 // Right click on a window, group or app button.
-function showTaskMenu(target, sender) {
+async function showTaskMenu(target, sender) {
   const app = tasks.get().apps.find((a) => a.pid === target.pid);
   if (!app) return;
   const send = (cmd, extra) => tasks.send({ cmd, ...extra });
   const items = [];
+  // The app's own New Window item, when its menus have one. A slow app
+  // doesn't hold the menu up for long.
+  const found = await Promise.race([send('newWindowItem', { pid: app.pid }), new Promise((r) => setTimeout(() => r({ ok: false }), 500))]);
+  if (found.ok && found.title) items.push({ label: found.title, click: () => send('newWindow', { pid: app.pid }) }, { type: 'separator' });
   if (target.kind === 'window') {
     const win = app.windows.find((w) => w.id === target.id);
     if (win) {
