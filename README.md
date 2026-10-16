@@ -27,7 +27,7 @@ The bar follows your Mac's light or dark setting and your accent color, with a r
 
 The Start button opens a menu that lists your apps with a search box, up to five recent apps, your main folders and Sleep, Log Out and Shut Down. Control Space also opens it, or throw the mouse into the bottom left corner and click. Start typing to search. Search can also find files in your home folder, and you can add your own folders to the menu. Right click a recent app to remove it from the list.
 
-Apps pinned next to the Start button open with one click. Drag them to reorder them. Right click an app in the Start menu or a window button and pick Pin to Bar to add one. Pins can also sit in the row with the window buttons, where a pinned app's button turns into its window buttons once it opens.
+Apps pinned next to the Start button open with one click, and an app that already has a window open gets a new one. Drag them to reorder them. Right click an app in the Start menu or a window button and pick Pin to Bar to add one. Pins can also sit in the row with the window buttons, where a pinned app's button turns into its window buttons once it opens.
 
 Right click a window button to minimize, close or quit, pin the app, or open a new window. Turn on previews and hovering a window button shows a picture of each of its windows. A strip at the right end of the bar can hide every app to show the desktop, and a second click brings them back.
 

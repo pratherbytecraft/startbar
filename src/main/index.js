@@ -784,8 +784,14 @@ function wireIpc() {
     if (links[name]) shell.openExternal(links[name]);
   });
   ipcMain.on('access:ask', (_e, name) => askPermission(name));
+  // Like Quick Launch: a pin opens a new window of an app that already has
+  // one, and opens the app otherwise (which gives a running app with no
+  // windows its first one).
   ipcMain.on('pins:launch', (_e, appPath) => {
-    if (pins.has(appPath)) shell.openPath(appPath);
+    if (!pins.has(appPath)) return;
+    const running = tasks.get().apps.find((a) => a.path === appPath);
+    if (running && running.windows.length > 0) tasks.send({ cmd: 'newWindow', pid: running.pid });
+    else shell.openPath(appPath);
   });
   ipcMain.on('pins:menu', (e, appPath) => showPinMenu(appPath, e.sender));
   ipcMain.on('pins:set', (_e, list) => pins.set(list));
