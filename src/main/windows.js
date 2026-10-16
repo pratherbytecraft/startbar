@@ -99,16 +99,16 @@ function barUnderMouse() {
   return entry ? entry.win : mainBar();
 }
 
+// The classic themes' Start menus sit right on the bar, each at its own size.
+const CLASSIC_MENUS = { 'classic-2001': { width: 400, height: 480 } };
+const gapFor = (name) => (CLASSIC_MENUS[name] ? 0 : MENU_GAP);
+const isClassic = (settings) => !!CLASSIC_MENUS[settings.theme];
+
 function menuBounds(settings, barWin) {
   const entry = barWin && entryOf(barWin);
   const b = barBounds(settings, entry ? displayById(entry.displayId) : screen.getPrimaryDisplay());
-  const isClassic = settings.theme === 'classic-2001';
-  return {
-    x: b.x + (isClassic ? 0 : MENU_GAP),
-    y: b.y - MENU_HEIGHT - (isClassic ? 0 : MENU_GAP),
-    width: isClassic ? 400 : MENU_WIDTH,
-    height: isClassic ? 480 : MENU_HEIGHT
-  };
+  const { width, height } = CLASSIC_MENUS[settings.theme] || { width: MENU_WIDTH, height: MENU_HEIGHT };
+  return { x: b.x + gapFor(settings.theme), y: b.y - height - gapFor(settings.theme), width, height };
 }
 
 // What a bar needs to know about where it is: its display, whether that's
@@ -192,11 +192,13 @@ function createBars(settings) {
 }
 
 function createMenu(settings) {
+  popupsClassic = isClassic(settings);
   menu = new BrowserWindow({
     ...menuBounds(settings, mainBar()),
     frame: false,
     transparent: true,
     hasShadow: true,
+    roundedCorners: !isClassic(settings), // see remakePopups
     resizable: false,
     movable: false,
     minimizable: false,
@@ -248,6 +250,7 @@ function createGroup(settings) {
     frame: false,
     transparent: true,
     hasShadow: true,
+    roundedCorners: !isClassic(settings), // see remakePopups
     resizable: false,
     movable: false,
     minimizable: false,
@@ -276,6 +279,7 @@ function createPopover(settings) {
     frame: false,
     transparent: true,
     hasShadow: true,
+    roundedCorners: !isClassic(settings), // see remakePopups
     resizable: false,
     movable: false,
     minimizable: false,
@@ -304,6 +308,7 @@ function createCalendar(settings) {
     frame: false,
     transparent: true,
     hasShadow: true,
+    roundedCorners: !isClassic(settings), // see remakePopups
     resizable: false,
     movable: false,
     minimizable: false,
@@ -381,7 +386,7 @@ function sizeGroup({ height }) {
   const b = groupAnchor.bar.getBounds();
   const { workArea } = displayById(entryOf(groupAnchor.bar).displayId);
   const h = Math.min(height, Math.round(workArea.height * 0.6));
-  const gap = theme === 'classic-2001' ? 0 : MENU_GAP;
+  const gap = gapFor(theme);
   const x = clampX(b.x + groupAnchor.rect.x, GROUP_WIDTH, groupAnchor.bar);
   group.setBounds({ x, y: b.y - h - gap, width: GROUP_WIDTH, height: h });
   group.show();
@@ -412,7 +417,7 @@ function sizeCalendar({ height }) {
   if (!calendar || !calendarAnchor || !liveBar(calendarAnchor.bar)) return;
   const b = calendarAnchor.bar.getBounds();
   const { rect } = calendarAnchor;
-  const gap = theme === 'classic-2001' ? 0 : MENU_GAP;
+  const gap = gapFor(theme);
   const x = clampX(b.x + rect.x + rect.width - CALENDAR_WIDTH, CALENDAR_WIDTH, calendarAnchor.bar);
   calendar.setBounds({ x, y: b.y - height - gap, width: CALENDAR_WIDTH, height });
   if (!calendar.isVisible()) {
@@ -443,7 +448,7 @@ function togglePopover(kind, rect, barWin) {
 function sizePopover({ height }) {
   if (!popover || !popoverAnchor || !liveBar(popoverAnchor.bar)) return;
   const b = popoverAnchor.bar.getBounds();
-  const gap = theme === 'classic-2001' ? 0 : MENU_GAP;
+  const gap = gapFor(theme);
   const { rect } = popoverAnchor;
   const x = clampX(b.x + rect.x + rect.width / 2 - POPOVER_WIDTH / 2, POPOVER_WIDTH, popoverAnchor.bar);
   popover.setBounds({ x, y: b.y - height - gap, width: POPOVER_WIDTH, height });
@@ -569,9 +574,31 @@ function barAreas() {
   });
 }
 
+// macOS rounds a borderless window's corners and outlines it, which suits
+// the System theme only. That's fixed when a window is made, so the popups
+// are made again when the theme changes between System and a classic one.
+let popupsClassic = null;
+
+function remakePopups(settings) {
+  const classic = isClassic(settings);
+  if (popupsClassic === null || popupsClassic === classic) return;
+  hideMenu();
+  for (const win of [menu, group, calendar, popover]) {
+    if (!win || win.isDestroyed()) continue;
+    win.removeAllListeners('closed');
+    win.removeAllListeners('blur');
+    win.destroy();
+  }
+  createMenu(settings);
+  createGroup(settings);
+  createCalendar(settings);
+  createPopover(settings);
+}
+
 function layout(settings) {
   current = settings;
   theme = settings.theme;
+  remakePopups(settings);
   setOverFullScreen(!settings.taskbar.hideInFullScreen);
   syncDisplays(settings);
   setAutoHide(settings.taskbar.autoHide);
