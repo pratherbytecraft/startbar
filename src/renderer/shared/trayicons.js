@@ -42,7 +42,7 @@
     if (kind === 'wifi') {
       if (!s.on) return 'Wi-Fi: off';
       if (!s.connected) return 'Wi-Fi: not connected';
-      return `Wi-Fi: connected, ${['', 'weak', 'fair', 'strong'][s.bars]} signal`;
+      return `Wi-Fi: ${s.name || 'connected'}, ${['', 'weak', 'fair', 'strong'][s.bars]} signal`;
     }
     let text = `Battery: ${s.percent}%`;
     if (s.charging) text += s.minutes > 0 ? `, charging, full in ${hours(s.minutes)}` : ', charging';

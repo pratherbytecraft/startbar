@@ -67,8 +67,11 @@
 
   function wifiPanel(w) {
     const line = !w.on ? 'Off' : !w.connected ? 'Not connected' : `Connected, ${['', 'weak', 'fair', 'strong'][w.bars]} signal`;
+    // The network's name comes with the Location permission only.
+    const name = w.connected && w.name ? [node('div', 'pop-name', w.name)] : [];
     return [
       head('Wi-Fi', toggle(w.on, () => api.trayCommand({ cmd: 'setWifi', on: !w.on }))),
+      ...name,
       node('div', 'pop-note', line),
       settingsLink('wifi', 'Wi-Fi Settings…')
     ];

@@ -162,7 +162,9 @@
           title: 'Tray',
           rows: [
             { label: 'Volume', control: { type: 'toggle', key: 'tray.volume' } },
-            { label: 'Wi-Fi', note: 'Shown when the Mac has Wi-Fi.', control: { type: 'toggle', key: 'tray.wifi' } },
+            { label: 'Wi-Fi', note: 'Shown when the Mac has Wi-Fi.', control: { type: 'toggle', key: 'tray.wifi' },
+              hint: { when: (s) => s.permissions.location !== 'allowed', text: 'To see the network name, allow Location on the ', link: 'Permissions page', after: '.',
+                click: () => show('permissions') } },
             { label: 'Battery', note: 'Shown on laptops only.', control: { type: 'toggle', key: 'tray.battery' } },
             { label: 'Show the collapse arrow', note: 'Hides the tray icons behind one click, like the original.',
               control: { type: 'toggle', key: 'tray.collapseArrow' } }
@@ -579,6 +581,15 @@
     const ctl = node('div', 'ctl');
     rowEl.append(lbl, ctl);
     ctl.append(CONTROLS[r.control.type](r.control, rowEl));
+    // A line that shows only in some states, ending in a link.
+    if (r.hint) {
+      const hint = node('small', 'hint hidden', r.hint.text);
+      const link = node('span', 'link', r.hint.link);
+      link.addEventListener('click', r.hint.click);
+      hint.append(link, r.hint.after || '');
+      lbl.append(hint);
+      syncs.push(() => hint.classList.toggle('hidden', !r.hint.when(state)));
+    }
     const unusedIf = r.systemOnly ? SYSTEM_ONLY
       : r.onlyWith ? { when: (s) => !r.onlyWith.when(s), note: r.onlyWith.note } : r.unused;
     if (unusedIf) {
