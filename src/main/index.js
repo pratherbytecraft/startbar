@@ -44,6 +44,42 @@ function userName() {
   }
 }
 
+// The account picture from System Settings, as a small data URL, or '' when
+// there isn't one. The directory record keeps it as image data (JPEG or
+// TIFF), or only as the path of a picture file. sips turns either into a PNG.
+let userPictureUrl = null;
+function readRecord(key) {
+  return new Promise((resolve) => {
+    execFile('dscl', ['.', '-read', `/Users/${os.userInfo().username}`, key], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (err, out) => resolve(err ? '' : out));
+  });
+}
+function toPng(source, dest) {
+  return new Promise((resolve) => {
+    execFile('sips', ['-s', 'format', 'png', '-Z', '128', source, '--out', dest], (err) => resolve(!err && fs.existsSync(dest)));
+  });
+}
+async function userPicture() {
+  if (userPictureUrl !== null) return userPictureUrl;
+  userPictureUrl = '';
+  const raw = path.join(settings.dataDir(), 'picture-raw');
+  const png = path.join(settings.dataDir(), 'picture.png');
+  try {
+    const hex = (await readRecord('JPEGPhoto')).replace(/^[^\n]*\n/, '').replace(/\s+/g, '');
+    let source = '';
+    if (hex) {
+      fs.writeFileSync(raw, Buffer.from(hex, 'hex'));
+      source = raw;
+    } else {
+      source = (await readRecord('Picture')).replace(/^Picture:\s*/, '').trim();
+    }
+    if (source && (await toPng(source, png))) userPictureUrl = 'data:image/png;base64,' + fs.readFileSync(png).toString('base64');
+  } catch {
+    userPictureUrl = '';
+  }
+  fs.rmSync(raw, { force: true });
+  return userPictureUrl;
+}
+
 let shortcutError = null; // the Start menu shortcut couldn't be registered
 let dockStatus = null; // { autohide, position }, read when the settings window opens
 
@@ -608,6 +644,7 @@ function wireIpc() {
   });
   ipcMain.handle('menu:files', (_e, q) => searchFiles(q));
   ipcMain.handle('menu:placeIcons', () => placeIcons());
+  ipcMain.handle('menu:userPicture', () => userPicture());
   ipcMain.on('menu:openFile', (_e, file) => {
     if (typeof file !== 'string' || !file.startsWith(os.homedir() + path.sep)) return;
     windows.hideMenu();

@@ -248,6 +248,14 @@
   }
 
   api.getState().then(apply);
+  // The account picture over the avatar's gradient, when there is one.
+  api.userPicture().then((url) => {
+    if (!url) return;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = url;
+    document.querySelector('.avatar').append(img);
+  });
   api.placeIcons().then((found) => {
     placeIcons = found || {};
     if (state) renderRight();
