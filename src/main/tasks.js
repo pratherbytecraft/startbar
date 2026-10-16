@@ -14,6 +14,7 @@ let restarts = 0;
 let relaunch = false;
 let seq = 0;
 let state = { accessibility: null, apps: [] };
+let keepOff = { cmd: 'keepOff' }; // resent to every new helper
 
 function update(patch) {
   state = { ...state, ...patch };
@@ -57,6 +58,7 @@ function start() {
   const startedAt = Date.now();
   child = spawn(helper, ['windows'], { stdio: ['pipe', 'pipe', 'inherit'] });
   readline.createInterface({ input: child.stdout }).on('line', onLine);
+  child.stdin.write(JSON.stringify(keepOff) + '\n');
   child.on('error', (err) => console.log(`Startbar: the window helper did not start: ${err.message}`));
   child.on('exit', (code, signal) => {
     child = null;
@@ -105,8 +107,16 @@ function send(command) {
   });
 }
 
+// Where the bar is, so the helper can move windows up off it. Pass null to
+// stop, for example while the bar is hidden or the setting is off.
+function setKeepOff(area) {
+  keepOff = { cmd: 'keepOff', ...(area || {}) };
+  if (child) send(keepOff);
+}
+
 module.exports = {
   start,
+  setKeepOff,
   stop,
   restart,
   send,

@@ -126,6 +126,10 @@ let axCallback: AXObserverCallback = { _, _, _, refcon in
 //   {"cmd":"activateApp","pid":501}   {"cmd":"quitApp","pid":501}
 //   {"cmd":"newWindow","pid":501}     bring the app forward and press Command N
 //   {"cmd":"refresh"}                 send the state now, even if unchanged
+//   {"cmd":"keepOff","top":25,"bottom":830,"screen":{"x":0,"y":0,"w":1512,"h":866}}
+//     move windows on that screen up when they would cover the bar, which
+//     starts at "bottom". "top" is the bottom of the menu bar. Without
+//     "bottom" it stops.
 // STARTBAR_HELPER_DEBUG=1 prints scan and command timings to stderr.
 final class WindowWatcher {
     struct Known {
@@ -143,6 +147,8 @@ final class WindowWatcher {
     var watchedWindows: [pid_t: [AXUIElement]] = [:]
     var counter = 0
     var lastLine = ""
+    var keepOff: (top: CGFloat, bottom: CGFloat, screen: CGRect)?
+    var nudgeTried: [String: CGRect] = [:] // window id -> its frame after a move that didn't clear the bar
     var emitPending = false
     let debug = ProcessInfo.processInfo.environment["STARTBAR_HELPER_DEBUG"] != nil
 
@@ -316,13 +322,15 @@ final class WindowWatcher {
                 watch(window, pid: pid)
             }
             after.append(item)
+            let onScreen = windowId != 0 && server.onScreen.contains(windowId)
+            if onScreen, let frame { nudge(window, id: item.id, frame: frame) }
             out.append([
                 "id": item.id,
                 "order": item.order,
                 "title": axValue(window, kAXTitleAttribute) as? String ?? "",
                 "minimized": axBool(window, kAXMinimizedAttribute),
                 "focused": focused.map { CFEqual($0, window) } ?? false,
-                "onScreen": windowId != 0 && server.onScreen.contains(windowId),
+                "onScreen": onScreen,
                 "x": Int(frame?.origin.x ?? 0), "y": Int(frame?.origin.y ?? 0),
                 "w": Int(frame?.size.width ?? 0), "h": Int(frame?.size.height ?? 0)
             ])
@@ -332,6 +340,40 @@ final class WindowWatcher {
         busyUntil[pid] = nil
         busyCount[pid] = nil
         return out
+    }
+
+    // Keeps a window off the bar. macOS has no way to reserve the space, so
+    // a window whose bottom edge sits under the bar is moved up to end at
+    // the bar, and one too tall for the space between the menu bar and the
+    // bar is moved to the top and shortened. Leaves alone full screen
+    // windows, windows taller than the screen, windows parked partly below
+    // the screen, and anything while a mouse button is down (a drag). A
+    // window that refused to move isn't tried again until its frame changes.
+    func nudge(_ window: AXUIElement, id: String, frame: CGRect) {
+        guard let k = keepOff, NSEvent.pressedMouseButtons == 0 else { return }
+        guard frame.maxY > k.bottom + 1, frame.maxY <= k.screen.maxY + 1,
+              frame.midX >= k.screen.minX, frame.midX < k.screen.maxX,
+              frame.height <= k.screen.height else { return }
+        if nudgeTried[id] == frame { return }
+        if axBool(window, "AXFullScreen") { return }
+        var target = CGRect(x: frame.minX, y: k.bottom - frame.height, width: frame.width, height: frame.height)
+        if target.minY < k.top {
+            target.origin.y = k.top
+            target.size.height = k.bottom - k.top
+        }
+        var origin = target.origin
+        if let value = AXValueCreate(.cgPoint, &origin) {
+            AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, value)
+        }
+        if target.height != frame.height {
+            var size = target.size
+            if let value = AXValueCreate(.cgSize, &size) {
+                AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, value)
+            }
+        }
+        let now = axFrame(window) ?? frame
+        nudgeTried[id] = now.maxY > k.bottom + 1 ? now : nil
+        note("moved \(id) from \(frame) to \(now)")
     }
 
     // A slow app (one just launched, or beachballing) is left alone for a
@@ -421,6 +463,16 @@ final class WindowWatcher {
         case "refresh":
             lastLine = ""
             emitState()
+            return nil
+        case "keepOff":
+            nudgeTried.removeAll()
+            guard let bottom = command["bottom"] as? Double, let top = command["top"] as? Double,
+                  let screen = command["screen"] as? [String: Double],
+                  let x = screen["x"], let y = screen["y"], let w = screen["w"], let h = screen["h"] else {
+                keepOff = nil
+                return nil
+            }
+            keepOff = (CGFloat(top), CGFloat(bottom), CGRect(x: x, y: y, width: w, height: h))
             return nil
         case "activateApp", "quitApp", "newWindow":
             guard let pid = command["pid"] as? Int, let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {

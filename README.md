@@ -31,7 +31,7 @@ Right click an empty part of the bar to hide it. While the bar is hidden, a Star
 
 ## Limits
 
-macOS does not let an app reserve space at the bottom of the screen, so other windows can overlap the bar. Set the Dock to hide automatically and the bar has the bottom edge to itself.
+macOS does not let an app reserve space at the bottom of the screen. Startbar moves windows up when they would cover the bar, but a window can still sit over it for a moment. Set the Dock to hide automatically and the bar has the bottom edge to itself.
 
 Other apps' menu bar icons can't be moved into the bar. They stay in the menu bar at the top.
 

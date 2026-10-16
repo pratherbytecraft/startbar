@@ -122,6 +122,18 @@ function toggleBar() {
   else hideBar();
 }
 
+// Tells the helper where the bar is so it can move windows up off it.
+function updateKeepOff() {
+  const bar = windows.bar;
+  if (!bar || windows.barHidden || !settings.get().taskbar.moveWindowsUp) return tasks.setKeepOff(null);
+  const { bounds, workArea } = screen.getPrimaryDisplay();
+  tasks.setKeepOff({
+    top: workArea.y,
+    bottom: bar.getBounds().y,
+    screen: { x: bounds.x, y: bounds.y, w: bounds.width, h: bounds.height }
+  });
+}
+
 function updateTray() {
   tray.update(settings.get().menuBarIcon, {
     hidden: windows.barHidden,
@@ -249,24 +261,33 @@ app.whenReady().then(() => {
   windows.createGroup(settings.get());
   registerShortcut();
   updateTray();
-  windows.onBarVisibility(updateTray);
+  windows.onBarVisibility(() => {
+    updateTray();
+    updateKeepOff();
+  });
   apps.load(); // warm the icon cache before the first click
   tasks.onChange((t) => {
     windows.broadcast('tasks', t);
     access.check(t);
   });
+  updateKeepOff();
   tasks.start();
 
   settings.onChange((s) => {
     windows.layout(s);
     registerShortcut();
     updateTray();
+    updateKeepOff();
     pushState();
   });
   system.watch(pushState);
-  screen.on('display-metrics-changed', () => windows.layout(settings.get()));
-  screen.on('display-added', () => windows.layout(settings.get()));
-  screen.on('display-removed', () => windows.layout(settings.get()));
+  const relayout = () => {
+    windows.layout(settings.get());
+    updateKeepOff();
+  };
+  screen.on('display-metrics-changed', relayout);
+  screen.on('display-added', relayout);
+  screen.on('display-removed', relayout);
 });
 
 app.on('window-all-closed', () => app.quit());

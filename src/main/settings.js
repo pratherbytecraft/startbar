@@ -18,7 +18,8 @@ const DEFAULTS = Object.freeze({
     clickActiveMinimizes: true,
     titleOnHover: true,
     showWindowless: false, // apps that are running with no windows get a button
-    order: 'opened' // opened | app
+    order: 'opened', // opened | app
+    moveWindowsUp: true // macOS can't reserve the bar's space, so windows are nudged up off it
   },
   clock: {
     hour12: true,
