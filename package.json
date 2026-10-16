@@ -8,7 +8,7 @@
   "homepage": "https://github.com/pratherbytecraft/startbar",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pratherbytecraft/startbar.git"
+    "url": "git+https://github.com/pratherbytecraft/startbar.git"
   },
   "bugs": {
     "url": "https://github.com/pratherbytecraft/startbar/issues"
