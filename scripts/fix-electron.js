@@ -4,6 +4,10 @@
 // and no path.txt. When that happens this unzips Electron's download again
 // with macOS's ditto, which keeps the app's links and signature intact, and
 // writes the files Electron's install would have written.
+//
+// npm runs Startbar's install script alongside Electron's, not after it,
+// so first this waits for Electron's own install to finish. Unzipping over
+// an install that's still going breaks both.
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -25,6 +29,31 @@ function isWhole(dir) {
   }
 }
 
+// Whether Electron's own install script (node install.js, run in its
+// folder) is still going.
+function installRunning(dir) {
+  const ps = spawnSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' });
+  if (ps.status !== 0) return false;
+  for (const line of ps.stdout.split('\n')) {
+    const m = line.trim().match(/^(\d+)\s+\S*node\S*\s+install\.js$/);
+    if (!m) continue;
+    const cwd = spawnSync('lsof', ['-a', '-p', m[1], '-d', 'cwd', '-Fn'], { encoding: 'utf8' });
+    if (cwd.status === 0 && cwd.stdout.split('\n').some((l) => l === 'n' + dir)) return true;
+  }
+  return false;
+}
+
+// Electron's script can start a moment after this one, so it gets a few
+// seconds to show up before it counts as not running.
+async function waitForInstall(dir) {
+  const start = Date.now();
+  const until = start + 5 * 60 * 1000;
+  while (!isWhole(dir) && Date.now() < until) {
+    if (!installRunning(dir) && Date.now() - start > 3000) break;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
 async function fix({ quiet = false } = {}) {
   if (process.platform !== 'darwin') return true;
   const log = (msg) => quiet || console.log(msg);
@@ -35,6 +64,7 @@ async function fix({ quiet = false } = {}) {
     log('Startbar: Electron is not installed.');
     return false;
   }
+  await waitForInstall(fs.realpathSync(dir));
   if (isWhole(dir)) return true;
   try {
     const { version } = require(path.join(dir, 'package.json'));
