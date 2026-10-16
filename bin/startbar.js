@@ -13,7 +13,7 @@ if (process.platform !== 'darwin') {
   process.exit(1);
 }
 
-const { appPath, BUNDLE_ID } = require('../scripts/build-app');
+const { appPath, build, BUNDLE_ID } = require('../scripts/build-app');
 const args = process.argv.slice(2);
 const foreground = args.includes('--foreground');
 
@@ -61,11 +61,23 @@ function runBundle(bundle) {
   }
 }
 
-const bundle = appPath();
-if (bundle) {
-  runBundle(bundle);
-} else {
-  if (foreground) console.log('Startbar: Startbar.app was not found, running as Electron. Run `npm run build-app` to build it.');
-  runElectron();
-  if (!foreground) console.log('Startbar is running. Quit it from the Start menu, About Startbar, Quit.');
-}
+// The install builds Startbar.app, except where it can't write to the home
+// folder (Homebrew), or when the app belongs to an older install. Then the
+// first run builds it, finishing Electron's install first if it stopped
+// partway (see scripts/fix-electron.js).
+(async () => {
+  let bundle = appPath();
+  if (!bundle) {
+    console.log('Startbar: setting up Startbar.app, this takes a moment the first time.');
+    await require('../scripts/fix-electron').fix({ quiet: true });
+    build({ quiet: true });
+    bundle = appPath();
+  }
+  if (bundle) {
+    runBundle(bundle);
+  } else {
+    if (foreground) console.log('Startbar: Startbar.app was not found, running as Electron. Run `npm run build-app` to build it.');
+    runElectron();
+    if (!foreground) console.log('Startbar is running. Quit it from the Start menu, About Startbar, Quit.');
+  }
+})();

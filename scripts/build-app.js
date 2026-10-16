@@ -18,7 +18,18 @@ const os = require('os');
 const path = require('path');
 
 const BUNDLE_ID = 'com.pratherbytecraft.startbar';
-const root = path.join(__dirname, '..');
+
+// Homebrew keeps each version in its own Cellar folder and links the current
+// one at opt/startbar. The bundle points at the opt path, so it stays the
+// same across brew upgrades and macOS keeps its Accessibility permission.
+function stableRoot(dir) {
+  const m = dir.match(/^(.*)\/Cellar\/startbar\/[^/]+\/(.*)$/);
+  if (!m) return dir;
+  const opt = `${m[1]}/opt/startbar/${m[2]}`;
+  return fs.existsSync(opt) ? opt : dir;
+}
+
+const root = stableRoot(path.join(__dirname, '..'));
 const mainScript = path.join(root, 'src', 'main', 'index.js');
 
 const userBundle = path.join(os.homedir(), 'Applications', 'Startbar.app');
