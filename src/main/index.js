@@ -10,6 +10,7 @@ const apps = require('./apps');
 const windows = require('./windows');
 const tasks = require('./tasks');
 const access = require('./access');
+const tray = require('./tray');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
@@ -82,6 +83,7 @@ async function runPower(action) {
 }
 
 async function showAbout() {
+  app.focus({ steal: true }); // opened from the menu bar icon, Startbar isn't in front
   const { response } = await dialog.showMessageBox({
     type: 'none',
     title: 'About Startbar',
@@ -96,15 +98,73 @@ async function showAbout() {
   if (response === 3) app.quit();
 }
 
-// Right click on the bar. Grows into the full bar menu later; for now it
-// only carries the way back to the Accessibility dialog.
+// Hide the Bar is for this session only. The first time, say how to get it back.
+async function hideBar() {
+  windows.hideBar();
+  if (settings.get().hideNoteShown) return;
+  settings.update({ hideNoteShown: true });
+  const combo = settings.get().startMenu.shortcut;
+  const ways = ['click the Startbar icon in the menu bar'];
+  if (combo) ways.push(`press ${combo.split('+').join(' ')}`);
+  ways.push('open Startbar again from Spotlight');
+  const last = ways.pop();
+  app.focus({ steal: true }); // Startbar has no Dock icon, so bring the dialog forward
+  await dialog.showMessageBox({
+    type: 'info',
+    message: 'The bar is hidden',
+    detail: `To bring it back, ${ways.join(', ')} or ${last}.`,
+    buttons: ['OK']
+  });
+}
+
+function toggleBar() {
+  if (windows.barHidden) windows.showBar();
+  else hideBar();
+}
+
+function updateTray() {
+  tray.update(settings.get().menuBarIcon, {
+    hidden: windows.barHidden,
+    toggleBar,
+    openMenu: () => windows.showMenu(),
+    about: () => showAbout(),
+    quit: () => app.quit()
+  });
+}
+
+// Right click on an empty part of the bar. Kept short: everything else lives
+// in the settings window. Allow Window Buttons stays here while the permission
+// is off until the settings window has its Accessibility row.
 function showBarMenu() {
-  const items = [];
+  if (!windows.bar) return;
+  const items = [{ label: 'Hide the Bar', click: () => hideBar() }];
   if (tasks.get().accessibility === false) {
     items.push({ label: 'Allow Window Buttons…', click: () => access.ask() });
   }
-  if (items.length === 0 || !windows.bar) return;
+  items.push(
+    { label: 'Startbar Settings', enabled: false }, // slice 3
+    { type: 'separator' },
+    { label: 'Quit Startbar', click: () => app.quit() }
+  );
   Menu.buildFromTemplate(items).popup({ window: windows.bar });
+}
+
+// The menu bar while one of Startbar's windows has focus (the Start menu, a
+// group list, a dialog). Replaces Electron's default File, View, Window and
+// Help menus. Edit stays so copy and paste work in the search box.
+function setAppMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: 'Startbar',
+      submenu: [
+        { label: 'About Startbar', click: () => showAbout() },
+        { type: 'separator' },
+        { label: 'Hide the Bar', click: () => hideBar() },
+        { label: 'Quit Startbar', click: () => app.quit() }
+      ]
+    },
+    { role: 'editMenu' }
+  ]));
 }
 
 // Right click on a window, group or app button.
@@ -181,12 +241,15 @@ function wireIpc() {
 app.whenReady().then(() => {
   app.setActivationPolicy('accessory'); // no Dock icon, no app switcher entry
   settings.init();
+  setAppMenu();
   wireIpc();
   windows.createBar(settings.get());
   windows.createMenu(settings.get());
   windows.createTip();
   windows.createGroup(settings.get());
   registerShortcut();
+  updateTray();
+  windows.onBarVisibility(updateTray);
   apps.load(); // warm the icon cache before the first click
   tasks.onChange((t) => {
     windows.broadcast('tasks', t);
@@ -197,6 +260,7 @@ app.whenReady().then(() => {
   settings.onChange((s) => {
     windows.layout(s);
     registerShortcut();
+    updateTray();
     pushState();
   });
   system.watch(pushState);

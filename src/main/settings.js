@@ -40,7 +40,9 @@ const DEFAULTS = Object.freeze({
     confirmPower: true,
     shortcut: 'Control+Space'
   },
-  accessibilityAsked: false // the one time Accessibility dialog has been shown
+  menuBarIcon: 'hidden', // hidden (only while the bar is hidden) | always | never
+  accessibilityAsked: false, // the one time Accessibility dialog has been shown
+  hideNoteShown: false // the one time note on how to bring a hidden bar back
 });
 
 let dir;

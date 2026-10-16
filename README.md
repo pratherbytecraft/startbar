@@ -27,6 +27,8 @@ The bar follows your Mac's light or dark setting and your accent color. A Classi
 
 The Start button opens a menu that lists your apps with a search box, your recent apps, your main folders and Sleep, Log Out and Shut Down. Control Space also opens it.
 
+Right click an empty part of the bar to hide it. While the bar is hidden, a Startbar icon sits in the menu bar. Click it, press Control Space or open Startbar again to bring the bar back.
+
 ## Limits
 
 macOS does not let an app reserve space at the bottom of the screen, so other windows can overlap the bar. Set the Dock to hide automatically and the bar has the bottom edge to itself.

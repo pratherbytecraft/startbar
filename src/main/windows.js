@@ -22,6 +22,8 @@ let group = null;
 let groupAnchor = null; // { pid, rect } of the group button the list belongs to
 let lastGroupHide = { pid: null, at: 0 };
 let theme = 'system';
+let barHidden = false; // Hide the Bar, for this session only
+const visibility = new Set();
 
 function vibrancyFor(settings) {
   return settings.theme === 'system' && settings.translucent ? 'menu' : null;
@@ -70,7 +72,7 @@ function createBar(settings) {
   bar.setAlwaysOnTop(true, 'floating');
   bar.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
   bar.loadFile(renderer('bar'));
-  bar.once('ready-to-show', () => bar.showInactive());
+  bar.once('ready-to-show', () => { if (!barHidden) bar.showInactive(); });
   bar.on('closed', () => { bar = null; });
   return bar;
 }
@@ -225,8 +227,31 @@ function layout(settings) {
   hideGroup();
 }
 
+function hideBar() {
+  if (!bar || barHidden) return;
+  barHidden = true;
+  hideMenu();
+  hideTip();
+  hideGroup();
+  bar.hide();
+  for (const fn of visibility) fn(true);
+}
+
+function showBar() {
+  if (!bar || !barHidden) return;
+  barHidden = false;
+  bar.showInactive();
+  for (const fn of visibility) fn(false);
+}
+
+function onBarVisibility(fn) {
+  visibility.add(fn);
+  return () => visibility.delete(fn);
+}
+
 function showMenu() {
   if (!menu) return;
+  showBar(); // the Start menu sits on the bar, so opening it brings a hidden bar back
   menu.show();
   menu.focus();
   menu.webContents.send('menu:shown');
@@ -258,6 +283,8 @@ function broadcast(channel, payload) {
 module.exports = {
   createBar, createMenu, createTip, createGroup, layout, showMenu, hideMenu, toggleMenu,
   showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, broadcast,
+  hideBar, showBar, onBarVisibility,
   get bar() { return bar; },
+  get barHidden() { return barHidden; },
   get menu() { return menu; }
 };
