@@ -98,7 +98,9 @@ function init() {
   } catch {
     saved = {};
   }
-  current = merge(DEFAULTS, saved);
+  // A value of the wrong kind, from a hand-edited file say, falls back to
+  // the default instead of being taken as it is ("false" would read as on).
+  current = merge(DEFAULTS, clean(saved, DEFAULTS));
   return current;
 }
 
