@@ -116,8 +116,47 @@ function state() {
     system: system.snapshot(),
     user: userName(),
     version: VERSION,
-    home: os.homedir()
+    home: os.homedir(),
+    filedrawer: !!filedrawerApp()
   };
+}
+
+// Filedrawer, Prather Bytecraft's file manager, when it's installed. Looked
+// up now and then, not on every redraw.
+const FILEDRAWER_ID = 'com.pratherbytecraft.filedrawer';
+let filedrawerSeen = { at: 0, path: null };
+
+function filedrawerApp() {
+  if (Date.now() - filedrawerSeen.at < 30 * 1000) return filedrawerSeen.path;
+  const places = [path.join(os.homedir(), 'Applications', 'Filedrawer.app'), '/Applications/Filedrawer.app'];
+  let found = null;
+  for (const p of places) {
+    try {
+      const id = execFileSync('plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', path.join(p, 'Contents', 'Info.plist')], { encoding: 'utf8' }).trim();
+      if (id === FILEDRAWER_ID) {
+        found = p;
+        break;
+      }
+    } catch {
+      // not there
+    }
+  }
+  filedrawerSeen = { at: Date.now(), path: found };
+  return found;
+}
+
+// A folder from the Start menu opens in Filedrawer when that's picked and
+// installed, and in Finder otherwise. Apps and files open as usual.
+function openFolder(p) {
+  let isFolder = false;
+  try {
+    isFolder = fs.statSync(p).isDirectory() && !/\.(app|bundle|framework|pkg)$/i.test(p);
+  } catch {
+    isFolder = false;
+  }
+  const fd = isFolder && settings.get().openFoldersWith === 'filedrawer' ? filedrawerApp() : null;
+  if (fd) execFile('open', ['-a', fd, p], (err) => err && shell.openPath(p));
+  else shell.openPath(p);
 }
 
 function pushState() {
@@ -754,7 +793,7 @@ function wireIpc() {
     if (target === 'about') return showAbout();
     if (target === 'update') return openSettings('about');
     if (target === 'settings') return openSettings();
-    if (places[target]) shell.openPath(places[target]);
+    if (places[target]) openFolder(places[target]);
   });
   ipcMain.handle('menu:files', (_e, q) => searchFiles(q));
   ipcMain.handle('menu:placeIcons', () => placeIcons());
@@ -762,12 +801,12 @@ function wireIpc() {
   ipcMain.on('menu:openFile', (_e, file) => {
     if (typeof file !== 'string' || !file.startsWith(os.homedir() + path.sep)) return;
     windows.hideMenu();
-    shell.openPath(file);
+    openFolder(file);
   });
   ipcMain.on('menu:openFolder', (_e, folder) => {
     if (!settings.get().startMenu.folders.includes(folder)) return;
     windows.hideMenu();
-    shell.openPath(folder);
+    openFolder(folder);
   });
   ipcMain.on('menu:power', (_e, action) => {
     windows.hideMenu();

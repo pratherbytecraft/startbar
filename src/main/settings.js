@@ -69,6 +69,7 @@ const DEFAULTS = Object.freeze({
     show: 'current' // current | all: windows from the current Space only, or from every Space
   },
   menuBarIcon: 'hidden', // hidden (only while the bar is hidden) | always
+  openFoldersWith: 'finder', // finder | filedrawer: the app the Start menu's folders open in, when Filedrawer is installed
   updates: {
     auto: true // check npm for a newer version now and then, never installs
   },

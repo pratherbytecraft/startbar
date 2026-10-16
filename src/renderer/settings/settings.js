@@ -255,6 +255,15 @@
           ]
         },
         {
+          title: 'Folders',
+          // Only once Filedrawer, Prather Bytecraft's file manager, is installed.
+          showIf: (st) => st.filedrawer,
+          rows: [
+            { label: 'Open folders from the Start menu in', note: 'Places, your added folders and folders found by search.',
+              control: { type: 'seg', key: 'openFoldersWith', options: [['finder', 'Finder'], ['filedrawer', 'Filedrawer']] } }
+          ]
+        },
+        {
           title: 'Settings',
           rows: [
             { label: 'Export settings and pins to a file', note: 'Import replaces everything here with what the file has.',
@@ -756,10 +765,11 @@
     const out = [];
     for (const g of list) {
       if (g.rows.length === 0) continue;
-      out.push(node('h2', null, g.title));
+      const head = node('h2', null, g.title);
       const box = node('div', 'group');
       g.rows.forEach((r) => box.append(r.list ? pathList(r.list) : row(r)));
-      out.push(box);
+      if (g.showIf) syncs.push(() => [head, box].forEach((el) => el.classList.toggle('hidden', !g.showIf(state))));
+      out.push(head, box);
     }
     return out;
   }
