@@ -33,6 +33,7 @@ body { color: var(--text); }
   background: var(--accent); color: var(--accent-text); font-weight: 600;
   box-shadow: 0 1px 2px rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .2);
 }
+[data-start-label="off"] .start { padding: 0 9px; }
 .start:hover { filter: brightness(1.08); }
 .start.open { filter: brightness(.85); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .35); }
 .start .glyph-fill { fill: var(--accent-text); }

@@ -56,6 +56,20 @@
       id: 'taskbar', title: 'Taskbar', color: '#0a84ff',
       groups: [
         {
+          title: 'Start button and pins',
+          rows: [
+            { label: 'Show the word Start on the button', control: { type: 'toggle', key: 'taskbar.showStartLabel' } },
+            { label: 'Show pinned apps next to the Start button', control: { type: 'toggle', key: 'taskbar.showPins' } }
+          ]
+        },
+        {
+          title: 'Pinned apps', pins: true,
+          rows: [
+            { label: 'Pin an app', note: 'Drag the list to reorder. You can also right click an app in the Start menu or on the bar and pick Pin to Bar.',
+              control: { type: 'button', text: 'Add…', click: () => api.addPins() } }
+          ]
+        },
+        {
           title: 'Window buttons',
           rows: [
             { label: 'Group windows from the same app',
@@ -367,6 +381,43 @@
 
   const CONTROLS = { toggle, seg, select, swatches, range, stepper, button, accessibility, shortcut };
 
+  // The pinned apps, one row each, drag to reorder.
+  const appName = (p) => p.split('/').pop().replace(/\.app$/, '');
+  const pinsKey = (list) => JSON.stringify(list.map((p) => [p, !!previewIcons[p]]));
+
+  function pinRow(p) {
+    const r = node('div', 'row pin');
+    r.dataset.key = p;
+    const grip = node('span', 'handle');
+    grip.innerHTML = '<svg viewBox="0 0 8 12"><circle cx="2" cy="2" r="1"/><circle cx="6" cy="2" r="1"/><circle cx="2" cy="6" r="1"/><circle cx="6" cy="6" r="1"/><circle cx="2" cy="10" r="1"/><circle cx="6" cy="10" r="1"/></svg>';
+    const img = node('img');
+    img.alt = '';
+    if (previewIcons[p]) img.src = previewIcons[p];
+    const remove = button({ text: 'Remove', click: () => api.unpin(p) });
+    remove.classList.add('no-drag');
+    r.append(grip, img, node('div', 'lbl', appName(p)), remove);
+    return r;
+  }
+
+  function pinList() {
+    const list = node('div', 'pins');
+    let drawn = '';
+    window.reorderable(list, {
+      axis: 'y',
+      onDrop: (order) => {
+        drawn = pinsKey(order);
+        api.setPins(order);
+      }
+    });
+    syncs.push(() => {
+      const key = pinsKey(state.pins);
+      if (key === drawn) return;
+      drawn = key;
+      list.replaceChildren(...(state.pins.length ? state.pins.map(pinRow) : [node('div', 'row none', 'No pinned apps.')]));
+    });
+    return list;
+  }
+
   // MARK: drawing
 
   function row(r) {
@@ -394,6 +445,7 @@
       if (g.rows.length === 0) continue;
       out.push(node('h2', null, g.title));
       const box = node('div', 'group');
+      if (g.pins) box.append(pinList());
       g.rows.forEach((r) => box.append(row(r)));
       out.push(box);
     }
@@ -467,6 +519,7 @@
     const matches = (r) => words.every((w) => text(r).includes(w));
     const found = PAGES.filter((p) => !p.about).map((p) => ({
       title: p.title,
+      pins: p.groups.some((g) => g.pins && g.rows.some(matches)),
       rows: p.groups.flatMap((g) => g.rows.filter(matches))
     }));
     reset();
@@ -489,8 +542,22 @@
     pv.contentWindow.postMessage({ state, icons: previewIcons }, '*');
   }
 
+  // Icons for the sample apps and the pins, fetched once each.
+  const askedIcons = new Set();
+  function fetchIcons(paths) {
+    const missing = paths.filter((p) => !askedIcons.has(p));
+    if (missing.length === 0) return;
+    missing.forEach((p) => askedIcons.add(p));
+    api.taskIcons(missing).then((found) => {
+      Object.assign(previewIcons, found);
+      if (state) syncs.forEach((fn) => fn());
+      pushPreview();
+    });
+  }
+
   function apply(next) {
     state = next;
+    fetchIcons(state.pins);
     const theme = window.resolveTheme(state);
     const root = document.documentElement;
     root.dataset.appearance = theme.appearance;
@@ -506,10 +573,7 @@
     '/System/Applications/Notes.app',
     '/System/Applications/Utilities/Terminal.app'
   ];
-  api.taskIcons(SAMPLE_APPS).then((found) => {
-    Object.assign(previewIcons, found);
-    pushPreview();
-  });
+  fetchIcons(SAMPLE_APPS);
 
   pv.addEventListener('load', pushPreview);
   drawNav();

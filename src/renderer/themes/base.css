@@ -19,6 +19,8 @@ svg { display: block; }
 .quick:empty, .quick:empty + .grip { display: none; }
 .quick .icon { display: grid; place-items: center; }
 .quick .icon img { width: 18px; height: 18px; }
+.quick .icon.dragging { opacity: .55; }
+[data-start-label="off"] .start span { display: none; }
 .grip { align-self: center; }
 .tasks { flex: 1; display: flex; align-items: center; gap: 4px; padding: 0 4px; overflow: hidden; }
 .task { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; max-width: var(--max-button); flex: 1; min-width: 36px; }

@@ -34,6 +34,10 @@
     label.textContent = a.name;
     d.append(img, label);
     d.addEventListener('click', () => api.launch(a.path));
+    d.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      api.appMenu(a.path);
+    });
     return d;
   }
 

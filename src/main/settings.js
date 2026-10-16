@@ -14,6 +14,8 @@ const DEFAULTS = Object.freeze({
   labels: 'icon-and-title', // icon-and-title | icons-only
   maxButtonWidth: 180,
   taskbar: {
+    showStartLabel: true, // the word Start next to the Start button's icon
+    showPins: true,
     grouping: 'always', // always | full | never
     clickActiveMinimizes: true,
     titleOnHover: true,

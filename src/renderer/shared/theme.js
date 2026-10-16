@@ -38,6 +38,7 @@
     root.dataset.appearance = appearance;
     root.dataset.labels = settings.labels;
     root.dataset.translucent = settings.translucent ? 'on' : 'off';
+    root.dataset.startLabel = settings.taskbar.showStartLabel ? 'on' : 'off';
     root.style.setProperty('--accent', accent);
     root.style.setProperty('--accent-text', accentText);
     root.style.setProperty('--bar-h', settings.barHeight + 'px');

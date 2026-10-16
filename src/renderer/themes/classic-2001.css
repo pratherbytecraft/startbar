@@ -14,6 +14,7 @@ body { font-size: 11px; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); 
   font-size: 16px; font-style: italic; font-weight: bold; text-transform: lowercase; text-shadow: 1px 1px 1px rgba(0, 0, 0, .55);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset -2px 0 2px rgba(0, 0, 0, .25), 1px 0 2px rgba(0, 0, 0, .35);
 }
+[data-start-label="off"] .start { padding: 0 12px 0 10px; }
 .start:hover { filter: brightness(1.08); }
 .start.open { background: linear-gradient(180deg, #237a23 0, #3a9e3a 60%, #4fb84f 100%); box-shadow: inset 0 2px 3px rgba(0, 0, 0, .35); filter: none; }
 .start svg { width: 18px; height: 18px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .4)); }

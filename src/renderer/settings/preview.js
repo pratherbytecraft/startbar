@@ -1,8 +1,9 @@
-// Draws a sample bar from the settings the window sends: a Finder group, an
-// active Safari window, Notes and a minimized Terminal. It follows the
-// theme, colors, size, labels, grouping and clock settings.
+// Draws a sample bar from the settings the window sends: the real pins, a
+// Finder group, an active Safari window, Notes and a minimized Terminal. It
+// follows the theme, colors, size, labels, grouping and clock settings.
 (function () {
   const tasksEl = document.getElementById('tasks');
+  const quickEl = document.querySelector('.quick');
   const clock = document.getElementById('clock');
   const timeEl = document.getElementById('time');
   const dateEl = document.getElementById('date');
@@ -43,6 +44,16 @@
 
   // The preview bar is never full, so only "Always" groups.
   function render() {
+    const pins = state.settings.taskbar.showPins ? state.pins : [];
+    quickEl.replaceChildren(...pins.map((p) => {
+      const d = document.createElement('div');
+      d.className = 'icon';
+      const img = document.createElement('img');
+      img.alt = '';
+      if (icons[p]) img.src = icons[p];
+      d.append(img);
+      return d;
+    }));
     const grouped = state.settings.taskbar.grouping === 'always';
     const list = [];
     for (const app of SAMPLE) {

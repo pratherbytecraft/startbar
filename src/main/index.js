@@ -11,6 +11,7 @@ const windows = require('./windows');
 const tasks = require('./tasks');
 const access = require('./access');
 const tray = require('./tray');
+const pins = require('./pins');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
@@ -43,6 +44,7 @@ let shortcutError = null; // the Start menu shortcut couldn't be registered
 function state() {
   return {
     settings: settings.get(),
+    pins: pins.get(),
     shortcutError,
     system: system.snapshot(),
     user: userName(),
@@ -215,6 +217,45 @@ function setAppMenu() {
   ]));
 }
 
+function launchApp(appPath) {
+  windows.hideMenu();
+  apps.noteLaunch(appPath);
+  shell.openPath(appPath);
+}
+
+function pinItem(appPath) {
+  return pins.has(appPath)
+    ? { label: 'Unpin from Bar', click: () => pins.remove(appPath) }
+    : { label: 'Pin to Bar', click: () => pins.add(appPath) };
+}
+
+// Right click on a pinned app.
+function showPinMenu(appPath) {
+  if (!windows.bar || !pins.has(appPath)) return;
+  Menu.buildFromTemplate([pinItem(appPath)]).popup({ window: windows.bar });
+}
+
+// Right click on an app in the Start menu.
+function showAppMenu(appPath) {
+  if (!windows.menu || !pins.isApp(appPath)) return;
+  Menu.buildFromTemplate([
+    { label: 'Open', click: () => launchApp(appPath) },
+    { type: 'separator' },
+    pinItem(appPath)
+  ]).popup({ window: windows.menu });
+}
+
+async function addPins() {
+  const { canceled, filePaths } = await dialog.showOpenDialog(windows.settings, {
+    title: 'Pin Apps to the Bar',
+    buttonLabel: 'Pin',
+    defaultPath: '/Applications',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Apps', extensions: ['app'] }]
+  });
+  if (!canceled) pins.add(...filePaths);
+}
+
 // Right click on a window, group or app button.
 function showTaskMenu(target) {
   const app = tasks.get().apps.find((a) => a.pid === target.pid);
@@ -239,6 +280,7 @@ function showTaskMenu(target) {
       { type: 'separator' }
     );
   }
+  if (pins.isApp(app.path)) items.push(pinItem(app.path), { type: 'separator' });
   items.push({ label: `Quit ${app.name}`, click: () => send('quitApp', { pid: app.pid }) });
   Menu.buildFromTemplate(items).popup({ window: windows.bar });
 }
@@ -250,11 +292,8 @@ function wireIpc() {
   ipcMain.on('menu:hide', () => windows.hideMenu());
   ipcMain.handle('menu:apps', () => apps.load());
   ipcMain.handle('menu:recent', () => apps.recent(settings.get().startMenu.recentCount));
-  ipcMain.on('menu:launch', (_e, appPath) => {
-    windows.hideMenu();
-    apps.noteLaunch(appPath);
-    shell.openPath(appPath);
-  });
+  ipcMain.on('menu:launch', (_e, appPath) => launchApp(appPath));
+  ipcMain.on('menu:appMenu', (_e, appPath) => showAppMenu(appPath));
   ipcMain.on('menu:open', (_e, target) => {
     windows.hideMenu();
     const home = os.homedir();
@@ -283,6 +322,13 @@ function wireIpc() {
     if (links[name]) shell.openExternal(links[name]);
   });
   ipcMain.on('access:open', () => access.openPane());
+  ipcMain.on('pins:launch', (_e, appPath) => {
+    if (pins.has(appPath)) shell.openPath(appPath);
+  });
+  ipcMain.on('pins:menu', (_e, appPath) => showPinMenu(appPath));
+  ipcMain.on('pins:set', (_e, list) => pins.set(list));
+  ipcMain.on('pins:remove', (_e, appPath) => pins.remove(appPath));
+  ipcMain.on('pins:add', () => addPins());
   // The shortcut field records keys, so the global shortcut steps aside.
   ipcMain.on('shortcut:pause', () => globalShortcut.unregisterAll());
   ipcMain.on('shortcut:resume', () => {
@@ -333,6 +379,7 @@ app.whenReady().then(() => {
     updateKeepOff();
     pushState();
   });
+  pins.onChange(pushState);
   system.watch(pushState);
   const relayout = () => {
     windows.layout(settings.get());

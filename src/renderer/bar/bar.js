@@ -6,6 +6,7 @@
   const timeEl = document.getElementById('time');
   const dateEl = document.getElementById('date');
   const tasksEl = document.getElementById('tasks');
+  const quickEl = document.getElementById('quick');
 
   // Narrowest a button with a label gets before windows are grouped or
   // labels drop.
@@ -14,6 +15,7 @@
 
   let tasks = { accessibility: null, apps: [] };
   let drawn = '';
+  let pinsDrawn = '';
   let tipTimer = null;
   const icons = new Map(); // app path -> data URL
   const asked = new Set(); // app paths whose icon has been requested
@@ -35,16 +37,69 @@
     clock.title = text.full;
   }
 
-  function fetchIcons() {
-    const missing = tasks.apps.map((a) => a.path).filter((p) => p && !asked.has(p));
+  function fetchIcons(paths) {
+    const missing = paths.filter((p) => p && !asked.has(p));
     if (missing.length === 0) return;
     missing.forEach((p) => asked.add(p));
     api.taskIcons(missing).then((found) => {
       for (const [p, url] of Object.entries(found)) icons.set(p, url);
       drawn = '';
       renderTasks();
+      renderPins();
     });
   }
+
+  const appName = (p) => p.split('/').pop().replace(/\.app$/, '');
+
+  // MARK: pinned apps
+
+  function pinButton(p) {
+    const b = document.createElement('div');
+    b.className = 'icon';
+    b.dataset.key = p;
+    const img = document.createElement('img');
+    img.alt = '';
+    if (icons.get(p)) img.src = icons.get(p);
+    b.append(img);
+    b.addEventListener('click', () => {
+      hideTip();
+      api.launchPin(p);
+    });
+    b.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      hideTip();
+      api.pinMenu(p);
+    });
+    b.addEventListener('mouseenter', () => {
+      if (quickEl.classList.contains('reordering')) return;
+      clearTimeout(tipTimer);
+      tipTimer = setTimeout(() => api.showTip({ text: appName(p), rect: rectOf(b) }), 500);
+    });
+    b.addEventListener('mouseleave', hideTip);
+    return b;
+  }
+
+  const pinsKey = (list) => JSON.stringify(list.map((p) => [p, !!icons.get(p)]));
+
+  function renderPins() {
+    if (!state) return;
+    const list = state.settings.taskbar.showPins ? state.pins : [];
+    const key = pinsKey(list);
+    if (key === pinsDrawn) return;
+    pinsDrawn = key;
+    quickEl.replaceChildren(...list.map(pinButton));
+    fetchIcons(list);
+  }
+
+  window.reorderable(quickEl, {
+    axis: 'x',
+    onStart: hideTip,
+    onDrop: (order) => {
+      pinsDrawn = pinsKey(order); // already drawn in this order
+      api.setPins(order);
+    }
+  });
 
   // The buttons, left to right, before grouping. Without the Accessibility
   // permission there are no windows to show, so every app gets one button.
@@ -217,7 +272,7 @@
     hideTip(); // the hovered button may be gone
     tasksEl.classList.toggle('compact', compact);
     tasksEl.replaceChildren(...list.map(button));
-    fetchIcons();
+    fetchIcons(tasks.apps.map((a) => a.path));
   }
 
   function applyTasks(next) {
@@ -229,6 +284,7 @@
     state = next;
     window.applyTheme(state);
     tick();
+    renderPins();
     renderTasks();
   }
 
