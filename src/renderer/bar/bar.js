@@ -30,6 +30,16 @@
 
   start.addEventListener('click', () => api.clickStart());
 
+  // The corner counts as the Start button: the bar's edge left of it, below
+  // it and above it, so throwing the mouse into the bottom left corner hits.
+  const barEl = document.querySelector('.bar');
+  const inCorner = (e) => e.target === barEl && e.clientX <= start.getBoundingClientRect().right;
+  barEl.addEventListener('click', (e) => {
+    if (inCorner(e)) api.clickStart();
+  });
+  barEl.addEventListener('mousemove', (e) => start.classList.toggle('hot', inCorner(e)));
+  barEl.addEventListener('mouseleave', () => start.classList.remove('hot'));
+
   const desk = document.getElementById('desk');
   desk.addEventListener('click', () => {
     hideTip();

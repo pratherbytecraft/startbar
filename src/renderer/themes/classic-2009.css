@@ -31,7 +31,7 @@ body { font-size: 12px; color: #fff; }
     radial-gradient(circle at 50% 88%, color-mix(in srgb, var(--accent) 50%, #fff) 0, var(--accent) 38%, color-mix(in srgb, var(--accent) 40%, #000) 100%);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .45), 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
 }
-.start:hover { filter: brightness(1.18); box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .55), 0 0 14px color-mix(in srgb, var(--accent) 70%, #fff); }
+.start:hover, .start.hot { filter: brightness(1.18); box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .55), 0 0 14px color-mix(in srgb, var(--accent) 70%, #fff); }
 .start.open { filter: brightness(.8); }
 .start span { display: none; }
 .start svg { width: calc((var(--bar-h) - 4px) * .5); height: calc((var(--bar-h) - 4px) * .5); filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5)); }
