@@ -26,6 +26,13 @@
     ['about', 'About Startbar', '#45aaf2']
   ];
   const POWER = [['sleep', 'Sleep', '#f7b731'], ['logout', 'Log Out', '#e8942a'], ['shutdown', 'Shut Down', '#d9412c']];
+  // White marks drawn on each power button's colored badge: a moon, a door
+  // with an arrow, the power symbol.
+  const POWER_MARKS = {
+    sleep: '<path d="M10.2 3.2a5 5 0 1 0 2.6 8.4 4.2 4.2 0 0 1-2.6-8.4z" fill="#fff"/>',
+    logout: '<path d="M7 3.5H4v9h3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M7.5 8h5.5M10.8 5.6 13.2 8l-2.4 2.4" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    shutdown: '<path d="M8 2.6v5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M4.9 4.6a4.6 4.6 0 1 0 6.2 0" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>'
+  };
 
   function appItem(a) {
     const d = document.createElement('div');
@@ -127,6 +134,7 @@
       const s = document.createElement('span');
       s.className = 'pw ' + action;
       const ico = document.createElement('span'); ico.className = 'ico'; ico.style.background = color;
+      ico.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${POWER_MARKS[action]}</svg>`;
       s.append(ico, document.createTextNode(name));
       s.addEventListener('click', () => api.power(action));
       footEl.append(s);

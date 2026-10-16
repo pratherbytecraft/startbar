@@ -71,7 +71,7 @@ body { color: var(--text); }
 .menu-foot { height: 44px; gap: 6px; padding: 0 10px; border-top: 1px solid var(--line); }
 .menu-foot .pw { padding: 5px 10px; border-radius: 7px; }
 .menu-foot .pw:hover { background: var(--accent); color: var(--accent-text); }
-.menu-foot .pw .ico { width: 14px; height: 14px; border-radius: 7px; }
+.menu-foot .pw .ico { width: 16px; height: 16px; border-radius: 8px; }
 .empty { color: var(--muted); padding: 10px 8px; }
 .group-list { padding: 6px; }
 .calendar { padding: 10px; }

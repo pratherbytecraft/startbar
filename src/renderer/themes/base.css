@@ -73,6 +73,8 @@ svg { display: block; }
 .menu-foot { display: flex; align-items: center; justify-content: flex-end; flex: none; }
 .menu-foot .pw { display: flex; align-items: center; gap: 6px; }
 .pw-more, .pw-pop { display: none; }
+.menu-foot .pw .ico { display: grid; place-items: center; }
+.menu-foot .pw .ico svg { width: 72%; height: 72%; }
 .hidden { display: none !important; }
 .scroll { overflow: auto; }
 
