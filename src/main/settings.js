@@ -44,7 +44,7 @@ const DEFAULTS = Object.freeze({
   },
   startMenu: {
     showRecent: true, // recently used apps above All Applications
-    recentCount: 6,
+    recentCount: 5, // 1 to RECENT_MAX
     focusSearch: true,
     search: 'apps', // apps | files (apps and files in the home folder)
     rightColumn: {
@@ -165,6 +165,8 @@ function init() {
   // A value of the wrong kind, from a hand-edited file say, falls back to
   // the default instead of being taken as it is ("false" would read as on).
   current = withScheme(merge(DEFAULTS, clean(saved, DEFAULTS)));
+  // Up to ten could be shown before 2026-10.
+  if (current.startMenu.recentCount > RECENT_MAX) current = merge(current, { startMenu: { recentCount: RECENT_MAX } });
   return current;
 }
 
@@ -175,6 +177,8 @@ function get() {
 function dataDir() {
   return dir;
 }
+
+const RECENT_MAX = 5;
 
 function save() {
   fs.writeFileSync(file, JSON.stringify(current, null, 2) + '\n');
