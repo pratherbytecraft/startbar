@@ -257,30 +257,42 @@ async function setDockHidden(hide) {
     });
     if (response !== 0) return;
   }
-  const result = await dock.setAutohide(hide);
+  await dockChanged(await dock.setAutohide(hide), '"Automatically hide and show the Dock"');
+}
+
+async function moveDockToBottom() {
+  const { response } = await dialog.showMessageBox(windows.settings, {
+    type: 'question',
+    message: 'Move the Dock to the bottom?',
+    detail: 'Minimized windows shrink toward the Dock. With the Dock at the bottom they go down toward the bar instead of off to the side.',
+    buttons: ['Move the Dock', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1
+  });
+  if (response !== 0) return;
+  await dockChanged(await dock.moveToBottom(), '"Position on screen"');
+}
+
+// setting is the name of the same switch in System Settings, Desktop and Dock.
+async function dockChanged(result, setting) {
   rememberAutomation(result);
   await refreshDock();
   // The first time, macOS asks for the permission, and closing its prompt
   // hands focus to the app that was in front before Startbar.
-  if (windows.settings) {
-    app.focus({ steal: true });
-    windows.settings.focus();
-  }
+  focusSettings();
   if (result === 'ok') return;
   const { response } = await dialog.showMessageBox(windows.settings, {
     type: 'warning',
     message: result === 'notAllowed' ? "Startbar isn't allowed to change the Dock" : "The Dock didn't change",
     detail: result === 'notAllowed'
-      ? 'Turn on System Events under Startbar in Privacy and Security, Automation, then try again. Or turn on "Automatically hide and show the Dock" in Desktop and Dock.'
-      : 'Try "Automatically hide and show the Dock" in System Settings, under Desktop and Dock.',
+      ? `Turn on System Events under Startbar in Privacy and Security, Automation, then try again. Or change ${setting} in Desktop and Dock.`
+      : `Try ${setting} in System Settings, under Desktop and Dock.`,
     buttons: ['Open System Settings', 'OK'],
     defaultId: 1,
     cancelId: 1
   });
   if (response === 0) {
-    shell.openExternal(result === 'notAllowed'
-      ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation'
-      : 'x-apple.systempreferences:com.apple.Desktop-Settings.extension');
+    shell.openExternal(result === 'notAllowed' ? PANES.automation : 'x-apple.systempreferences:com.apple.Desktop-Settings.extension');
   }
 }
 
@@ -584,6 +596,7 @@ function wireIpc() {
   ipcMain.on('pins:remove', (_e, appPath) => pins.remove(appPath));
   ipcMain.on('pins:add', () => addPins());
   ipcMain.on('dock:hidden', (_e, hide) => setDockHidden(!!hide));
+  ipcMain.on('dock:bottom', () => moveDockToBottom());
   ipcMain.on('folders:add', () => addFolders());
   ipcMain.on('login:set', (_e, on) => setLoginItem(on));
   ipcMain.on('updates:check', () => updates.check(VERSION));

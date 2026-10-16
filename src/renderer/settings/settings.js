@@ -95,7 +95,8 @@
               unused: { when: (s) => s.taskbar.autoHide, note: 'Not used while the bar hides itself.' },
               control: { type: 'toggle', key: 'taskbar.moveWindowsUp' } },
             { label: 'The Dock', note: 'The Dock and the bar share the bottom edge. Hiding the Dock is the usual setup.',
-              control: { type: 'dock' } },
+              control: { type: 'dock' },
+              hint: { when: (s) => s.dock && s.dock.position !== 'bottom', text: 'Minimized windows shrink toward the Dock, so with the Dock on the side they go off to that side.' } },
             { label: 'Show Startbar in the menu bar', note: 'The menu bar icon brings a hidden bar back.',
               control: { type: 'select', key: 'menuBarIcon', options: [['hidden', 'Only while the bar is hidden'], ['always', 'Always']] } }
           ]
@@ -416,22 +417,32 @@
   }
 
   // Whether the Dock hides itself, with a button to change it. A Dock on
-  // the left or right doesn't share the bottom edge, so there's nothing to do.
-  function dock() {
+  // the left or right doesn't share the bottom edge, but minimized windows
+  // fly off toward it, so the button offers to move it down.
+  function dock(c, rowEl) {
+    const note = rowEl.querySelector('.lbl small'); // about sharing the bottom edge
     const box = node('div', 'ctl-inner');
     box.style.display = 'contents';
     const status = node('span', 'status');
     const dot = node('i');
     const text = node('span');
     status.append(dot, text);
-    const b = button({ text: '', click: () => state.dock && api.setDockHidden(!state.dock.autohide) });
+    const b = button({
+      text: '',
+      click: () => {
+        const d = state.dock;
+        if (d && d.position !== 'bottom') api.moveDockToBottom();
+        else if (d) api.setDockHidden(!d.autohide);
+      }
+    });
     syncs.push(() => {
       const d = state.dock;
       const side = d && d.position !== 'bottom';
       dot.className = !d ? 'wait' : side || d.autohide ? '' : 'warn';
       text.textContent = !d ? 'Checking' : side ? `The Dock is on the ${d.position}` : d.autohide ? 'The Dock hides itself' : 'The Dock is visible';
-      b.textContent = d && d.autohide ? 'Show the Dock' : 'Hide the Dock';
-      b.classList.toggle('hidden', !d || side);
+      b.textContent = side ? 'Move to the Bottom' : d && d.autohide ? 'Show the Dock' : 'Hide the Dock';
+      b.classList.toggle('hidden', !d);
+      note.classList.toggle('hidden', side);
     });
     box.append(status, b);
     return box;
@@ -585,12 +596,14 @@
     const ctl = node('div', 'ctl');
     rowEl.append(lbl, ctl);
     ctl.append(CONTROLS[r.control.type](r.control, rowEl));
-    // A line that shows only in some states, ending in a link.
+    // A line that shows only in some states, sometimes ending in a link.
     if (r.hint) {
       const hint = node('small', 'hint hidden', r.hint.text);
-      const link = node('span', 'link', r.hint.link);
-      link.addEventListener('click', r.hint.click);
-      hint.append(link, r.hint.after || '');
+      if (r.hint.link) {
+        const link = node('span', 'link', r.hint.link);
+        link.addEventListener('click', r.hint.click);
+        hint.append(link, r.hint.after || '');
+      }
       lbl.append(hint);
       syncs.push(() => hint.classList.toggle('hidden', !r.hint.when(state)));
     }

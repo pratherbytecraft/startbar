@@ -39,9 +39,15 @@ function setAutohide(on) {
   return tellSystemEvents(`set autohide of dock preferences to ${on}`);
 }
 
+// Minimized windows shrink toward the Dock, so on a side they fly off to
+// that side instead of down toward the bar.
+function moveToBottom() {
+  return tellSystemEvents('set screen edge of dock preferences to bottom');
+}
+
 // Only reads, so the Permissions page can ask without changing anything.
 function askAutomation() {
   return tellSystemEvents('get autohide of dock preferences');
 }
 
-module.exports = { status, setAutohide, askAutomation };
+module.exports = { status, setAutohide, moveToBottom, askAutomation };

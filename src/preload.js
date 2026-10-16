@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('startbar', {
   unpin: (appPath) => ipcRenderer.send('pins:remove', appPath),
   addPins: () => ipcRenderer.send('pins:add'),
   setDockHidden: (hide) => ipcRenderer.send('dock:hidden', hide),
+  moveDockToBottom: () => ipcRenderer.send('dock:bottom'),
   addFolders: () => ipcRenderer.send('folders:add'),
   setFolders: (list) => ipcRenderer.send('folders:set', list),
   setLoginItem: (on) => ipcRenderer.send('login:set', on),
