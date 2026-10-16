@@ -17,6 +17,9 @@
 //     Prints {"allowed": true or false} for the Screen Recording permission
 //     and exits. A fresh process sees a grant that a running one may not.
 //
+//   startbar-helper pass-finder
+//     Asks Filedrawer to leave the next Finder window to Finder, and exits.
+//
 //   startbar-helper status
 //     Runs until stdin closes. Prints the volume, Wi-Fi, battery and
 //     Bluetooth for the tray, and where the Location, Bluetooth and
@@ -1200,7 +1203,7 @@ var statusWatcher: StatusWatcher?
 // MARK: - Entry
 
 let args = CommandLine.arguments
-let usage = "usage: startbar-helper icons <cacheDir> | startbar-helper windows | startbar-helper screen-access | startbar-helper status"
+let usage = "usage: startbar-helper icons <cacheDir> | startbar-helper windows | startbar-helper screen-access | startbar-helper status | startbar-helper pass-finder"
 guard args.count >= 2 else { fail(usage) }
 switch args[1] {
 case "icons":
@@ -1212,6 +1215,11 @@ case "windows":
     RunLoop.main.run()
 case "screen-access":
     jsonLine(["allowed": CGPreflightScreenCaptureAccess()])
+case "pass-finder":
+    // Tells Filedrawer, when it opens folders in place of Finder, to leave the
+    // next Finder window alone: the Start menu's folders are set to Finder.
+    DistributedNotificationCenter.default().postNotificationName(
+        Notification.Name("com.pratherbytecraft.filedrawer.passFinder"), object: nil, userInfo: nil, deliverImmediately: true)
 case "status":
     statusWatcher = StatusWatcher()
     statusWatcher?.start()

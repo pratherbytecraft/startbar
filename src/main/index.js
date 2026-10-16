@@ -174,7 +174,11 @@ function openFolder(p) {
     isFolder = false;
   }
   const fd = isFolder && settings.get().openFoldersWith === 'filedrawer' ? filedrawerApp() : null;
-  if (fd) execFile('open', ['-a', fd, p], (err) => err && shell.openPath(p));
+  if (fd) return execFile('open', ['-a', fd, p], (err) => err && shell.openPath(p));
+  // Finder picked, while Filedrawer may be opening folders in place of
+  // Finder: ask it to leave this window alone first.
+  const helper = isFolder && filedrawerApp() ? helperPath() : null;
+  if (helper) execFile(helper, ['pass-finder'], () => shell.openPath(p));
   else shell.openPath(p);
 }
 
