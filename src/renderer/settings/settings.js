@@ -90,7 +90,7 @@
         {
           title: 'Start button and pins',
           rows: [
-            { label: 'Show the word Start on the button', unused: { when: (s) => s.theme === 'classic-2009', note: 'Classic 2009 has a round button with no word on it.' },
+            { label: 'Show the word Start on the button', unused: { when: (s) => s.theme === 'classic-2009' || s.theme === 'system', note: 'This theme has a round button with no word on it.' },
               control: { type: 'toggle', key: 'taskbar.showStartLabel' } },
             { label: 'Show pinned apps on the bar', control: { type: 'toggle', key: 'taskbar.showPins' } },
             { label: 'Where pinned apps go', note: "In the row, a pinned app's button turns into its window buttons once it opens.",

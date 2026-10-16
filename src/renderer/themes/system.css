@@ -28,29 +28,58 @@ body { color: var(--text); }
 .bar { background: var(--surface); border-top: 1px solid var(--line); }
 [data-translucent="off"] .bar { background: var(--surface-solid); }
 
+/* the round Start button, in the accent color, sized to the bar */
 .start {
-  align-self: center; height: calc(var(--bar-h) - 10px); margin: 0 6px; padding: 0 12px 0 9px; border-radius: 7px;
-  background: var(--accent); color: var(--accent-text); font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .2);
+  align-self: center; width: calc(var(--bar-h) - 6px); height: calc(var(--bar-h) - 6px); flex: none;
+  margin: 0 8px 0 6px; padding: 0; justify-content: center; border-radius: 50%;
+  background:
+    radial-gradient(ellipse 60% 38% at 50% 24%, rgba(255, 255, 255, .55) 0, rgba(255, 255, 255, .06) 96%, transparent 100%),
+    radial-gradient(circle at 50% 85%, color-mix(in srgb, var(--accent) 55%, #fff) 0, var(--accent) 45%, color-mix(in srgb, var(--accent) 55%, #000) 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .3);
 }
-[data-start-label="off"] .start { padding: 0 9px; }
-.start:hover, .start.hot { filter: brightness(1.08); }
-.start.open { filter: brightness(.85); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .35); }
-.start .glyph-fill { fill: var(--accent-text); }
-.start .glyph-ink { fill: var(--accent); }
+.start:hover, .start.hot { filter: brightness(1.12); box-shadow: 0 1px 3px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .4), 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent); }
+.start.open { filter: brightness(.85); }
+.start span { display: none; }
+.start svg { width: 50%; height: 50%; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+.start .glyph-fill { fill: #fff; }
+.start .glyph-ink { fill: color-mix(in srgb, var(--accent) 70%, #000); }
 
 .quick .icon { width: calc(var(--bar-h) - 10px); height: calc(var(--bar-h) - 10px); border-radius: 6px; }
 .quick .icon:hover { background: var(--fill-hover); }
 .grip { width: 1px; height: calc(var(--bar-h) - 16px); margin: 0 6px; background: var(--line); }
 
-.task { height: calc(var(--bar-h) - 10px); padding: 0 8px; border-radius: 7px; background: var(--fill); }
-.task:hover { background: var(--fill-hover); }
-.task.active { background: var(--accent); color: var(--accent-text); font-weight: 600; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2); }
+/* window buttons: soft glass that glows in the app's own color on hover
+   (--glow, set by the bar from the icon), the active one tinted with the
+   accent color */
+.task {
+  --glow: #7fc4ff; --edge: inset 0 0 0 1px rgba(255, 255, 255, .12), inset 0 1px 0 rgba(255, 255, 255, .12);
+  position: relative; height: calc(var(--bar-h) - 6px); padding: 0 8px; border-radius: 7px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .03)); box-shadow: var(--edge);
+}
+[data-appearance="light"] .task {
+  --edge: inset 0 0 0 1px rgba(0, 0, 0, .1), 0 1px 1px rgba(0, 0, 0, .06);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .75), rgba(255, 255, 255, .35));
+}
+.task:hover {
+  background: radial-gradient(ellipse 85% 80% at 50% 105%, color-mix(in srgb, var(--glow) 70%, transparent) 0, transparent 80%),
+    linear-gradient(180deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, .06));
+}
+[data-appearance="light"] .task:hover {
+  background: radial-gradient(ellipse 85% 80% at 50% 105%, color-mix(in srgb, var(--glow) 55%, transparent) 0, transparent 80%),
+    linear-gradient(180deg, rgba(255, 255, 255, .9), rgba(255, 255, 255, .5));
+}
+.task.active {
+  --edge: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, #fff), inset 0 1px 0 rgba(255, 255, 255, .25);
+  font-weight: 600;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 45%, rgba(255, 255, 255, .2)), color-mix(in srgb, var(--accent) 30%, transparent));
+}
 .task.active:hover { filter: brightness(1.08); }
-[data-labels="icons-only"] .task, .tasks.compact .task { padding: 0 9px; }
-.task .count { background: rgba(255, 255, 255, .18); }
-[data-appearance="light"] .task .count { background: rgba(0, 0, 0, .12); }
-.task.active .count { background: rgba(0, 0, 0, .2); }
+/* a group: the window count, and a stacked edge on the right */
+.task:has(.count) { margin-right: 5px; overflow: visible; box-shadow: var(--edge), 4px 0 0 -3px var(--fill-hover), 5px 0 0 -3px var(--line); }
+.task .count { background: var(--accent); color: var(--accent-text); }
+.task.active .count { background: rgba(255, 255, 255, .9); color: color-mix(in srgb, var(--accent) 70%, #000); }
+[data-labels="icons-only"] .task, .tasks.compact .task { width: calc(var(--bar-h) * 1.4); padding: 0; justify-content: center; }
+[data-labels="icons-only"] .task .count, .tasks.compact .task .count { position: absolute; top: 2px; right: 6px; height: 14px; min-width: 14px; padding: 0 3px; font-size: 10px; }
 
 .tray { padding: 0 12px 0 10px; margin-left: 4px; border-left: 1px solid var(--line); }
 .tray .clock .date { font-size: 10px; opacity: .75; }
