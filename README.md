@@ -9,7 +9,7 @@ npm install -g startbar
 startbar
 ```
 
-Startbar needs Node 18 or newer. The first start takes a moment while it reads your app icons.
+Startbar needs Node 18 or newer and Apple's Command Line Tools, which the install uses to build a small helper. If they're missing, the install says so; run `xcode-select --install`, then `npm rebuild -g startbar`. The first start takes a moment while it reads your app icons.
 
 The install also adds Startbar to the Applications folder in your home folder, so you can open it again from Spotlight or the Start menu after you quit it.
 
