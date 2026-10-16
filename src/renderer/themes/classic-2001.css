@@ -36,6 +36,8 @@ body { font-size: 11px; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); 
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 1px 0 0 rgba(255, 255, 255, .2), 0 1px 1px rgba(0, 0, 0, .35);
 }
 .task img { width: 16px; height: 16px; }
+.task .count { background: none; padding: 0; min-width: 0; font-size: 11px; }
+.task .caret { border-top-color: #fff; opacity: 1; }
 .task:hover { background: linear-gradient(180deg, #5a98ff 0, #3b74e6 100%); }
 .task.active {
   font-weight: bold;
@@ -74,3 +76,7 @@ body { font-size: 11px; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); 
 .menu-foot .pw:hover { text-decoration: underline; }
 .menu-foot .pw .ico { width: 18px; height: 18px; border-radius: 9px; }
 .empty { color: #777; padding: 10px; }
+.menu.group-list { border-radius: 0; padding: 2px 0; }
+
+/* tooltip */
+.tip { background: #ffffe1; color: #000; border: 1px solid #000; padding: 2px 5px; font-size: 11px; text-shadow: none; }

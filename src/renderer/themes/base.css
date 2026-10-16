@@ -25,8 +25,11 @@ svg { display: block; }
 .task .label { overflow: hidden; text-overflow: ellipsis; }
 .task img { width: 18px; height: 18px; flex: none; }
 .task.dim img, .task.dim .label { opacity: .5; }
-[data-labels="icons-only"] .task { flex: none; min-width: 0; }
-[data-labels="icons-only"] .task .label { display: none; }
+.task .count { font-weight: 600; font-size: 11px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+.task .caret { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; margin-left: auto; flex: none; opacity: .8; }
+[data-labels="icons-only"] .task, .tasks.compact .task { flex: none; min-width: 0; }
+[data-labels="icons-only"] .task .label, [data-labels="icons-only"] .task .caret,
+.tasks.compact .task .label, .tasks.compact .task .caret { display: none; }
 .tray { display: flex; align-items: center; gap: 10px; position: relative; }
 .tray .clock { font-variant-numeric: tabular-nums; text-align: center; line-height: 1.15; }
 .tray .clock .date { display: none; }
@@ -49,3 +52,11 @@ svg { display: block; }
 .menu-foot { display: flex; align-items: center; justify-content: flex-end; flex: none; }
 .menu-foot .pw { display: flex; align-items: center; gap: 6px; }
 .hidden { display: none !important; }
+.scroll { overflow: auto; }
+
+/* group list and tooltip */
+.menu.group-list { position: relative; inset: auto; display: block; }
+.group-list .item img { width: 20px; height: 20px; }
+.group-list .item.current .label { font-weight: 600; }
+.group-list .item.dim img, .group-list .item.dim .label { opacity: .55; }
+.tip { position: absolute; left: 8px; top: 8px; width: max-content; max-width: 480px; overflow-wrap: anywhere; }

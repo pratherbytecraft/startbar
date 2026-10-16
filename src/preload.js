@@ -23,5 +23,14 @@ contextBridge.exposeInMainWorld('startbar', {
   getTasks: () => ipcRenderer.invoke('tasks:get'),
   onTasks: on('tasks'),
   taskCommand: (command) => ipcRenderer.invoke('tasks:command', command),
-  taskIcons: (paths) => ipcRenderer.invoke('tasks:icons', paths)
+  taskIcons: (paths) => ipcRenderer.invoke('tasks:icons', paths),
+  taskMenu: (target) => ipcRenderer.send('tasks:menu', target),
+  showTip: (tip) => ipcRenderer.send('tip:show', tip),
+  hideTip: () => ipcRenderer.send('tip:hide'),
+  onTipText: on('tip:text'),
+  tipSize: (size) => ipcRenderer.send('tip:size', size),
+  showGroup: (group) => ipcRenderer.send('group:show', group),
+  hideGroup: () => ipcRenderer.send('group:hide'),
+  onGroupShow: on('group:show'),
+  groupSize: (size) => ipcRenderer.send('group:size', size)
 });

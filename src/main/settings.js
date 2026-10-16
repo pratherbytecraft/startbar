@@ -13,6 +13,13 @@ const DEFAULTS = Object.freeze({
   barHeight: 36,
   labels: 'icon-and-title', // icon-and-title | icons-only
   maxButtonWidth: 180,
+  taskbar: {
+    grouping: 'always', // always | full | never
+    clickActiveMinimizes: true,
+    titleOnHover: true,
+    showWindowless: false, // apps that are running with no windows get a button
+    order: 'opened' // opened | app
+  },
   clock: {
     hour12: true,
     seconds: false,

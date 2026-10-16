@@ -124,6 +124,7 @@ let axCallback: AXObserverCallback = { _, _, _, refcon in
 //   {"cmd":"minimize","id":"w123"}    {"cmd":"unminimize","id":"w123"}
 //   {"cmd":"close","id":"w123"}       press the window's close button
 //   {"cmd":"activateApp","pid":501}   {"cmd":"quitApp","pid":501}
+//   {"cmd":"newWindow","pid":501}     bring the app forward and press Command N
 //   {"cmd":"refresh"}                 send the state now, even if unchanged
 // STARTBAR_HELPER_DEBUG=1 prints scan and command timings to stderr.
 final class WindowWatcher {
@@ -421,12 +422,16 @@ final class WindowWatcher {
             lastLine = ""
             emitState()
             return nil
-        case "activateApp", "quitApp":
+        case "activateApp", "quitApp", "newWindow":
             guard let pid = command["pid"] as? Int, let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {
                 return "no such app"
             }
             if name == "quitApp" { return app.terminate() ? nil : "the app did not quit" }
             activateApp(app)
+            if name == "newWindow" {
+                guard trusted else { return "no accessibility permission" }
+                newWindow(pid_t(pid))
+            }
             return nil
         case "activate", "minimize", "unminimize", "close":
             guard trusted else { return "no accessibility permission" }
@@ -461,6 +466,19 @@ final class WindowWatcher {
             NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in }
         } else {
             app.activate(options: [])
+        }
+    }
+
+    // Command N, sent straight to the app so it lands even if another app
+    // is still in front. Waits a moment for the app to come forward first.
+    func newWindow(_ pid: pid_t) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            let source = CGEventSource(stateID: .hidSystemState)
+            for down in [true, false] {
+                let event = CGEvent(keyboardEventSource: source, virtualKey: 45, keyDown: down) // N
+                event?.flags = .maskCommand
+                event?.postToPid(pid)
+            }
         }
     }
 

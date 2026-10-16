@@ -107,6 +107,34 @@ function showBarMenu() {
   Menu.buildFromTemplate(items).popup({ window: windows.bar });
 }
 
+// Right click on a window, group or app button.
+function showTaskMenu(target) {
+  const app = tasks.get().apps.find((a) => a.pid === target.pid);
+  if (!app || !windows.bar) return;
+  const send = (cmd, extra) => tasks.send({ cmd, ...extra });
+  const items = [];
+  if (target.kind === 'window') {
+    const win = app.windows.find((w) => w.id === target.id);
+    if (win) {
+      items.push(
+        win.minimized
+          ? { label: 'Restore', click: () => send('unminimize', { id: win.id }) }
+          : { label: 'Minimize', click: () => send('minimize', { id: win.id }) },
+        { label: 'Close', click: () => send('close', { id: win.id }) },
+        { type: 'separator' }
+      );
+    }
+  } else if (target.kind === 'group' && Array.isArray(target.ids)) {
+    items.push(
+      { label: 'Minimize All', click: () => target.ids.forEach((id) => send('minimize', { id })) },
+      { label: 'Close All', click: () => target.ids.forEach((id) => send('close', { id })) },
+      { type: 'separator' }
+    );
+  }
+  items.push({ label: `Quit ${app.name}`, click: () => send('quitApp', { pid: app.pid }) });
+  Menu.buildFromTemplate(items).popup({ window: windows.bar });
+}
+
 function wireIpc() {
   ipcMain.handle('state', () => state());
   ipcMain.on('bar:start', () => windows.toggleMenu());
@@ -141,6 +169,13 @@ function wireIpc() {
   ipcMain.handle('tasks:get', () => tasks.get());
   ipcMain.handle('tasks:command', (_e, command) => tasks.send(command));
   ipcMain.handle('tasks:icons', (_e, paths) => apps.icons(Array.isArray(paths) ? paths : []));
+  ipcMain.on('tasks:menu', (_e, target) => showTaskMenu(target || {}));
+  ipcMain.on('tip:show', (_e, { text, rect }) => windows.showTip(String(text), rect));
+  ipcMain.on('tip:size', (_e, size) => windows.sizeTip(size));
+  ipcMain.on('tip:hide', () => windows.hideTip());
+  ipcMain.on('group:show', (_e, payload) => windows.showGroup(payload));
+  ipcMain.on('group:size', (_e, size) => windows.sizeGroup(size));
+  ipcMain.on('group:hide', () => windows.hideGroup());
 }
 
 app.whenReady().then(() => {
@@ -149,6 +184,8 @@ app.whenReady().then(() => {
   wireIpc();
   windows.createBar(settings.get());
   windows.createMenu(settings.get());
+  windows.createTip();
+  windows.createGroup(settings.get());
   registerShortcut();
   apps.load(); // warm the icon cache before the first click
   tasks.onChange((t) => {
