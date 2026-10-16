@@ -29,11 +29,11 @@ The Start button opens a menu that lists your apps with a search box, your recen
 
 Apps pinned next to the Start button open with one click. Drag them to reorder them. Right click an app in the Start menu or a window button and pick Pin to Bar to add one.
 
-The tray shows the volume, Wi-Fi and battery next to the clock. Click one for a small panel to change the volume, turn Wi-Fi on or off, or see how much charge is left. Click the clock for a small calendar.
+The tray shows Bluetooth, the volume, Wi-Fi and the battery next to the clock. Click one for a small panel to change the volume, turn Wi-Fi or Bluetooth on or off, connect a Bluetooth device, or see how much charge is left. Click the clock for a small calendar.
 
 With more than one display, each display gets its own bar with that display's windows. The bar can also show windows from every Space, and clicking one switches to its Space.
 
-Open Startbar Settings from the Start menu or by right clicking the bar. Everything above is set there, with a preview of the bar that changes as you go. Settings also has Open at login, export and import of your settings, and a button that hides the Dock for you.
+Open Startbar Settings from the Start menu or by right clicking the bar. Everything above is set there, with a preview of the bar that changes as you go. Settings also has Open at login, export and import of your settings, and buttons that hide the Dock or move it to the bottom.
 
 Right click an empty part of the bar to hide it. While the bar is hidden, a Startbar icon sits in the menu bar. Click it, press Control Space or open Startbar again to bring the bar back.
 
@@ -47,11 +47,14 @@ macOS does not let an app reserve space at the bottom of the screen. Startbar mo
 
 Other apps' menu bar icons can't be moved into the bar. They stay in the menu bar at the top.
 
-Window buttons need the Accessibility permission. Startbar asks once and explains why. Without it the bar shows one button per app. To turn it on later, open Startbar Settings, go to General and click Open System Settings.
+## Permissions
 
-The Hide the Dock button asks macOS for permission to control System Events the first time you use it. Nothing else needs it.
+The Permissions page in Startbar Settings shows each permission Startbar can use, whether it's allowed, and a button to allow it or open System Settings. Apart from Accessibility, nothing is asked until you press that button or use the feature.
 
-The Wi-Fi panel doesn't show the network name, since macOS only gives that out with the Location permission.
+- Accessibility shows window titles on the bar and brings a window forward when you click its button. Startbar asks once when it first opens. Without it the bar shows one button per app.
+- Automation for System Events lets the Dock buttons hide the Dock or move it to the bottom.
+- Location shows the Wi-Fi network's name in the tray. macOS counts the network name as location. Startbar doesn't read where you are.
+- Bluetooth shows Bluetooth in the tray with your devices and their battery.
 
 ## Help
 
