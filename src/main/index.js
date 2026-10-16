@@ -596,11 +596,13 @@ app.whenReady().then(() => {
     access.check(t);
   });
   updateKeepOff();
+  tasks.setSpaces(settings.get().spaces.show === 'all');
   tasks.start();
   status.onChange((s) => windows.broadcast('status', s));
   status.start();
 
   settings.onChange((s) => {
+    tasks.setSpaces(s.spaces.show === 'all');
     applyAppearance();
     windows.layout(s);
     registerShortcut();

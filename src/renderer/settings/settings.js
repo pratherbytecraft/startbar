@@ -183,6 +183,13 @@
             { label: 'Show the clock and tray on', onlyWith: { when: (s) => s.displays.bars === 'all', note: 'Used when there is a bar on every display.' },
               control: { type: 'seg', key: 'displays.tray', options: [['every', 'Every bar'], ['main', 'Main display only']] } }
           ]
+        },
+        {
+          title: 'Spaces',
+          rows: [
+            { label: 'Show windows from', note: 'Windows from other Spaces switch to that Space when clicked.',
+              control: { type: 'seg', key: 'spaces.show', options: [['current', 'The current Space'], ['all', 'All Spaces']] } }
+          ]
         }
       ]
     },

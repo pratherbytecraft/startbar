@@ -86,6 +86,12 @@ func runIcons(cacheDir: String) {
 // Private but long stable: the CGWindowID behind an Accessibility window.
 // Every taskbar and window manager on macOS uses it. When it fails, the
 // window is matched to the window server list by its owner and bounds.
+// Builds an Accessibility element from a remote token: the app's pid and an
+// element number. Used to reach windows on other Spaces, which the windows
+// attribute leaves out. Private, the same call AltTab uses.
+@_silgen_name("_AXUIElementCreateWithRemoteToken")
+func _AXUIElementCreateWithRemoteToken(_ data: CFData) -> Unmanaged<AXUIElement>?
+
 @_silgen_name("_AXUIElementGetWindow")
 func _AXUIElementGetWindow(_ element: AXUIElement, _ windowId: UnsafeMutablePointer<CGWindowID>) -> AXError
 
@@ -122,11 +128,13 @@ let axCallback: AXObserverCallback = { _, _, _, refcon in
 // Out, one JSON object per line:
 //   {"type":"permission","accessibility":true}
 //   {"type":"state","apps":[{"pid","name","bundleId","path","active","hidden",
-//     "windows":[{"id","order","title","minimized","focused","onScreen","fullScreen","x","y","w","h"}]}]}
+//     "windows":[{"id","order","title","minimized","focused","onScreen","fullScreen","otherSpace","x","y","w","h"}]}]}
 //     Regular apps only. Windows are standard windows and dialogs, empty
 //     without the permission. "order" counts up as windows are first seen,
 //     "focused" is the app's own focused window, "onScreen" is false for
 //     minimized windows, hidden apps and windows on other Spaces.
+//     "otherSpace" marks windows on another Space, listed only after
+//     {"cmd":"spaces","all":true}.
 //   {"type":"reply","seq":n,"cmd":"...","ok":true} or with "error":"..."
 // In, one JSON object per line, each with an optional "seq" echoed back:
 //   {"cmd":"activate","id":"w123"}    raise the window and bring its app forward
@@ -135,6 +143,7 @@ let axCallback: AXObserverCallback = { _, _, _, refcon in
 //   {"cmd":"activateApp","pid":501}   {"cmd":"quitApp","pid":501}
 //   {"cmd":"newWindow","pid":501}     bring the app forward and press Command N
 //   {"cmd":"refresh"}                 send the state now, even if unchanged
+//   {"cmd":"spaces","all":true}       also list windows on other Spaces
 //   {"cmd":"keepOff","areas":[{"top":25,"bottom":830,"screen":{"x":0,"y":0,"w":1512,"h":866}}]}
 //     one area per bar, or a single area's keys at the top level
 //     move windows on that screen up when they would cover the bar, which
@@ -160,6 +169,9 @@ final class WindowWatcher {
     var keepOff: [(top: CGFloat, bottom: CGFloat, screen: CGRect)] = []
     var nudgeTried: [String: CGRect] = [:] // window id -> its frame after a move that didn't clear the bar
     var emitPending = false
+    var allSpaces = false
+    var remote: [pid_t: [CGWindowID: AXUIElement]] = [:] // other Spaces' windows found by token
+    var searched: [pid_t: Set<CGWindowID>] = [:] // window ids already looked for that way
     let debug = ProcessInfo.processInfo.environment["STARTBAR_HELPER_DEBUG"] != nil
 
     func note(_ text: String) {
@@ -280,6 +292,8 @@ final class WindowWatcher {
         }
         for pid in Array(known.keys) where !alive.contains(pid) {
             known[pid] = nil
+            remote[pid] = nil
+            searched[pid] = nil
             lastWindows[pid] = nil
             busyUntil[pid] = nil
             busyCount[pid] = nil
@@ -307,7 +321,8 @@ final class WindowWatcher {
         let before = known[pid] ?? []
         var after: [Known] = []
         var out: [[String: Any]] = []
-        for window in list {
+        let elsewhere = allSpaces ? otherSpaceWindows(pid, listed: list, server: server) : [:]
+        for window in list + Array(elsewhere.values) {
             var subroleValue: CFTypeRef?
             let subroleResult = AXUIElementCopyAttributeValue(window, kAXSubroleAttribute as CFString, &subroleValue)
             // One timeout means the app is busy. Skip it this round rather
@@ -323,9 +338,14 @@ final class WindowWatcher {
             if _AXUIElementGetWindow(window, &windowId) != .success || windowId == 0, let frame {
                 windowId = server.all.first { $0.pid == pid && $0.bounds == frame }?.id ?? 0
             }
+            // A window seen before keeps its place, even when it comes back as
+            // a different element (listed now, found by token before).
             let item: Known
             if let seen = before.first(where: { CFEqual($0.element, window) }) {
                 item = seen
+            } else if windowId != 0, let seen = before.first(where: { $0.id == "w\(windowId)" }) {
+                item = Known(element: window, id: seen.id, order: seen.order)
+                watch(window, pid: pid)
             } else {
                 counter += 1
                 item = Known(element: window, id: windowId != 0 ? "w\(windowId)" : "p\(pid)-\(counter)", order: counter)
@@ -342,6 +362,7 @@ final class WindowWatcher {
                 "focused": focused.map { CFEqual($0, window) } ?? false,
                 "onScreen": onScreen,
                 "fullScreen": axBool(window, "AXFullScreen"),
+                "otherSpace": elsewhere[windowId].map { CFEqual($0, window) } ?? false,
                 "x": Int(frame?.origin.x ?? 0), "y": Int(frame?.origin.y ?? 0),
                 "w": Int(frame?.size.width ?? 0), "h": Int(frame?.size.height ?? 0)
             ])
@@ -412,6 +433,46 @@ final class WindowWatcher {
         observers[pid] = observer
     }
 
+    // Windows of this app on other Spaces, by window id. The window server
+    // knows every window; the ones the windows attribute leaves out are
+    // looked for once by trying element numbers, like AltTab. Ids that turn
+    // out not to be windows (an app's hidden helper windows) aren't tried again.
+    func otherSpaceWindows(_ pid: pid_t, listed: [AXUIElement],
+                           server: (onScreen: Set<CGWindowID>, all: [(pid: pid_t, id: CGWindowID, bounds: CGRect)])) -> [CGWindowID: AXUIElement] {
+        var listedIds = Set<CGWindowID>()
+        for window in listed {
+            var id: CGWindowID = 0
+            if _AXUIElementGetWindow(window, &id) == .success { listedIds.insert(id) }
+        }
+        let candidates = server.all.filter {
+            $0.pid == pid && !listedIds.contains($0.id) && !server.onScreen.contains($0.id)
+                && $0.bounds.width >= 50 && $0.bounds.height >= 50
+        }.map(\.id)
+        let alive = Set(candidates)
+        var found = (remote[pid] ?? [:]).filter { alive.contains($0.key) }
+        let fresh = candidates.filter { found[$0] == nil && !(searched[pid] ?? []).contains($0) }
+        if !fresh.isEmpty {
+            let started = Date()
+            var token = Data(count: 20)
+            token.replaceSubrange(0..<4, with: withUnsafeBytes(of: pid) { Data($0) })
+            token.replaceSubrange(8..<12, with: withUnsafeBytes(of: Int32(0x636f636f)) { Data($0) })
+            for number in UInt64(0)..<1000 {
+                token.replaceSubrange(12..<20, with: withUnsafeBytes(of: number) { Data($0) })
+                guard let element = _AXUIElementCreateWithRemoteToken(token as CFData)?.takeRetainedValue() else { continue }
+                var id: CGWindowID = 0
+                guard _AXUIElementGetWindow(element, &id) == .success, alive.contains(id), found[id] == nil else { continue }
+                let subrole = axValue(element, kAXSubroleAttribute) as? String
+                guard subrole == kAXStandardWindowSubrole || subrole == kAXDialogSubrole else { continue }
+                found[id] = element
+            }
+            searched[pid, default: []].formUnion(fresh)
+            note(String(format: "pid %d other Spaces search %.0f ms, %d found", pid, Date().timeIntervalSince(started) * 1000, found.count))
+        }
+        searched[pid] = (searched[pid] ?? []).intersection(alive)
+        remote[pid] = found
+        return found
+    }
+
     func watch(_ window: AXUIElement, pid: pid_t) {
         guard let observer = observers[pid] else { return }
         let refcon = Unmanaged.passUnretained(self).toOpaque()
@@ -475,6 +536,14 @@ final class WindowWatcher {
         case "refresh":
             lastLine = ""
             emitState()
+            return nil
+        case "spaces":
+            allSpaces = command["all"] as? Bool ?? false
+            if !allSpaces {
+                remote.removeAll()
+                searched.removeAll()
+            }
+            lastLine = ""
             return nil
         case "keepOff":
             nudgeTried.removeAll()

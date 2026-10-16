@@ -196,6 +196,7 @@
   // Buttons that aren't windows go on the main display's bar.
   function buildItems(t) {
     const mine = perDisplay() ? (w) => displayOf(w) === place.id : () => true;
+    const otherSpaces = state.settings.spaces.show === 'all';
     const appsHere = !perDisplay() || place.main;
     if (!tasks.accessibility) return appsHere ? tasks.apps.map((a) => ({ kind: 'app', app: a })) : [];
     const wins = [];
@@ -203,7 +204,7 @@
     for (const a of tasks.apps) {
       // Minimized windows and hidden apps are off screen but still belong
       // on the bar. Windows on other Spaces only show when asked for.
-      const all = a.windows.filter((w) => w.onScreen || w.minimized || a.hidden);
+      const all = a.windows.filter((w) => w.onScreen || w.minimized || a.hidden || (otherSpaces && w.otherSpace));
       const list = all.filter(mine);
       if (all.length === 0) {
         if (t.showWindowless && appsHere) windowless.push({ kind: 'app', app: a });
@@ -357,7 +358,7 @@
     const t = state.settings.taskbar;
     const width = tasksEl.clientWidth - 8; // .tasks has 4px padding each side
     const { list, compact } = arrange(buildItems(t), t.grouping, width);
-    const key = JSON.stringify([compact, t, place, state.settings.displays, list.map((item) => [
+    const key = JSON.stringify([compact, t, place, state.settings.displays, state.settings.spaces, list.map((item) => [
       item.kind, item.app.pid, item.app.path, isActive(item), isDim(item),
       item.kind === 'window' ? [item.win.id, item.win.title] : item.kind === 'group' ? item.wins.map((w) => [w.id, w.title, w.minimized, w.focused]) : item.app.name
     ])]);

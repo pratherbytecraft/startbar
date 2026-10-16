@@ -15,6 +15,7 @@ let relaunch = false;
 let seq = 0;
 let state = { accessibility: null, apps: [] };
 let keepOff = { cmd: 'keepOff', areas: [] }; // resent to every new helper
+let spaces = { cmd: 'spaces', all: false }; // this one too
 
 function update(patch) {
   state = { ...state, ...patch };
@@ -59,6 +60,7 @@ function start() {
   child = spawn(helper, ['windows'], { stdio: ['pipe', 'pipe', 'inherit'] });
   readline.createInterface({ input: child.stdout }).on('line', onLine);
   child.stdin.write(JSON.stringify(keepOff) + '\n');
+  child.stdin.write(JSON.stringify(spaces) + '\n');
   child.on('error', (err) => console.log(`Startbar: the window helper did not start: ${err.message}`));
   child.on('exit', (code, signal) => {
     child = null;
@@ -115,9 +117,17 @@ function setKeepOff(areas) {
   if (child) send(keepOff);
 }
 
+// Whether the helper also lists windows on other Spaces.
+function setSpaces(all) {
+  if (spaces.all === !!all) return;
+  spaces = { cmd: 'spaces', all: !!all };
+  if (child) send(spaces);
+}
+
 module.exports = {
   start,
   setKeepOff,
+  setSpaces,
   stop,
   restart,
   send,
