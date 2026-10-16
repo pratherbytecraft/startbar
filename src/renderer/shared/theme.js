@@ -29,10 +29,17 @@
     return { appearance, accent, accentText: luminance(accent) > 0.7 ? '#1d1d1f' : '#ffffff' };
   }
 
+  let schemeNames = []; // the scheme variables set last time, to clear on a theme change
+
   function apply(state) {
     const { settings } = state;
     const root = document.documentElement;
     const { appearance, accent, accentText } = resolve(state);
+
+    const vars = window.schemeVars ? window.schemeVars(settings, { accent, appearance }) : {};
+    for (const name of schemeNames) if (!(name in vars)) root.style.removeProperty(name);
+    for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
+    schemeNames = Object.keys(vars);
 
     root.dataset.theme = settings.theme;
     root.dataset.appearance = appearance;

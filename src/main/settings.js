@@ -74,6 +74,18 @@ const DEFAULTS = Object.freeze({
   accessibilityAsked: false, // the one time Accessibility dialog has been shown
   hideNoteShown: false, // the one time note on how to bring a hidden bar back
   automationAnswer: '', // allowed | denied: the last answer for System Events, see main/index.js
+  // A classic theme's color scheme, kept per theme. scheme is one of the
+  // theme's schemes in renderer/shared/schemes.js; the rest are the Classic
+  // 1995 Custom colors and Classic 2009's own glass color and strength.
+  colors: {
+    scheme: 'default',
+    face: '#c0c0c0',
+    selected: '#000080',
+    title1: '#000080',
+    title2: '#1084d0',
+    tint: '#4a9ff5',
+    intensity: 34
+  },
   themes: {} // the THEME_KEYS of each theme that isn't the current one, by theme name
 });
 
@@ -83,7 +95,8 @@ const DEFAULTS = Object.freeze({
 const THEME_KEYS = [
   'appearance', 'accent', 'translucent', 'barHeight', 'labels', 'maxButtonWidth',
   'taskbar.showStartLabel', 'taskbar.showPins', 'taskbar.pinsPlace', 'taskbar.showDesktop', 'taskbar.grouping',
-  'clock.showDate', 'clock.dateStyle', 'tray.collapseArrow'
+  'clock.showDate', 'clock.dateStyle', 'tray.collapseArrow',
+  'colors.scheme', 'colors.face', 'colors.selected', 'colors.title1', 'colors.title2', 'colors.tint', 'colors.intensity'
 ];
 
 // A theme's own defaults over the shared ones, used the first time it's picked
