@@ -52,6 +52,7 @@ function state() {
     settings: settings.get(),
     pins: pins.get(),
     dock: dockStatus,
+    permissions: permissions(),
     loginItem: loginItem(),
     update: updates.get(),
     shortcutError,
@@ -97,10 +98,74 @@ function openSettings(page) {
   app.setActivationPolicy('regular');
   const fresh = !windows.settings;
   const win = windows.showSettings(() => app.setActivationPolicy('accessory'), typeof page === 'string' ? page : undefined);
-  // The Dock and the login item may have changed in System Settings.
-  if (fresh) win.on('focus', refreshDock);
+  // The Dock, the login item and the permissions may have changed in System Settings.
+  if (fresh) {
+    win.on('focus', () => {
+      refreshDock();
+      status.send({ cmd: 'access' });
+    });
+  }
   app.focus({ steal: true });
   refreshDock();
+  status.send({ cmd: 'access' });
+}
+
+// The Permissions page. Each permission is allowed, notAsked, denied, off
+// (Location Services is off for the whole Mac) or null until the status
+// helper reports. Accessibility comes from the window list instead.
+const PANES = {
+  automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
+  location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
+  bluetooth: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth'
+};
+let askingFor = null; // the permission whose macOS prompt is up
+let shownPermissions = '';
+
+function permissions() {
+  const a = status.get().access || {};
+  // macOS only answers for System Events while it's running. Otherwise go
+  // by the last answer Startbar saw.
+  const automation = a.automation && a.automation !== 'unknown' ? a.automation : settings.get().automationAnswer || 'notAsked';
+  return { automation, location: a.location || null, bluetooth: a.bluetooth || null };
+}
+
+function rememberAutomation(result) {
+  if (result === 'ok') settings.update({ automationAnswer: 'allowed' });
+  if (result === 'notAllowed') settings.update({ automationAnswer: 'denied' });
+  status.send({ cmd: 'access' });
+}
+
+// Closing a macOS prompt hands focus to the app that was in front before.
+function focusSettings() {
+  if (!windows.settings) return;
+  app.focus({ steal: true });
+  windows.settings.focus();
+}
+
+async function askPermission(name) {
+  if (name === 'accessibility') return access.openPane();
+  const now = permissions()[name];
+  if (!PANES[name] || now === 'allowed') return;
+  if (now === 'denied' || now === 'off') return shell.openExternal(PANES[name]);
+  if (name === 'automation') {
+    rememberAutomation(await dock.askAutomation());
+    focusSettings();
+    return;
+  }
+  askingFor = name;
+  status.send({ cmd: name === 'location' ? 'askLocation' : 'askBluetooth' });
+}
+
+function permissionsChanged() {
+  const now = permissions();
+  const key = JSON.stringify(now);
+  if (key === shownPermissions) return;
+  shownPermissions = key;
+  pushState();
+  if (askingFor && now[askingFor] !== 'notAsked') {
+    askingFor = null;
+    focusSettings();
+  }
 }
 
 // Open at login, through macOS's own login items. The switch shows what
@@ -133,7 +198,7 @@ async function exportSettings() {
     filters: [{ name: 'Startbar settings', extensions: ['json'] }]
   });
   if (canceled || !filePath) return;
-  const { accessibilityAsked, hideNoteShown, ...saved } = settings.get();
+  const { accessibilityAsked, hideNoteShown, automationAnswer, ...saved } = settings.get();
   fs.writeFileSync(filePath, JSON.stringify({ startbar: VERSION, settings: saved, pins: pins.get() }, null, 2) + '\n');
 }
 
@@ -193,6 +258,7 @@ async function setDockHidden(hide) {
     if (response !== 0) return;
   }
   const result = await dock.setAutohide(hide);
+  rememberAutomation(result);
   await refreshDock();
   // The first time, macOS asks for the permission, and closing its prompt
   // hands focus to the app that was in front before Startbar.
@@ -509,7 +575,7 @@ function wireIpc() {
     };
     if (links[name]) shell.openExternal(links[name]);
   });
-  ipcMain.on('access:open', () => access.openPane());
+  ipcMain.on('access:ask', (_e, name) => askPermission(name));
   ipcMain.on('pins:launch', (_e, appPath) => {
     if (pins.has(appPath)) shell.openPath(appPath);
   });
@@ -598,7 +664,10 @@ app.whenReady().then(() => {
   updateKeepOff();
   tasks.setSpaces(settings.get().spaces.show === 'all');
   tasks.start();
-  status.onChange((s) => windows.broadcast('status', s));
+  status.onChange((s) => {
+    windows.broadcast('status', s);
+    permissionsChanged();
+  });
   status.start();
 
   settings.onChange((s) => {

@@ -14,15 +14,21 @@
 //     on stdin and answers each with a {"type":"reply"} line. See WindowWatcher.
 //
 //   startbar-helper status
-//     Runs until stdin closes. Prints the volume, Wi-Fi and battery for the
-//     tray as one {"type":"status"} line whenever one changes, and takes
-//     commands to change them. See StatusWatcher.
+//     Runs until stdin closes. Prints the volume, Wi-Fi, battery and
+//     Bluetooth for the tray, and where the Location, Bluetooth and
+//     Automation permissions stand, as one {"type":"status"} line whenever
+//     one changes, and takes commands to change them. Runs from its own small
+//     app bundle so it can hold the Location permission. See StatusWatcher.
 import AppKit
 import ApplicationServices
 import AudioToolbox
 import CoreAudio
+import CoreBluetooth
+import CoreLocation
 import CoreWLAN
 import Foundation
+import IOBluetooth
+import IOKit
 import IOKit.ps
 
 func fail(_ message: String) -> Never {
@@ -644,19 +650,27 @@ final class WindowWatcher {
 // In, each with an optional "seq" echoed in a {"type":"reply"} line:
 //   {"cmd":"setVolume","level":0.4}   {"cmd":"setMuted","muted":true}
 //   {"cmd":"setWifi","on":false}      {"cmd":"refresh"}
-final class StatusWatcher: NSObject, CWEventDelegate {
+final class StatusWatcher: NSObject, CWEventDelegate, CLLocationManagerDelegate, CBCentralManagerDelegate {
     var lastLine = ""
     var pending = false
     var device = AudioObjectID(kAudioObjectUnknown)
     let wifiClient = CWWiFiClient.shared()
+    var location: CLLocationManager!
+    var central: CBCentralManager? // made once Bluetooth is allowed, making it asks
+    var connectNote: IOBluetoothUserNotification?
+    var access: [String: String] = [:]
 
     func start() {
         watchDefaultDevice()
         watchDevice()
         wifiClient.delegate = self
-        for event in [CWEventType.powerDidChange, .linkDidChange, .linkQualityDidChange] {
+        for event in [CWEventType.powerDidChange, .linkDidChange, .linkQualityDidChange, .ssidDidChange] {
             try? wifiClient.startMonitoringEvent(with: event)
         }
+        location = CLLocationManager()
+        location.delegate = self
+        if CBManager.authorization == .allowedAlways { startBluetooth() }
+        checkAccess()
         if let source = IOPSNotificationCreateRunLoopSource({ _ in statusWatcher?.changed() }, nil)?.takeRetainedValue() {
             CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
         }
@@ -681,6 +695,8 @@ final class StatusWatcher: NSObject, CWEventDelegate {
         out["volume"] = volume() ?? NSNull()
         out["wifi"] = wifi() ?? NSNull()
         out["battery"] = battery() ?? NSNull()
+        out["bluetooth"] = bluetooth() ?? NSNull()
+        out["access"] = access
         guard let line = jsonText(out), line != lastLine else { return }
         lastLine = line
         print(line)
@@ -769,7 +785,10 @@ final class StatusWatcher: NSObject, CWEventDelegate {
         let connected = on && rssi != 0
         // Rough bars from the signal, the way the menu bar draws them.
         let bars = !connected ? 0 : rssi >= -60 ? 3 : rssi >= -70 ? 2 : 1
-        return ["on": on, "connected": connected, "bars": bars]
+        var out: [String: Any] = ["on": on, "connected": connected, "bars": bars]
+        // macOS hands out the network's name only with the Location permission.
+        if connected, access["location"] == "allowed", let name = iface.ssid(), !name.isEmpty { out["name"] = name }
+        return out
     }
 
     func setWifi(_ on: Bool) -> String? {
@@ -785,6 +804,7 @@ final class StatusWatcher: NSObject, CWEventDelegate {
     func powerStateDidChangeForWiFiInterface(withName interfaceName: String) { changed() }
     func linkDidChangeForWiFiInterface(withName interfaceName: String) { changed() }
     func linkQualityDidChangeForWiFiInterface(withName interfaceName: String, rssi: Int, transmitRate: Double) { changed() }
+    func ssidDidChangeForWiFiInterface(withName interfaceName: String) { changed() }
 
     // MARK: Battery
 
@@ -803,6 +823,164 @@ final class StatusWatcher: NSObject, CWEventDelegate {
             let percent = max > 0 ? Int((Double(current) / Double(max) * 100).rounded()) : current
             return ["percent": percent, "charging": charging, "plugged": plugged, "minutes": minutes]
         }
+        return nil
+    }
+
+    // MARK: Bluetooth
+
+    // Nothing here touches Bluetooth until macOS says Startbar may, or the
+    // process is stopped on the spot. The permission belongs to Startbar.app,
+    // which started this helper.
+    func startBluetooth() {
+        guard central == nil else { return }
+        central = CBCentralManager(delegate: self, queue: .main)
+    }
+
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        checkAccess()
+        if CBManager.authorization == .allowedAlways && connectNote == nil {
+            // Fires for the devices already connected too.
+            connectNote = IOBluetoothDevice.register(forConnectNotifications: self, selector: #selector(deviceConnected(_:device:)))
+        }
+        changed()
+    }
+
+    @objc func deviceConnected(_ note: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+        device.register(forDisconnectNotification: self, selector: #selector(deviceDisconnected(_:device:)))
+        changed()
+    }
+
+    @objc func deviceDisconnected(_ note: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+        note.unregister()
+        changed()
+    }
+
+    // nil until allowed, and on a Mac without Bluetooth.
+    func bluetooth() -> [String: Any]? {
+        guard let c = central, CBManager.authorization == .allowedAlways,
+              c.state == .poweredOn || c.state == .poweredOff else { return nil }
+        let on = c.state == .poweredOn
+        let batteries = bluetoothBatteries()
+        let paired = (IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice]) ?? []
+        let devices: [[String: Any]] = paired.map { d in
+            var out: [String: Any] = [
+                "address": d.addressString ?? "",
+                "name": d.nameOrAddress ?? "Device",
+                "connected": on && d.isConnected(),
+                "kind": deviceKind(d)
+            ]
+            if let percent = batteries[plainAddress(d.addressString)] { out["battery"] = percent }
+            return out
+        }
+        return ["on": on, "devices": devices]
+    }
+
+    func deviceKind(_ d: IOBluetoothDevice) -> String {
+        switch d.deviceClassMajor {
+        case 0x01: return "computer"
+        case 0x02: return "phone"
+        case 0x04: return "audio"
+        case 0x05: // peripheral, keyboard and pointing bits in the minor class
+            if d.deviceClassMinor & 0x10 != 0 { return "keyboard" }
+            if d.deviceClassMinor & 0x20 != 0 { return "mouse" }
+            return "other"
+        default: return "other"
+        }
+    }
+
+    func plainAddress(_ address: String?) -> String {
+        (address ?? "").lowercased().filter { $0.isHexDigit }
+    }
+
+    // Apple keyboards, mice and trackpads report their charge in the I/O
+    // registry. Other devices don't share theirs.
+    func bluetoothBatteries() -> [String: Int] {
+        var out: [String: Int] = [:]
+        var iter = io_iterator_t()
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("AppleDeviceManagementHIDEventService"), &iter) == KERN_SUCCESS else { return out }
+        defer { IOObjectRelease(iter) }
+        var service = IOIteratorNext(iter)
+        while service != 0 {
+            let percent = IORegistryEntryCreateCFProperty(service, "BatteryPercent" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Int
+            let address = IORegistryEntryCreateCFProperty(service, "DeviceAddress" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? String
+            if let percent, let address { out[plainAddress(address)] = percent }
+            IOObjectRelease(service)
+            service = IOIteratorNext(iter)
+        }
+        return out
+    }
+
+    // The same switch as the one in Control Center. IOBluetooth has it but
+    // doesn't publish it.
+    func setBluetooth(_ on: Bool) -> String? {
+        guard central != nil, CBManager.authorization == .allowedAlways else { return "Bluetooth isn't allowed" }
+        typealias SetPower = @convention(c) (Int32) -> Int32
+        guard let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "IOBluetoothPreferenceSetControllerPowerState") else {
+            return "Bluetooth can't be switched from here"
+        }
+        _ = unsafeBitCast(sym, to: SetPower.self)(on ? 1 : 0)
+        return nil
+    }
+
+    // Connecting can take a few seconds, so it runs off the main thread.
+    func setConnected(_ address: String, _ on: Bool) -> String? {
+        guard central != nil, CBManager.authorization == .allowedAlways else { return "Bluetooth isn't allowed" }
+        guard let d = IOBluetoothDevice(addressString: address) else { return "that device wasn't found" }
+        DispatchQueue.global().async {
+            _ = on ? d.openConnection() : d.closeConnection()
+            DispatchQueue.main.async { self.changed() }
+        }
+        return nil
+    }
+
+    // MARK: Permissions
+
+    // Where each permission stands: allowed, notAsked or denied. Location is
+    // off when Location Services is switched off for the whole Mac. Reading
+    // these never asks.
+    func checkAccess() {
+        // Allowed in System Settings while Startbar runs.
+        if CBManager.authorization == .allowedAlways { startBluetooth() }
+        let next = ["location": locationAccess(), "bluetooth": bluetoothAccess(), "automation": automationAccess()]
+        if next != access {
+            access = next
+            changed()
+        }
+    }
+
+    func locationAccess() -> String {
+        guard CLLocationManager.locationServicesEnabled() else { return "off" }
+        let status = location.authorizationStatus
+        if status == .notDetermined { return "notAsked" }
+        return status.rawValue >= CLAuthorizationStatus.authorizedAlways.rawValue ? "allowed" : "denied"
+    }
+
+    func bluetoothAccess() -> String {
+        switch CBManager.authorization {
+        case .allowedAlways: return "allowed"
+        case .notDetermined: return "notAsked"
+        default: return "denied"
+        }
+    }
+
+    // macOS only answers while System Events is running. Otherwise unknown,
+    // and the main process goes by the last answer it saw.
+    func automationAccess() -> String {
+        let target = NSAppleEventDescriptor(bundleIdentifier: "com.apple.systemevents")
+        guard let desc = target.aeDesc else { return "unknown" }
+        switch AEDeterminePermissionToAutomateTarget(desc, typeWildCard, typeWildCard, false) {
+        case noErr: return "allowed"
+        case OSStatus(errAEEventNotPermitted): return "denied"
+        case OSStatus(errAEEventWouldRequireUserConsent): return "notAsked"
+        default: return "unknown"
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { checkAccess() }
+
+    func askLocation() -> String? {
+        guard CLLocationManager.locationServicesEnabled() else { return "Location Services is off" }
+        location.requestWhenInUseAuthorization()
         return nil
     }
 
@@ -831,6 +1009,11 @@ final class StatusWatcher: NSObject, CWEventDelegate {
         case "setVolume": error = setVolume(command["level"] as? Double ?? 0)
         case "setMuted": error = setMuted(command["muted"] as? Bool ?? false)
         case "setWifi": error = setWifi(command["on"] as? Bool ?? true)
+        case "setBluetooth": error = setBluetooth(command["on"] as? Bool ?? true)
+        case "setConnected": error = setConnected(command["address"] as? String ?? "", command["on"] as? Bool ?? true)
+        case "askLocation": error = askLocation()
+        case "askBluetooth": startBluetooth()
+        case "access": checkAccess()
         case "refresh": lastLine = ""
         default: error = "unknown command"
         }

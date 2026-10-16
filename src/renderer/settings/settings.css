@@ -91,6 +91,7 @@ input[type=range] { accent-color: var(--accent); width: 170px; }
 .status i { width: 8px; height: 8px; border-radius: 4px; background: var(--ok); }
 .status i.warn { background: var(--warn); }
 .status i.wait { background: var(--muted); }
+.status i.bad { background: #ff453a; }
 .kbd { padding: 3px 8px; border-radius: 6px; background: var(--control); border: 1px solid var(--control-line); font-size: 12px; min-width: 110px; text-align: center; outline: 0; }
 .kbd.rec { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); color: var(--muted); }
 

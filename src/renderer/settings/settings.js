@@ -21,6 +21,7 @@
     clock: '<circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/>',
     displays: '<rect x="2" y="3" width="12" height="8" rx="1.5"/><path d="M6 13.5h4"/>',
     general: '<circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>',
+    permissions: '<path d="M8 1.8l5 2v4c0 3.2-2.2 5.3-5 6.4-2.8-1.1-5-3.2-5-6.4v-4z"/><path d="M5.8 8l1.6 1.6 2.9-3"/>',
     about: '<circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5v.5"/>'
   };
 
@@ -205,13 +206,6 @@
           ]
         },
         {
-          title: 'Permissions',
-          rows: [
-            { label: 'Accessibility', note: 'Needed to read window titles and to bring a window forward when you click its button. Without it the bar shows app icons only.',
-              control: { type: 'accessibility' } }
-          ]
-        },
-        {
           title: 'Settings',
           rows: [
             { label: 'Export settings and pins to a file', note: 'Import replaces everything here with what the file has.',
@@ -220,6 +214,25 @@
           ]
         }
       ]
+    },
+    {
+      id: 'permissions', title: 'Permissions', color: '#30b0c7', preview: false,
+      groups: [
+        {
+          title: 'What Startbar can use',
+          rows: [
+            { label: 'Accessibility', note: 'Window titles on the bar, and bringing a window forward when you click its button. Without it the bar shows app icons only.',
+              control: { type: 'permission', name: 'accessibility' } },
+            { label: 'Automation (System Events)', note: 'The Dock buttons on the Taskbar page.',
+              control: { type: 'permission', name: 'automation' } },
+            { label: 'Location', note: "The Wi-Fi network's name in the tray. macOS counts the network name as location, so it asks. Startbar doesn't read where you are.",
+              control: { type: 'permission', name: 'location' } },
+            { label: 'Bluetooth', note: 'A Bluetooth icon in the tray with your devices, their battery and an on and off switch.',
+              control: { type: 'permission', name: 'bluetooth' } }
+          ]
+        }
+      ],
+      note: 'Accessibility is asked once, when Startbar first opens. The others are asked only when you press their button here, or the button they belong to. You can change any of them later in System Settings, Privacy and Security.'
     },
     { id: 'about', title: 'About', color: '#ff375f', about: true, groups: [] }
   ];
@@ -365,18 +378,32 @@
     return t;
   }
 
-  function accessibility() {
+  // Where a permission stands, with the button that asks for it, or opens
+  // System Settings once it's been turned down.
+  const STANDING = {
+    allowed: ['', 'Allowed'],
+    notAsked: ['wait', 'Not asked yet'],
+    denied: ['bad', 'Turned off'],
+    off: ['warn', 'Location Services is off']
+  };
+
+  function permission(c) {
     const box = node('div', 'ctl-inner');
     box.style.display = 'contents';
     const status = node('span', 'status');
     const dot = node('i');
     const text = node('span');
     status.append(dot, text);
-    const b = button({ text: 'Open System Settings', click: () => api.openAccessibility() });
+    const b = button({ text: '', click: () => api.askPermission(c.name) });
     syncs.push(() => {
-      const on = tasks.accessibility;
-      dot.className = on ? '' : on === false ? 'warn' : 'wait';
-      text.textContent = on ? 'Allowed' : on === false ? 'Not allowed' : 'Checking';
+      // Accessibility can't be asked for, only switched on in System Settings.
+      const acc = tasks.accessibility;
+      const now = c.name === 'accessibility' ? (acc ? 'allowed' : acc === false ? 'denied' : null) : state.permissions[c.name];
+      const [cls, label] = STANDING[now] || ['wait', 'Checking'];
+      dot.className = cls;
+      text.textContent = label;
+      b.textContent = now === 'notAsked' ? 'Allow…' : 'Open System Settings…';
+      b.classList.toggle('hidden', !now || now === 'allowed');
     });
     box.append(status, b);
     return box;
@@ -481,7 +508,7 @@
     return k;
   }
 
-  const CONTROLS = { toggle, seg, select, swatches, range, stepper, button, buttons, login, accessibility, dock, shortcut };
+  const CONTROLS = { toggle, seg, select, swatches, range, stepper, button, buttons, login, permission, dock, shortcut };
 
   // Lists of paths drawn inside a group, one row each, drag to reorder:
   // the pinned apps and the folders added to the Start menu.
@@ -638,7 +665,7 @@
     page = id;
     const p = PAGES.find((x) => x.id === id);
     navEl.querySelectorAll('a').forEach((a) => a.classList.toggle('on', a.dataset.page === id));
-    previewEl.classList.toggle('hidden', !!p.about);
+    previewEl.classList.toggle('hidden', !!p.about || p.preview === false);
     reset();
     const children = p.about ? [aboutPage()] : groups(p.groups);
     if (p.note) children.push(node('div', 'foot-note', p.note));

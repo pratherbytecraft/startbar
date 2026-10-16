@@ -21,18 +21,27 @@ async function status() {
   return { autohide: autohide === '1', position: orientation || 'bottom' };
 }
 
-// Through System Events, the way the switch in System Settings does it.
-// Writing the setting and restarting the Dock instead leaves the bar pushed
-// up off the bottom edge. macOS asks once whether Startbar may control
-// System Events. Resolves to ok, notAllowed or failed.
-function setAutohide(on) {
-  const script = `tell application "System Events" to set autohide of dock preferences to ${on}`;
+// macOS asks once whether Startbar may control System Events. Resolves to
+// ok, notAllowed or failed.
+function tellSystemEvents(command) {
   return new Promise((resolve) => {
-    execFile('osascript', ['-e', script], (err, _out, stderr) => {
+    execFile('osascript', ['-e', `tell application "System Events" to ${command}`], (err, _out, stderr) => {
       if (!err) return resolve('ok');
       resolve(String(stderr).includes(String(NOT_ALLOWED)) ? 'notAllowed' : 'failed');
     });
   });
 }
 
-module.exports = { status, setAutohide };
+// Through System Events, the way the switch in System Settings does it.
+// Writing the setting and restarting the Dock instead leaves the bar pushed
+// up off the bottom edge.
+function setAutohide(on) {
+  return tellSystemEvents(`set autohide of dock preferences to ${on}`);
+}
+
+// Only reads, so the Permissions page can ask without changing anything.
+function askAutomation() {
+  return tellSystemEvents('get autohide of dock preferences');
+}
+
+module.exports = { status, setAutohide, askAutomation };

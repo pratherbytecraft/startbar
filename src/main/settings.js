@@ -68,7 +68,8 @@ const DEFAULTS = Object.freeze({
     auto: true // check npm for a newer version now and then, never installs
   },
   accessibilityAsked: false, // the one time Accessibility dialog has been shown
-  hideNoteShown: false // the one time note on how to bring a hidden bar back
+  hideNoteShown: false, // the one time note on how to bring a hidden bar back
+  automationAnswer: '' // allowed | denied: the last answer for System Events, see main/index.js
 });
 
 let dir;
@@ -138,8 +139,8 @@ function clean(saved, base) {
 // Everything from saved, the rest from the defaults, for an import. The one
 // time dialogs stay answered.
 function replace(saved) {
-  const { accessibilityAsked, hideNoteShown } = current;
-  current = merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, hideNoteShown });
+  const { accessibilityAsked, hideNoteShown, automationAnswer } = current;
+  current = merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, hideNoteShown, automationAnswer });
   fs.writeFileSync(file, JSON.stringify(current, null, 2) + '\n');
   for (const fn of listeners) fn(current);
   return current;

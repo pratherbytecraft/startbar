@@ -4,5 +4,6 @@ node_modules/
 *.jpg
 *.mov
 helper/startbar-helper
+helper/status.noindex/
 npm-debug.log*
 bundle/

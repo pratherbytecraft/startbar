@@ -116,12 +116,16 @@ function setPlist(dest) {
   set('LSApplicationCategoryType', 'string', 'public.app-category.utilities');
   set('LSUIElement', 'bool', 'true'); // no Dock icon, not even for a moment at launch
   set('NSHumanReadableCopyright', 'string', 'Prather Bytecraft. All rights reserved.');
-  // Electron asks for the usage strings by default and Startbar uses none of
-  // them. The version keys go too: the bundle stays the same from one
+  // Bluetooth belongs to Startbar.app even when the status helper asks, since
+  // Startbar started it. macOS stops any process that touches Bluetooth
+  // without this line in the app's Info.plist.
+  set('NSBluetoothAlwaysUsageDescription', 'string', 'Startbar shows your Bluetooth devices and their battery in the tray.');
+  // Electron asks for the other usage strings by default and Startbar uses
+  // none of them. The version keys go too: the bundle stays the same from one
   // Startbar version to the next, so macOS keeps the Accessibility permission
   // across updates. Startbar reads its version from the package instead.
   for (const key of ['CFBundleShortVersionString', 'CFBundleVersion', 'NSCameraUsageDescription', 'NSMicrophoneUsageDescription',
-    'NSBluetoothAlwaysUsageDescription', 'NSBluetoothPeripheralUsageDescription']) {
+    'NSBluetoothPeripheralUsageDescription']) {
     spawnSync('plutil', ['-remove', key, plist]);
   }
 }
