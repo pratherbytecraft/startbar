@@ -118,7 +118,7 @@ const PANES = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   bluetooth: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth'
 };
-let askingFor = null; // the permission whose macOS prompt is up
+let askingFor = null; // { name, at }: the permission whose macOS prompt is up
 let shownPermissions = '';
 
 function permissions() {
@@ -152,19 +152,25 @@ async function askPermission(name) {
     focusSettings();
     return;
   }
-  askingFor = name;
+  askingFor = { name, at: Date.now() };
   status.send({ cmd: name === 'location' ? 'askLocation' : 'askBluetooth' });
 }
 
 function permissionsChanged() {
+  // Keep what macOS said about System Events, for when it isn't running.
+  const seen = (status.get().access || {}).automation;
+  if ((seen === 'allowed' || seen === 'denied') && settings.get().automationAnswer !== seen) settings.update({ automationAnswer: seen });
   const now = permissions();
   const key = JSON.stringify(now);
   if (key === shownPermissions) return;
   shownPermissions = key;
   pushState();
-  if (askingFor && now[askingFor] !== 'notAsked') {
+  if (askingFor && now[askingFor.name] !== 'notAsked') {
+    // Only right after the prompt. A prompt left open and answered much
+    // later shouldn't pull the settings window over whatever is in front.
+    const recent = Date.now() - askingFor.at < 60000;
     askingFor = null;
-    focusSettings();
+    if (recent) focusSettings();
   }
 }
 
