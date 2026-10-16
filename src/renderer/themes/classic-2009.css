@@ -62,8 +62,8 @@ body { font-size: 12px; color: #fff; }
 .task:has(.count) { margin-right: 5px; overflow: visible; box-shadow: var(--edge), 4px 0 0 -2px rgba(255, 255, 255, .3), 5px 0 0 -2px rgba(0, 0, 0, .55); }
 .task .count, .task .caret { display: none; }
 .task img { width: 20px; height: 20px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .45)); }
-[data-labels="icons-only"] .task, .tasks.compact .task { width: calc(var(--bar-h) * 1.5); padding: 0; justify-content: center; }
-[data-labels="icons-only"] .task img, .tasks.compact .task img { width: min(24px, calc(var(--bar-h) - 12px)); height: min(24px, calc(var(--bar-h) - 12px)); }
+[data-labels="icons-only"] .task, .tasks.compact .task, .task.pinned { width: calc(var(--bar-h) * 1.5); padding: 0; justify-content: center; }
+[data-labels="icons-only"] .task img, .tasks.compact .task img, .task.pinned img { width: min(24px, calc(var(--bar-h) - 12px)); height: min(24px, calc(var(--bar-h) - 12px)); }
 
 .tray { gap: 8px; padding: 0 10px 0 8px; margin-left: 4px; }
 .tray .chev { border-radius: 3px; }

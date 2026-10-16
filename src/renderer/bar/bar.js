@@ -191,9 +191,13 @@
 
   const pinsKey = (list) => JSON.stringify(list.map((p) => [p, !!icons.get(p)]));
 
+  // Pins in the row with the windows instead of their own spot.
+  const pinsInRow = (t) => t.showPins && t.pinsPlace === 'row';
+
   function renderPins() {
     if (!state) return;
-    const list = state.settings.taskbar.showPins ? state.pins : [];
+    const t = state.settings.taskbar;
+    const list = t.showPins && !pinsInRow(t) ? state.pins : [];
     const key = pinsKey(list);
     if (key === pinsDrawn) return;
     pinsDrawn = key;
@@ -206,6 +210,32 @@
     onStart: hideTip,
     onDrop: (order) => {
       pinsDrawn = pinsKey(order); // already drawn in this order
+      api.setPins(order);
+    }
+  });
+
+  // In the row, each pin takes its place in pin order: the app's buttons if
+  // it's open, a bare icon if not. The first button of each carries the pin,
+  // so dragging it reorders the pins.
+  function inRow(list, pinList) {
+    const out = [];
+    const used = new Set();
+    for (const p of pinList) {
+      const mine = list.filter((item) => item.app.path === p);
+      if (mine.length === 0) out.push({ kind: 'pin', path: p });
+      mine.forEach((item, i) => {
+        used.add(item);
+        out.push(i === 0 ? { ...item, pin: p } : item);
+      });
+    }
+    return out.concat(list.filter((item) => !used.has(item)));
+  }
+
+  window.reorderable(tasksEl, {
+    axis: 'x',
+    onStart: hideTip,
+    onDrop: (order) => {
+      drawn = '';
       api.setPins(order);
     }
   });
@@ -338,10 +368,43 @@
     api.taskCommand({ cmd: 'activate', id: item.win.id });
   }
 
+  function pinTask(p) {
+    const b = document.createElement('div');
+    b.className = 'task pinned';
+    b.dataset.key = p;
+    if (glows.has(p)) b.style.setProperty('--glow', glows.get(p));
+    const img = document.createElement('img');
+    img.alt = '';
+    if (icons.get(p)) img.src = icons.get(p);
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = appName(p);
+    b.append(img, label);
+    b.addEventListener('click', () => {
+      hideTip();
+      api.launchPin(p);
+    });
+    b.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      hideTip();
+      api.pinMenu(p);
+    });
+    b.addEventListener('mouseenter', () => {
+      if (tasksEl.classList.contains('reordering')) return;
+      clearTimeout(tipTimer);
+      tipTimer = setTimeout(() => api.showTip({ text: appName(p), rect: rectOf(b) }), 500);
+    });
+    b.addEventListener('mouseleave', hideTip);
+    return b;
+  }
+
   function button(item) {
+    if (item.kind === 'pin') return pinTask(item.path);
     const b = document.createElement('div');
     b.className = 'task' + (isActive(item) ? ' active' : '') + (isDim(item) ? ' dim' : '');
     if (glows.has(item.app.path)) b.style.setProperty('--glow', glows.get(item.app.path));
+    if (item.pin) b.dataset.key = item.pin;
     const img = document.createElement('img');
     img.alt = '';
     if (icons.get(item.app.path)) img.src = icons.get(item.app.path);
@@ -378,7 +441,7 @@
       });
     });
     b.addEventListener('mouseenter', () => {
-      if (!state.settings.taskbar.titleOnHover) return;
+      if (!state.settings.taskbar.titleOnHover || tasksEl.classList.contains('reordering')) return;
       clearTimeout(tipTimer);
       tipTimer = setTimeout(() => api.showTip({ text: label.textContent, rect: rectOf(b) }), 500);
     });
@@ -389,11 +452,18 @@
   // The helper sends the list a few times a second, so only redraw when
   // something on the bar would change.
   function renderTasks() {
-    if (!state) return;
+    if (!state || tasksEl.classList.contains('reordering')) return;
     const t = state.settings.taskbar;
-    const width = tasksEl.clientWidth - 8; // .tasks has 4px padding each side
-    const { list, compact } = arrange(buildItems(t), t.grouping, width);
-    const key = JSON.stringify([compact, t, place, state.settings.displays, state.settings.spaces, list.map((item) => [
+    const pinList = pinsInRow(t) ? state.pins : [];
+    const items = buildItems(t);
+    // Pins that aren't open take an icon's width out of the row.
+    const open = new Set(items.map((item) => item.app.path));
+    const closed = pinList.filter((p) => !open.has(p)).length;
+    const width = tasksEl.clientWidth - 8 - closed * (state.settings.barHeight * 1.5 + GAP); // .tasks has 4px padding each side
+    const arranged = arrange(items, t.grouping, width);
+    const compact = arranged.compact;
+    const list = pinList.length ? inRow(arranged.list, pinList) : arranged.list;
+    const key = JSON.stringify([compact, t, place, state.settings.displays, state.settings.spaces, pinList, list.map((item) => item.kind === 'pin' ? ['pin', item.path] : [
       item.kind, item.app.pid, item.app.path, isActive(item), isDim(item),
       item.kind === 'window' ? [item.win.id, item.win.title] : item.kind === 'group' ? item.wins.map((w) => [w.id, w.title, w.minimized, w.focused]) : item.app.name
     ])]);
@@ -402,7 +472,7 @@
     hideTip(); // the hovered button may be gone
     tasksEl.classList.toggle('compact', compact);
     tasksEl.replaceChildren(...list.map(button));
-    fetchIcons(tasks.apps.map((a) => a.path));
+    fetchIcons(tasks.apps.map((a) => a.path).concat(pinList));
   }
 
   function applyTasks(next) {

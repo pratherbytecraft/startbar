@@ -70,7 +70,10 @@
           title: 'Start button and pins',
           rows: [
             { label: 'Show the word Start on the button', control: { type: 'toggle', key: 'taskbar.showStartLabel' } },
-            { label: 'Show pinned apps next to the Start button', control: { type: 'toggle', key: 'taskbar.showPins' } }
+            { label: 'Show pinned apps on the bar', control: { type: 'toggle', key: 'taskbar.showPins' } },
+            { label: 'Where pinned apps go', note: "In the row, a pinned app's button turns into its window buttons once it opens.",
+              onlyWith: { when: (s) => s.taskbar.showPins, note: 'Used when pinned apps are shown.' },
+              control: { type: 'seg', key: 'taskbar.pinsPlace', options: [['own', 'Their own spot'], ['row', 'In the row with windows']] } }
           ]
         },
         {

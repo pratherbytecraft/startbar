@@ -45,9 +45,21 @@
     return b;
   }
 
+  function pinned(p) {
+    const b = document.createElement('div');
+    b.className = 'task pinned';
+    const img = document.createElement('img');
+    img.alt = '';
+    if (icons[p]) img.src = icons[p];
+    b.append(img);
+    return b;
+  }
+
   // The preview bar is never full, so only "Always" groups.
   function render() {
-    const pins = state.settings.taskbar.showPins ? state.pins : [];
+    const tb = state.settings.taskbar;
+    const row = tb.showPins && tb.pinsPlace === 'row';
+    const pins = tb.showPins && !row ? state.pins : [];
     quickEl.replaceChildren(...pins.map((p) => {
       const d = document.createElement('div');
       d.className = 'icon';
@@ -69,12 +81,16 @@
       s.innerHTML = window.trayIcons[kind](status[kind]);
       return s;
     }));
-    const grouped = state.settings.taskbar.grouping === 'always';
+    const grouped = tb.grouping === 'always';
+    const buttons = (app) => (app.windows.length > 1 && grouped ? [button(app, app.name, app.windows.length)] : app.windows.map((w) => button(app, w)));
+    // In the row, pins come first in their order, open ones as their windows.
+    const rowPins = row ? state.pins : [];
     const list = [];
-    for (const app of SAMPLE) {
-      if (app.windows.length > 1 && grouped) list.push(button(app, app.name, app.windows.length));
-      else app.windows.forEach((w) => list.push(button(app, w)));
+    for (const p of rowPins) {
+      const app = SAMPLE.find((a) => a.path === p);
+      list.push(...(app ? buttons(app) : [pinned(p)]));
     }
+    for (const app of SAMPLE) if (!rowPins.includes(app.path)) list.push(...buttons(app));
     tasksEl.replaceChildren(...list);
     tick();
   }

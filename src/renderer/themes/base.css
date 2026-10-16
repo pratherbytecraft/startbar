@@ -30,6 +30,11 @@ svg { display: block; }
 .task .count { font-weight: 600; font-size: 11px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center; flex: none; }
 .task .caret { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; margin-left: auto; flex: none; opacity: .8; }
 [data-labels="icons-only"] .task, .tasks.compact .task { flex: none; min-width: 0; }
+/* a pinned app that isn't open, in the row with the windows */
+.task.pinned { flex: none; min-width: 0; justify-content: center; }
+.task.pinned .label { display: none; }
+.tasks .task.pinned:not(:hover) { background: none; box-shadow: none; }
+.task.dragging { opacity: .55; }
 [data-labels="icons-only"] .task .label, [data-labels="icons-only"] .task .caret,
 .tasks.compact .task .label, .tasks.compact .task .caret { display: none; }
 .tray { display: flex; align-items: center; gap: 10px; position: relative; }
