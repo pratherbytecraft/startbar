@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en" data-theme="classic-1995" data-appearance="dark" data-accent="blue" data-labels="on">
+<head>
+<meta charset="utf-8">
+<title>Startbar mockup: Classic 1995</title>
+<style>
+  /* ---------- shared ---------- */
+  :root {
+    --bar-h: 36px;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --accent: #0A84FF;
+    --accent-text: #fff;
+  }
+  [data-appearance="light"] { --accent: #007AFF; }
+  [data-accent="purple"] { --accent: #BF5AF2; } [data-appearance="light"][data-accent="purple"] { --accent: #AF52DE; }
+  [data-accent="pink"] { --accent: #FF375F; } [data-appearance="light"][data-accent="pink"] { --accent: #FF2D55; }
+  [data-accent="red"] { --accent: #FF453A; } [data-appearance="light"][data-accent="red"] { --accent: #FF3B30; }
+  [data-accent="orange"] { --accent: #FF9F0A; } [data-appearance="light"][data-accent="orange"] { --accent: #FF9500; }
+  [data-accent="yellow"] { --accent: #FFD60A; --accent-text: #1d1d1f; } [data-appearance="light"][data-accent="yellow"] { --accent: #FFCC00; --accent-text: #1d1d1f; }
+  [data-accent="green"] { --accent: #30D158; } [data-appearance="light"][data-accent="green"] { --accent: #34C759; }
+  [data-accent="graphite"] { --accent: #98989D; } [data-appearance="light"][data-accent="graphite"] { --accent: #8E8E93; }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: var(--font); font-size: 13px; overflow: hidden; user-select: none;
+    background: linear-gradient(160deg, #1c2541 0%, #3a506b 45%, #5bc0be 100%);
+  }
+  [data-appearance="light"] body { background: linear-gradient(160deg, #f6d365 0%, #fda085 50%, #a1c4fd 100%); }
+
+  .notes {
+    position: absolute; left: 24px; top: 24px; width: 420px; border-radius: 12px;
+    background: rgba(255,255,255,.9); color: #1d1d1f; padding: 14px 16px; line-height: 1.45; font-size: 13px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  }
+  .notes h1 { font-size: 15px; margin: 0 0 6px; }
+  .notes p { margin: 6px 0; }
+  .controls { display: grid; grid-template-columns: 110px 1fr; gap: 8px 10px; align-items: center; margin-top: 10px; font-size: 12px; }
+  .controls select, .controls input[type=range] { width: 100%; font: inherit; }
+  .controls .val { font-variant-numeric: tabular-nums; color: #666; margin-left: 6px; }
+
+  .zoom-wrap { position: absolute; left: 24px; right: 24px; bottom: 70px; height: 190px; }
+  .zoom-label { position: absolute; left: 0; top: 0; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); font-size: 12px; }
+  .zoom-inner { position: absolute; left: 0; bottom: 0; transform: scale(2.5); transform-origin: left bottom; width: 40%; }
+  .zoom-inner .bar { position: static; }
+  body:has(.menu.open) .zoom-wrap { display: none; }
+  .preview .notes, .preview .zoom-wrap { display: none; }
+
+  /* ---------- bar, system theme ---------- */
+  .bar {
+    position: absolute; left: 0; right: 0; bottom: 0; height: var(--bar-h);
+    display: flex; align-items: stretch; gap: 0;
+    background: rgba(30,30,32,.78); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4);
+    border-top: 1px solid rgba(255,255,255,.12);
+    color: rgba(255,255,255,.92);
+  }
+  [data-appearance="light"] .bar { background: rgba(246,246,248,.82); border-top-color: rgba(0,0,0,.14); color: #1d1d1f; }
+
+  .start {
+    align-self: center; height: calc(var(--bar-h) - 10px); margin: 0 6px 0 6px; padding: 0 12px 0 9px;
+    display: flex; align-items: center; gap: 6px; border-radius: 7px;
+    background: var(--accent); color: var(--accent-text); font-weight: 600; font-size: 13px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.2);
+  }
+  .start:hover { filter: brightness(1.08); }
+  .start.open { filter: brightness(.85); box-shadow: inset 0 1px 3px rgba(0,0,0,.35); }
+  .start svg { width: 16px; height: 16px; }
+  .start .glyph-fill { fill: var(--accent-text); }
+  .start .glyph-ink { fill: var(--accent); }
+
+  .quick { display: flex; align-items: center; gap: 2px; padding: 0 2px; }
+  .quick .icon { width: calc(var(--bar-h) - 10px); height: calc(var(--bar-h) - 10px); display: grid; place-items: center; border-radius: 6px; }
+  .quick .icon:hover { background: rgba(255,255,255,.12); }
+  [data-appearance="light"] .quick .icon:hover { background: rgba(0,0,0,.07); }
+  .quick .icon svg { width: 18px; height: 18px; }
+  .grip { width: 1px; height: calc(var(--bar-h) - 16px); align-self: center; margin: 0 6px; background: rgba(255,255,255,.18); }
+  [data-appearance="light"] .grip { background: rgba(0,0,0,.15); }
+
+  .tasks { flex: 1; display: flex; align-items: center; gap: 4px; padding: 0 4px; overflow: hidden; }
+  .task {
+    height: calc(var(--bar-h) - 10px); min-width: 36px; max-width: 180px; flex: 1;
+    display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 7px;
+    background: rgba(255,255,255,.08); white-space: nowrap; overflow: hidden;
+  }
+  [data-appearance="light"] .task { background: rgba(0,0,0,.06); }
+  .task:hover { background: rgba(255,255,255,.14); }
+  [data-appearance="light"] .task:hover { background: rgba(0,0,0,.1); }
+  .task.active { background: var(--accent); color: var(--accent-text); font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,.2); }
+  .task.active:hover { filter: brightness(1.08); }
+  .task .label { overflow: hidden; text-overflow: ellipsis; }
+  .task svg { width: 18px; height: 18px; flex: none; }
+  .task .count { font-weight: 600; font-size: 11px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center; background: rgba(255,255,255,.18); }
+  [data-appearance="light"] .task .count { background: rgba(0,0,0,.12); }
+  .task.active .count { background: rgba(0,0,0,.2); }
+  .task .caret { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; margin-left: auto; flex: none; opacity: .8; }
+  [data-labels="off"] .task { flex: none; min-width: 0; padding: 0 9px; }
+  [data-labels="off"] .task .label, [data-labels="off"] .task .caret { display: none; }
+
+  .tray { display: flex; align-items: center; gap: 10px; padding: 0 12px 0 10px; position: relative; border-left: 1px solid rgba(255,255,255,.12); margin-left: 4px; }
+  [data-appearance="light"] .tray { border-left-color: rgba(0,0,0,.12); }
+  .tray .chev { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 12px; opacity: .8; }
+  .tray .chev:hover { background: rgba(255,255,255,.12); }
+  .tray svg { width: 16px; height: 16px; fill: currentColor; stroke: currentColor; }
+  .tray .clock { font-variant-numeric: tabular-nums; text-align: center; line-height: 1.15; }
+  .tray .clock .date { display: none; font-size: 10px; opacity: .75; }
+  [data-clockdate="on"] .tray .clock .date { display: block; }
+  .tip {
+    position: absolute; right: 8px; bottom: calc(100% + 8px); display: none;
+    background: rgba(50,50,52,.95); color: #fff; padding: 5px 9px; border-radius: 7px; font-size: 12px; white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  }
+  [data-appearance="light"] .tip { background: rgba(255,255,255,.97); color: #1d1d1f; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+  .tray .clock:hover + .tip, .show-tip .tip { display: block; }
+
+  /* ---------- Start menu, system theme ---------- */
+  .menu {
+    position: absolute; left: 8px; bottom: calc(var(--bar-h) + 8px); width: 420px; height: 500px;
+    display: none; flex-direction: column; overflow: hidden; border-radius: 14px;
+    background: rgba(36,36,38,.86); -webkit-backdrop-filter: blur(30px) saturate(1.4); backdrop-filter: blur(30px) saturate(1.4);
+    border: 1px solid rgba(255,255,255,.12); box-shadow: 0 20px 50px rgba(0,0,0,.45); color: rgba(255,255,255,.92);
+  }
+  [data-appearance="light"] .menu { background: rgba(246,246,248,.9); border-color: rgba(0,0,0,.1); color: #1d1d1f; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .menu.open { display: flex; }
+  .menu-head { height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 15px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,.08); }
+  [data-appearance="light"] .menu-head { border-bottom-color: rgba(0,0,0,.08); }
+  .avatar { width: 40px; height: 40px; border-radius: 20px; background: linear-gradient(135deg, var(--accent), #fff3); }
+  .menu-body { flex: 1; display: flex; min-height: 0; }
+  .col-left { flex: 1; display: flex; flex-direction: column; padding: 8px; min-width: 0; }
+  .col-right { width: 170px; padding: 8px; border-left: 1px solid rgba(255,255,255,.08); }
+  [data-appearance="light"] .col-right { border-left-color: rgba(0,0,0,.08); }
+  .item { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item:hover { background: var(--accent); color: var(--accent-text); }
+  .item .ico { width: 24px; height: 24px; flex: none; border-radius: 6px; }
+  .col-right .item .ico { width: 20px; height: 20px; border-radius: 5px; }
+  .sep { height: 1px; margin: 6px 8px; background: rgba(255,255,255,.1); }
+  [data-appearance="light"] .sep { background: rgba(0,0,0,.1); }
+  .list { flex: 1; }
+  .search { margin: 6px 0 0; display: flex; align-items: center; gap: 8px; border-radius: 8px; padding: 6px 10px; background: rgba(255,255,255,.1); opacity: .9; }
+  [data-appearance="light"] .search { background: rgba(0,0,0,.06); }
+  .menu-foot { height: 44px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 0 10px; border-top: 1px solid rgba(255,255,255,.08); }
+  [data-appearance="light"] .menu-foot { border-top-color: rgba(0,0,0,.08); }
+  .menu-foot .pw { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 7px; }
+  .menu-foot .pw:hover { background: var(--accent); color: var(--accent-text); }
+  .menu-foot .pw .ico { width: 14px; height: 14px; border-radius: 7px; }
+
+  /* ---------- Classic 2001 overrides ---------- */
+  [data-theme="classic-2001"] { --font: Tahoma, "Trebuchet MS", Verdana, sans-serif; }
+  [data-theme="classic-2001"] body { font-size: 11px; background: linear-gradient(180deg, #4e8ad8 0%, #2f6fcc 35%, #3f9a4f 100%); }
+  [data-theme="classic-2001"] .bar {
+    background: linear-gradient(180deg, #4f85f0 0, #4f85f0 1px, #3168d5 2px, #2a5fd0 60%, #1941a5 100%);
+    border-top: 1px solid #0c2f8a; color: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; text-shadow: 0 1px 1px rgba(0,0,0,.35);
+  }
+  [data-theme="classic-2001"] .start {
+    align-self: stretch; height: auto; margin: 0 6px 0 0; padding: 0 16px 0 10px; border-radius: 0 10px 10px 0;
+    background: linear-gradient(180deg, #4fb84f 0, #3a9e3a 45%, #237a23 100%); color: #fff;
+    font-size: 16px; font-style: italic; font-weight: bold; text-shadow: 1px 1px 1px rgba(0,0,0,.55);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset -2px 0 2px rgba(0,0,0,.25), 1px 0 2px rgba(0,0,0,.35);
+  }
+  [data-theme="classic-2001"] .start.open { background: linear-gradient(180deg, #237a23 0, #3a9e3a 60%, #4fb84f 100%); filter: none; }
+  [data-theme="classic-2001"] .start .glyph-fill { fill: #fff; } [data-theme="classic-2001"] .start .glyph-ink { fill: #2a62d8; }
+  [data-theme="classic-2001"] .start svg { width: 18px; height: 18px; }
+  [data-theme="classic-2001"] .start span { text-transform: lowercase; }
+  [data-theme="classic-2001"] .quick .icon { border-radius: 2px; }
+  [data-theme="classic-2001"] .quick .icon:hover { background: rgba(255,255,255,.18); box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
+  [data-theme="classic-2001"] .grip {
+    width: 5px; height: 20px; margin: 0 3px;
+    background: repeating-linear-gradient(180deg, rgba(255,255,255,.55) 0 1px, rgba(0,0,0,.25) 1px 2px, transparent 2px 3px);
+    border-left: 1px solid rgba(255,255,255,.35); border-right: 1px solid rgba(0,0,0,.3);
+  }
+  [data-theme="classic-2001"] .tasks { gap: 3px; }
+  [data-theme="classic-2001"] .task {
+    border-radius: 3px; padding: 0 6px; gap: 5px; max-width: 160px;
+    background: linear-gradient(180deg, #3c81f3 0, #2a62d8 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 1px 0 0 rgba(255,255,255,.2), 0 1px 1px rgba(0,0,0,.35);
+  }
+  [data-theme="classic-2001"] .task:hover { background: linear-gradient(180deg, #5a98ff 0, #3b74e6 100%); }
+  [data-theme="classic-2001"] .task.active {
+    background: linear-gradient(180deg, #1a46b0 0, #2b5ed1 100%); color: #fff;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,.55), inset 1px 0 2px rgba(0,0,0,.3);
+  }
+  [data-theme="classic-2001"] .task .count { background: none; padding: 0; min-width: 0; font-size: 11px; }
+  [data-theme="classic-2001"] .task .caret { border-top-color: #fff; opacity: 1; }
+  [data-theme="classic-2001"] .task svg { width: 16px; height: 16px; }
+  [data-theme="classic-2001"] .tray {
+    gap: 6px; padding: 0 10px 0 8px; margin: 0;
+    background: linear-gradient(180deg, #139ff9 0, #0a7edc 100%); border-left: 1px solid #0a5fb4;
+    box-shadow: inset 1px 0 0 rgba(255,255,255,.35), inset 0 1px 0 rgba(255,255,255,.25);
+  }
+  [data-theme="classic-2001"] .tray .chev {
+    width: 16px; height: 16px; border-radius: 8px; font-size: 9px; font-weight: bold; opacity: 1;
+    background: linear-gradient(180deg, #4bb1ff, #1f8ded); box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 1px 1px rgba(0,0,0,.3);
+  }
+  [data-theme="classic-2001"] .tip { background: #ffffe1; color: #000; border: 1px solid #000; border-radius: 0; padding: 2px 5px; font-size: 11px; box-shadow: none; text-shadow: none; }
+  [data-theme="classic-2001"] .menu {
+    left: 0; bottom: var(--bar-h); width: 400px; height: 480px; border-radius: 8px 8px 0 0;
+    background: #fff; border: 1px solid #0c2f8a; color: #000; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: 2px -2px 6px rgba(0,0,0,.35);
+  }
+  [data-theme="classic-2001"] .menu-head {
+    height: 58px; font-size: 14px; border-bottom: 2px solid #e8942a; color: #fff; text-shadow: 1px 1px 1px rgba(0,0,0,.5);
+    background: linear-gradient(180deg, #2d6ad8 0, #1f52bf 50%, #2a63d2 100%);
+  }
+  [data-theme="classic-2001"] .avatar { border-radius: 4px; border: 2px solid #fff; background: linear-gradient(135deg, #f2a74b, #d8661b); }
+  [data-theme="classic-2001"] .col-left { padding: 6px 0; }
+  [data-theme="classic-2001"] .col-right { background: #d3e5fa; border-left: 1px solid #95bdee; padding: 6px 0; }
+  [data-theme="classic-2001"] .item { border-radius: 0; padding: 5px 10px; gap: 8px; }
+  [data-theme="classic-2001"] .item:hover { background: #316ac5; color: #fff; }
+  [data-theme="classic-2001"] .col-right .item { font-weight: bold; color: #1b3f8f; }
+  [data-theme="classic-2001"] .col-right .item:hover { color: #fff; }
+  [data-theme="classic-2001"] .sep { margin: 4px 10px; background: linear-gradient(90deg, transparent, #9ab 50%, transparent); }
+  [data-theme="classic-2001"] .search { margin: 6px 10px 2px; border-radius: 0; border: 1px solid #7f9db9; background: #fff; color: #777; padding: 3px 6px; }
+  [data-theme="classic-2001"] .menu-foot {
+    height: 36px; gap: 14px; padding: 0 12px; color: #fff; text-shadow: 1px 1px 1px rgba(0,0,0,.4);
+    background: linear-gradient(180deg, #4178d6 0, #2d5fc4 100%); border-top: 1px solid #1d4aa8;
+  }
+  [data-theme="classic-2001"] .menu-foot .pw { padding: 0; border-radius: 0; }
+  [data-theme="classic-2001"] .menu-foot .pw:hover { background: none; text-decoration: underline; }
+  [data-theme="classic-2001"] .menu-foot .pw .ico { width: 18px; height: 18px; border-radius: 9px; }
+
+  /* ---------- Classic 1995 ---------- */
+  [data-theme="classic-1995"] {
+    --font: Tahoma, Geneva, Verdana, sans-serif;
+    --raised: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+    --pressed: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+    --sunken: inset 1px 1px #808080, inset -1px -1px #fff;
+    --field: inset 1px 1px #808080, inset -1px -1px #fff, inset 2px 2px #0a0a0a, inset -2px -2px #dfdfdf;
+    --navy: #000080;
+  }
+  [data-theme="classic-1995"] body { font-size: 11px; background: #008080; }
+  [data-theme="classic-1995"] .bar {
+    background: #c0c0c0; color: #000; border-top: 0; -webkit-backdrop-filter: none; backdrop-filter: none;
+    box-shadow: inset 0 1px #dfdfdf, inset 0 2px #fff; padding-top: 2px;
+  }
+  [data-theme="classic-1995"] .start {
+    height: calc(var(--bar-h) - 9px); margin: 0 3px 0 3px; padding: 0 7px 0 5px; gap: 4px; border-radius: 0;
+    background: #c0c0c0; color: #000; font-weight: bold; font-size: 11px; box-shadow: var(--raised);
+  }
+  [data-theme="classic-1995"] .start:hover { filter: none; }
+  [data-theme="classic-1995"] .start.open { filter: none; box-shadow: var(--pressed); padding: 1px 6px 0 6px; }
+  [data-theme="classic-1995"] .start .glyph-fill { fill: #008080; }
+  [data-theme="classic-1995"] .start .glyph-ink { fill: #fff; }
+  [data-theme="classic-1995"] .quick .icon { border-radius: 0; }
+  [data-theme="classic-1995"] .quick .icon:hover { background: none; box-shadow: inset -1px -1px #808080, inset 1px 1px #fff; }
+  [data-theme="classic-1995"] .grip { width: 2px; background: none; border-left: 1px solid #808080; border-right: 1px solid #fff; margin: 0 4px; }
+  [data-theme="classic-1995"] .tasks { gap: 3px; padding: 0 2px; }
+  [data-theme="classic-1995"] .task {
+    height: calc(var(--bar-h) - 9px); max-width: 160px; padding: 0 6px; gap: 4px; border-radius: 0;
+    background: #c0c0c0; color: #000; font-size: 11px; box-shadow: var(--raised);
+  }
+  [data-theme="classic-1995"] .task:hover { background: #c0c0c0; }
+  [data-theme="classic-1995"] .task.active {
+    font-weight: bold; color: #000; box-shadow: var(--pressed); padding-top: 1px;
+    background: repeating-conic-gradient(#fff 0 25%, #c0c0c0 0 50%) 0 0 / 2px 2px;
+  }
+  [data-theme="classic-1995"] .task.active:hover { filter: none; }
+  [data-theme="classic-1995"] .task svg { width: 16px; height: 16px; }
+  [data-theme="classic-1995"] .task .count, [data-theme="classic-1995"] .task.active .count { background: none; padding: 0; min-width: 0; font-size: 11px; }
+  [data-theme="classic-1995"] .task .caret { border-top-color: #000; opacity: 1; }
+  [data-theme="classic-1995"] .tray {
+    align-self: center; height: calc(var(--bar-h) - 9px); margin: 0 3px 0 4px; padding: 0 8px 0 4px; gap: 6px;
+    border-left: 0; box-shadow: var(--sunken); color: #000;
+  }
+  [data-theme="classic-1995"] .tray .chev { border-radius: 0; opacity: 1; }
+  [data-theme="classic-1995"] .tray .chev:hover { background: none; box-shadow: inset -1px -1px #808080, inset 1px 1px #fff; }
+  [data-theme="classic-1995"] .tip { background: #ffffe1; color: #000; border: 1px solid #000; border-radius: 0; padding: 1px 4px; font-size: 11px; box-shadow: none; }
+  [data-theme="classic-1995"] .menu {
+    width: 380px; height: 460px; border-radius: 0; border: 0; padding: 3px 3px 3px 27px;
+    background: #c0c0c0; color: #000; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--raised);
+    bottom: calc(var(--bar-h) - 2px); left: 2px;
+  }
+  [data-theme="classic-1995"] .menu::before {
+    content: "Startbar"; position: absolute; left: 3px; top: 3px; bottom: 3px; width: 21px;
+    background: #808080; color: #c0c0c0; font: bold 17px/21px Tahoma, Geneva, sans-serif; letter-spacing: .5px;
+    writing-mode: vertical-rl; transform: rotate(180deg); padding-top: 6px;
+  }
+  [data-theme="classic-1995"] .menu-head { display: none; }
+  [data-theme="classic-1995"] .col-left { padding: 0; }
+  [data-theme="classic-1995"] .col-right { padding: 0 0 0 4px; border-left: 0; box-shadow: inset 1px 0 #808080, inset 2px 0 #fff; }
+  [data-theme="classic-1995"] .item { border-radius: 0; padding: 4px 8px; gap: 8px; }
+  [data-theme="classic-1995"] .item:hover, [data-theme="classic-1995"] .menu-foot .pw:hover { background: var(--navy); color: #fff; }
+  [data-theme="classic-1995"] .item .ico, [data-theme="classic-1995"] .col-right .item .ico { border-radius: 0; }
+  [data-theme="classic-1995"] .sep { height: 2px; background: none; border-top: 1px solid #808080; border-bottom: 1px solid #fff; margin: 3px 2px; }
+  [data-theme="classic-1995"] .search { margin: 4px 4px 2px; border-radius: 0; background: #fff; color: #000; padding: 4px 6px; box-shadow: var(--field); opacity: 1; }
+  [data-theme="classic-1995"] .menu-foot { height: auto; justify-content: stretch; flex-direction: column; align-items: stretch; gap: 0; padding: 3px 0 0; border-top: 0; box-shadow: inset 0 1px #808080, inset 0 2px #fff; }
+  [data-theme="classic-1995"] .menu-foot .pw { border-radius: 0; padding: 4px 8px; gap: 8px; }
+  [data-theme="classic-1995"] .menu-foot .pw .ico { width: 16px; height: 16px; border-radius: 0; }
+
+  /* the panels, shown only for Classic 1995 in this mockup */
+  .panels { display: none; position: absolute; right: 24px; top: 24px; gap: 14px; align-items: flex-start; font: 11px Tahoma, Geneva, Verdana, sans-serif; color: #000; }
+  [data-theme="classic-1995"] .panels { display: flex; }
+  [data-theme="classic-1995"] body:has(.menu.open) .panels { display: none; }
+  .p95 { width: 200px; background: #c0c0c0; box-shadow: var(--raised); padding: 3px; }
+  .p95 .cap { color: rgba(255,255,255,.85); font-size: 11px; margin: 0 0 4px; }
+  .p95 .title { display: flex; align-items: center; justify-content: space-between; height: 18px; padding: 0 2px 0 4px; background: linear-gradient(90deg, #000080, #1084d0); color: #fff; font-weight: bold; }
+  .p95 .body { padding: 8px 6px 6px; }
+  .p95 .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  .p95 .muted { color: #404040; }
+  .p95 .btn95 { display: inline-block; padding: 3px 10px; box-shadow: var(--raised); background: #c0c0c0; margin-top: 8px; }
+  .p95 .btn95:active { box-shadow: var(--pressed); }
+  .p95 .check { display: inline-flex; align-items: center; gap: 6px; }
+  .p95 .check i { width: 13px; height: 13px; background: #fff; box-shadow: var(--field); display: grid; place-items: center; font-style: normal; font-size: 10px; font-weight: bold; line-height: 1; }
+  .p95 .track { flex: 1; height: 4px; box-shadow: var(--field); background: #fff; position: relative; }
+  .p95 .thumb { position: absolute; top: -8px; width: 11px; height: 20px; background: #c0c0c0; box-shadow: var(--raised); }
+  .p95 .grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; background: #fff; box-shadow: var(--field); padding: 3px; }
+  .p95 .grid span { padding: 2px 0; }
+  .p95 .grid .h { color: #404040; }
+  .p95 .grid .o { color: #808080; }
+  .p95 .grid .t { background: var(--navy); color: #fff; }
+  .p95 .nav95 { width: 16px; height: 14px; box-shadow: var(--raised); background: #c0c0c0; color: #000; display: grid; place-items: center; font-size: 9px; }
+  .p95 .win { display: flex; align-items: center; gap: 6px; padding: 3px 4px; }
+  .p95 .win:hover { background: var(--navy); color: #fff; }
+  .p95 svg { width: 16px; height: 16px; flex: none; }
+</style>
+</head>
+<body>
+
+<div class="notes">
+  <h1>Classic 1995 mockup</h1>
+  <p>Real size at the bottom, 2.5x copy above. Click <b>Start</b> for the menu. Hover the clock for the date. Icons are placeholders, the app pulls each app's own icon.</p>
+  <p>Classic 1995 is the grey, square look: raised buttons, a pressed button for the active window, a sunken tray and a Start menu with a side banner. The panels at the top right are the tray panels, the calendar and the group list in the same style. Switch the theme to compare with the other two.</p>
+  <div class="controls">
+    <label>Theme</label><select id="c-theme"><option value="system">System</option><option value="classic-2001">Classic 2001</option><option value="classic-1995" selected>Classic 1995</option></select>
+    <label>Appearance</label><select id="c-appearance"><option value="dark">Dark (your Mac now)</option><option value="light">Light</option></select>
+    <label>Accent</label><select id="c-accent"><option>blue</option><option>purple</option><option>pink</option><option>red</option><option>orange</option><option>yellow</option><option>green</option><option>graphite</option></select>
+    <label>Bar height</label><div style="display:flex;align-items:center"><input type="range" id="c-height" min="28" max="56" value="36"><span class="val" id="c-height-val">36 px</span></div>
+    <label>Labels</label><select id="c-labels"><option value="on">Icon and title</option><option value="off">Icons only</option></select>
+    <label>Date in bar</label><select id="c-clockdate"><option value="off">Off</option><option value="on">On</option></select>
+  </div>
+</div>
+
+<div class="zoom-wrap">
+  <div class="zoom-label">2.5x</div>
+  <div class="zoom-inner" id="zoom"></div>
+</div>
+
+<div class="menu" id="menu">
+  <div class="menu-head"><div class="avatar"></div><span>Aaron</span></div>
+  <div class="menu-body">
+    <div class="col-left">
+      <div class="item"><span class="ico" style="background:#4b7bec"></span>Safari</div>
+      <div class="item"><span class="ico" style="background:#20bf6b"></span>Messages</div>
+      <div class="item"><span class="ico" style="background:#fd9644"></span>Music</div>
+      <div class="item"><span class="ico" style="background:#333"></span>Terminal</div>
+      <div class="item"><span class="ico" style="background:#2d98da"></span>Visual Studio Code</div>
+      <div class="item"><span class="ico" style="background:#eb3b5a"></span>Photos</div>
+      <div class="sep"></div>
+      <div class="item" style="font-weight:600">All Applications <span style="margin-left:auto">&#9656;</span></div>
+      <div class="list"></div>
+      <div class="search"><svg viewBox="0 0 16 16" width="13" height="13" style="opacity:.7"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 10l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Search</span></div>
+    </div>
+    <div class="col-right">
+      <div class="item"><span class="ico" style="background:#f7b731"></span>Applications</div>
+      <div class="item"><span class="ico" style="background:#fed330"></span>Documents</div>
+      <div class="item"><span class="ico" style="background:#26de81"></span>Downloads</div>
+      <div class="item"><span class="ico" style="background:#a5b1c2"></span>Home</div>
+      <div class="sep"></div>
+      <div class="item"><span class="ico" style="background:#778ca3"></span>System Settings</div>
+      <div class="item"><span class="ico" style="background:#4b6584"></span>Startbar Settings</div>
+      <div class="sep"></div>
+      <div class="item"><span class="ico" style="background:#45aaf2"></span>About Startbar</div>
+    </div>
+  </div>
+  <div class="menu-foot">
+    <span class="pw"><span class="ico" style="background:#f7b731"></span>Sleep</span>
+    <span class="pw"><span class="ico" style="background:#e8942a"></span>Log Out</span>
+    <span class="pw"><span class="ico" style="background:#d9412c"></span>Shut Down</span>
+  </div>
+</div>
+
+
+<div class="panels">
+  <div>
+    <div class="p95-cap" style="color:#fff;margin:0 0 4px">Volume</div>
+    <div class="p95">
+      <div class="title">Sound <span>60%</span></div>
+      <div class="body">
+        <div class="row"><svg viewBox="0 0 16 16"><path d="M2 6h3l4-3v10l-4-3H2z"/><path d="M11 5.5a4 4 0 010 5M12.5 3.5a7 7 0 010 9" fill="none" stroke="#000" stroke-width="1.2"/></svg>
+          <div class="track"><div class="thumb" style="left:58%"></div></div></div>
+        <div class="row"><span class="check"><i></i>Mute</span></div>
+        <span class="btn95">Sound Settings...</span>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div style="color:#fff;margin:0 0 4px">Wi-Fi</div>
+    <div class="p95">
+      <div class="title">Wi-Fi</div>
+      <div class="body">
+        <div class="row"><span class="check"><i>&#10003;</i>Wi-Fi on</span></div>
+        <div style="font-weight:bold;margin-top:8px">Home Network</div>
+        <div class="muted" style="margin-top:2px">Connected, strong signal</div>
+        <span class="btn95">Wi-Fi Settings...</span>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div style="color:#fff;margin:0 0 4px">Clock</div>
+    <div class="p95">
+      <div class="title">October 2026 <span style="display:flex;gap:2px"><span class="nav95">&#9664;</span><span class="nav95">&#9654;</span></span></div>
+      <div class="body">
+        <div class="grid" id="cal95"></div>
+        <div style="margin-top:6px">Monday, October 19, 2026</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div style="color:#fff;margin:0 0 4px">Group list</div>
+    <div class="p95">
+      <div class="title">Finder</div>
+      <div class="body" style="padding:4px 2px">
+        <div class="win"><svg viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2" fill="#3ea1ff"/><rect x="1" y="2" width="7" height="12" rx="2" fill="#dff0ff"/></svg>Downloads</div>
+        <div class="win"><svg viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2" fill="#3ea1ff"/><rect x="1" y="2" width="7" height="12" rx="2" fill="#dff0ff"/></svg>Documents</div>
+        <div class="win"><svg viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2" fill="#3ea1ff"/><rect x="1" y="2" width="7" height="12" rx="2" fill="#dff0ff"/></svg>prathercc</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bar" id="bar">
+  <div class="start" id="start">
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <rect class="glyph-fill" x="2" y="3" width="16" height="14" rx="2"/>
+      <rect class="glyph-ink" x="4.5" y="9" width="11" height="1.6" rx=".8"/>
+      <rect class="glyph-ink" x="4.5" y="12.2" width="7" height="1.6" rx=".8"/>
+    </svg>
+    <span>Start</span>
+  </div>
+
+  <div class="quick">
+    <div class="icon" title="Safari"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#eaf4ff" stroke="#1f6fd8"/><path d="M11 5 9 9 5 11 7 7z" fill="#e8402f"/></svg></div>
+    <div class="icon" title="Finder"><svg viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2" fill="#3ea1ff"/><rect x="1" y="2" width="7" height="12" rx="2" fill="#dff0ff"/></svg></div>
+    <div class="icon" title="Terminal"><svg viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2" fill="#222"/><path d="M4 6l3 2-3 2" stroke="#fff" fill="none" stroke-width="1.4"/></svg></div>
+  </div>
+  <div class="grip"></div>
+
+  <div class="tasks">
+    <div class="task active"><svg viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2" fill="#222"/><path d="M4 6l3 2-3 2" stroke="#fff" fill="none" stroke-width="1.4"/></svg><span class="label">Terminal</span></div>
+    <div class="task"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#eaf4ff" stroke="#1f6fd8"/><path d="M11 5 9 9 5 11 7 7z" fill="#e8402f"/></svg><span class="label">Safari</span></div>
+    <div class="task"><svg viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2" fill="#3ea1ff"/><rect x="1" y="2" width="7" height="12" rx="2" fill="#dff0ff"/></svg><span class="count">3</span><span class="label">Finder</span><span class="caret"></span></div>
+    <div class="task"><svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="3" fill="#20bf6b"/><path d="M4 6h8M4 9h6" stroke="#fff" stroke-width="1.4"/></svg><span class="label">Messages</span></div>
+    <div class="task"><svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="3" fill="#2d98da"/><path d="M5 4l-3 4 3 4M11 4l3 4-3 4" stroke="#fff" fill="none" stroke-width="1.4"/></svg><span class="label">startbar-helper.swift - Visual Studio Code</span></div>
+  </div>
+
+  <div class="tray">
+    <div class="chev">&lsaquo;</div>
+    <svg viewBox="0 0 16 16"><path d="M2 6h3l4-3v10l-4-3H2z" stroke="none"/><path d="M11 5.5a4 4 0 010 5M12.5 3.5a7 7 0 010 9" fill="none" stroke-width="1.2"/></svg>
+    <svg viewBox="0 0 16 16"><path d="M1.5 6a9 9 0 0113 0M3.5 8.5a6 6 0 019 0M5.5 11a3 3 0 015 0" fill="none" stroke-width="1.4"/><circle cx="8" cy="13.2" r="1.2" stroke="none"/></svg>
+    <span class="clock"><span class="time" id="clock">12:00 PM</span><span class="date" id="clockdate">Oct 18</span></span>
+    <div class="tip" id="tip">Saturday, October 18, 2026</div>
+  </div>
+</div>
+
+<script>
+  const root = document.documentElement;
+  const q = new URLSearchParams(location.search);
+  if (q.has('preview')) document.body.classList.add('preview');
+  const bind = (id, attr) => {
+    const el = document.getElementById(id);
+    if (q.has(attr)) el.value = q.get(attr);
+    const apply = () => { root.dataset[attr] = el.value; if (attr === 'height') { root.style.setProperty('--bar-h', el.value + 'px'); document.getElementById('c-height-val').textContent = el.value + ' px'; } };
+    el.addEventListener('input', apply); apply();
+  };
+  bind('c-theme', 'theme'); bind('c-appearance', 'appearance'); bind('c-accent', 'accent');
+  bind('c-height', 'height'); bind('c-labels', 'labels'); bind('c-clockdate', 'clockdate');
+
+  const start = document.getElementById('start');
+  const menu = document.getElementById('menu');
+  start.addEventListener('click', e => { e.stopPropagation(); start.classList.toggle('open'); menu.classList.toggle('open'); });
+  document.addEventListener('click', () => { start.classList.remove('open'); menu.classList.remove('open'); });
+  menu.addEventListener('click', e => e.stopPropagation());
+  if (q.has('menu')) { start.classList.add('open'); menu.classList.add('open'); }
+
+  function tick() {
+    const d = new Date();
+    document.getElementById('clock').textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    document.getElementById('clockdate').textContent = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    document.getElementById('tip').textContent = d.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const copy = document.getElementById('bar').cloneNode(true);
+    copy.querySelectorAll('[id]').forEach(n => n.removeAttribute('id')); copy.removeAttribute('id');
+    copy.querySelector('.tray').classList.add('show-tip');
+    document.getElementById('zoom').replaceChildren(copy);
+  }
+  tick(); setInterval(tick, 1000);
+  // settings.html drives this page through postMessage when it is embedded as the live preview
+  addEventListener('message', e => { const s = e.data || {}; for (const k in s) { const el = document.getElementById('c-' + k); if (el) { el.value = s[k]; el.dispatchEvent(new Event('input')); } } });
+
+  // Calendar grid for the Classic 1995 panel: October 2026, Sunday first.
+  (function () {
+    const g = document.getElementById('cal95');
+    const head = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<span class="h">${d}</span>`);
+    const days = [];
+    for (let i = 27; i <= 30; i++) days.push(`<span class="o">${i}</span>`);
+    for (let d = 1; d <= 31; d++) days.push(`<span${d === 19 ? ' class="t"' : ''}>${d}</span>`);
+    for (let d = 1; days.length < 42; d++) days.push(`<span class="o">${d}</span>`);
+    g.innerHTML = head.concat(days).join('');
+  })();
+</script>
+</body>
+</html>
