@@ -39,6 +39,10 @@ let popover = null;
 let popoverAnchor = null; // { kind, rect, bar } of the tray icon it belongs to
 let lastPopoverHide = { kind: null, at: 0 };
 let theme = 'system';
+let preview = null; // the window pictures over a window button
+let previewAnchor = null; // { rect, bar } of the button
+let previewHover = false; // the mouse is over the pictures
+let previewHide = null;
 let settingsWin = null;
 let barHidden = false; // Hide the Bar, for this session only
 const visibility = new Set();
@@ -273,6 +277,79 @@ function createGroup(settings) {
   group.on('blur', () => hideGroup());
   group.on('closed', () => { group = null; });
   return group;
+}
+
+// Pictures of a button's windows, shown on hover when previews are on. A
+// non-activating panel like the bar, so it takes hovers and clicks without
+// pulling focus from the app in front.
+function createPreview(settings) {
+  preview = new BrowserWindow({
+    width: 200,
+    height: 150,
+    type: 'panel',
+    frame: false,
+    transparent: true,
+    hasShadow: true,
+    roundedCorners: !isClassic(settings), // see remakePopups
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    focusable: false,
+    acceptFirstMouse: true,
+    skipTaskbar: true,
+    show: false,
+    vibrancy: vibrancyFor(settings),
+    visualEffectState: 'active',
+    webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true }
+  });
+  preview.setAlwaysOnTop(true, 'pop-up-menu');
+  onAllSpaces(preview);
+  preview.loadFile(renderer('preview'));
+  preview.on('closed', () => { preview = null; });
+  return preview;
+}
+
+function showPreview(payload, barWin) {
+  if (!preview || !liveBar(barWin)) return;
+  clearTimeout(previewHide);
+  previewAnchor = { rect: payload.rect, bar: barWin };
+  preview.webContents.send('preview:show', payload);
+}
+
+function sendPreview(channel, data) {
+  if (preview && !preview.isDestroyed()) preview.webContents.send(channel, data);
+}
+
+// The pictures laid out. Open them above the button, centered on it.
+function sizePreview({ width, height }) {
+  if (!preview || !previewAnchor || !liveBar(previewAnchor.bar)) return;
+  const b = previewAnchor.bar.getBounds();
+  const { rect } = previewAnchor;
+  const x = clampX(b.x + rect.x + rect.width / 2 - width / 2, width, previewAnchor.bar);
+  preview.setBounds({ x, y: b.y - height - gapFor(theme), width, height });
+  if (!preview.isVisible()) preview.showInactive();
+}
+
+// The mouse left the button. The pictures stay a moment, so the mouse can
+// move up onto them.
+function leavePreview() {
+  clearTimeout(previewHide);
+  previewHide = setTimeout(() => { if (!previewHover) hidePreview(); }, 250);
+}
+
+function hoverPreview(on) {
+  previewHover = !!on;
+  if (previewHover) clearTimeout(previewHide);
+  else leavePreview();
+}
+
+function hidePreview() {
+  clearTimeout(previewHide);
+  previewAnchor = null;
+  previewHover = false;
+  if (preview && preview.isVisible()) preview.hide();
 }
 
 // The tray's volume, Wi-Fi and battery panels share one window.
@@ -587,7 +664,8 @@ function remakePopups(settings) {
   const classic = isClassic(settings);
   if (popupsClassic === null || popupsClassic === classic) return;
   hideMenu();
-  for (const win of [menu, group, calendar, popover]) {
+  hidePreview();
+  for (const win of [menu, group, calendar, popover, preview]) {
     if (!win || win.isDestroyed()) continue;
     win.removeAllListeners('closed');
     win.removeAllListeners('blur');
@@ -597,6 +675,7 @@ function remakePopups(settings) {
   createGroup(settings);
   createCalendar(settings);
   createPopover(settings);
+  createPreview(settings);
 }
 
 function layout(settings) {
@@ -614,6 +693,8 @@ function layout(settings) {
   if (group) group.setVibrancy(vibrancyFor(settings));
   if (calendar) calendar.setVibrancy(vibrancyFor(settings));
   if (popover) popover.setVibrancy(vibrancyFor(settings));
+  if (preview) preview.setVibrancy(vibrancyFor(settings));
+  hidePreview();
   hideTip();
   hideGroup();
   hideCalendar();
@@ -624,6 +705,7 @@ function hideBar() {
   if (bars.size === 0 || barHidden) return;
   barHidden = true;
   hideMenu();
+  hidePreview();
   hideTip();
   hideGroup();
   hideCalendar();
@@ -650,6 +732,7 @@ function showMenu(barWin) {
   if (!menu) return;
   showBar(); // the Start menu sits on the bar, so opening it brings a hidden bar back
   menuBar = liveBar(barWin) || barUnderMouse();
+  hidePreview();
   if (current) menu.setBounds(menuBounds(current, menuBar));
   menu.show();
   syncBars();
@@ -722,7 +805,8 @@ function broadcast(channel, payload) {
 }
 
 module.exports = {
-  createBars, createMenu, createTip, createGroup, createCalendar, createPopover, layout, showMenu, hideMenu, toggleMenu,
+  createBars, createMenu, createTip, createGroup, createCalendar, createPopover, createPreview, layout, showMenu, hideMenu, toggleMenu,
+  showPreview, sendPreview, sizePreview, leavePreview, hoverPreview, hidePreview,
   showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, toggleCalendar, sizeCalendar, hideCalendar,
   togglePopover, sizePopover, hidePopover, broadcast,
   hideBar, showBar, onBarVisibility, holdBar, setFullScreenDisplays, barAreas, barOf, showSettings,

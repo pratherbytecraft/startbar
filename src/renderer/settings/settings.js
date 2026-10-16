@@ -112,7 +112,12 @@
             { label: 'Group windows from the same app',
               control: { type: 'select', key: 'taskbar.grouping', options: [['always', 'Always'], ['full', 'When the bar is full'], ['never', 'Never']] } },
             { label: "Clicking the active window's button minimizes it", control: { type: 'toggle', key: 'taskbar.clickActiveMinimizes' } },
-            { label: 'Show the window title when hovering a button', control: { type: 'toggle', key: 'taskbar.titleOnHover' } },
+            { label: 'Show a preview when hovering a window button', note: 'A picture of each window, to click or close. Needs the Screen Recording permission, asked when you turn this on.',
+              control: { type: 'toggle', key: 'taskbar.previews' },
+              hint: { when: (st) => st.settings.taskbar.previews && st.permissions.screen && st.permissions.screen !== 'allowed',
+                text: 'Without Screen Recording the previews show app icons. Allow it on the ', link: 'Permissions page', after: '.', click: () => openPage('permissions') } },
+            { label: 'Show the window title when hovering a button', unused: { when: (s) => s.taskbar.previews, note: 'Previews show the title instead.' },
+              control: { type: 'toggle', key: 'taskbar.titleOnHover' } },
             { label: 'Show apps that are running but have no windows', control: { type: 'toggle', key: 'taskbar.showWindowless' } },
             { label: 'Order', note: 'New windows go on the right in either case.',
               control: { type: 'select', key: 'taskbar.order', options: [['opened', 'In the order they opened'], ['app', 'Grouped by app']] } }
@@ -272,7 +277,9 @@
             { label: 'Location', note: "The Wi-Fi network's name in the tray. macOS counts the network name as location, so it asks. Startbar doesn't read where you are.",
               control: { type: 'permission', name: 'location' } },
             { label: 'Bluetooth', note: 'A Bluetooth icon in the tray with your devices, their battery and an on and off switch.',
-              control: { type: 'permission', name: 'bluetooth' } }
+              control: { type: 'permission', name: 'bluetooth' } },
+            { label: 'Screen Recording', note: "Pictures of your windows for the previews over window buttons, when they're turned on. Startbar doesn't record or keep your screen.",
+              control: { type: 'permission', name: 'screen' } }
           ]
         }
       ],

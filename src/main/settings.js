@@ -21,6 +21,7 @@ const DEFAULTS = Object.freeze({
     grouping: 'always', // always | full | never
     clickActiveMinimizes: true,
     titleOnHover: true,
+    previews: false, // pictures of the windows over a button on hover, needs Screen Recording
     showWindowless: false, // apps that are running with no windows get a button
     order: 'opened', // opened | app
     hideInFullScreen: true,
@@ -72,6 +73,7 @@ const DEFAULTS = Object.freeze({
     auto: true // check npm for a newer version now and then, never installs
   },
   accessibilityAsked: false, // the one time Accessibility dialog has been shown
+  screenAsked: false, // Screen Recording has been asked for, see checkScreen in main/index.js
   hideNoteShown: false, // the one time note on how to bring a hidden bar back
   automationAnswer: '', // allowed | denied: the last answer for System Events, see main/index.js
   // A classic theme's color scheme, kept per theme. scheme is one of the
@@ -236,8 +238,8 @@ function clean(saved, base) {
 // Everything from saved, the rest from the defaults, for an import. The one
 // time dialogs stay answered.
 function replace(saved) {
-  const { accessibilityAsked, hideNoteShown, automationAnswer } = current;
-  current = withScheme(merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, hideNoteShown, automationAnswer }));
+  const { accessibilityAsked, hideNoteShown, automationAnswer, screenAsked } = current;
+  current = withScheme(merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, hideNoteShown, automationAnswer, screenAsked }));
   return save();
 }
 

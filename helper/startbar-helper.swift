@@ -13,6 +13,10 @@
 //     the Accessibility permission changes. Takes one JSON command per line
 //     on stdin and answers each with a {"type":"reply"} line. See WindowWatcher.
 //
+//   startbar-helper screen-access
+//     Prints {"allowed": true or false} for the Screen Recording permission
+//     and exits. A fresh process sees a grant that a running one may not.
+//
 //   startbar-helper status
 //     Runs until stdin closes. Prints the volume, Wi-Fi, battery and
 //     Bluetooth for the tray, and where the Location, Bluetooth and
@@ -30,6 +34,7 @@ import Foundation
 import IOBluetooth
 import IOKit
 import IOKit.ps
+import ScreenCaptureKit
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
@@ -151,6 +156,9 @@ let axCallback: AXObserverCallback = { _, _, _, refcon in
 //   {"cmd":"activate","id":"w123"}    raise the window and bring its app forward
 //   {"cmd":"minimize","id":"w123"}    {"cmd":"unminimize","id":"w123"}
 //   {"cmd":"close","id":"w123"}       press the window's close button
+//   {"cmd":"askScreen"}               ask for the Screen Recording permission (macOS asks once)
+//   {"cmd":"thumb","id":"w123","width":380,"height":240}
+//                                     a picture of the window, answered later as "image", a JPEG data URL
 //   {"cmd":"activateApp","pid":501}   {"cmd":"quitApp","pid":501}
 //   {"cmd":"newWindow","pid":501}     bring the app forward and press Command N
 //   {"cmd":"refresh"}                 send the state now, even if unchanged
@@ -538,6 +546,7 @@ final class WindowWatcher {
         }
         var reply: [String: Any] = ["type": "reply", "cmd": name]
         if let seq = command["seq"] { reply["seq"] = seq }
+        if name == "thumb" { return thumb(command, reply) }
         replyExtra = [:]
         let error = run(name, command)
         reply.merge(replyExtra) { _, extra in extra }
@@ -575,6 +584,9 @@ final class WindowWatcher {
             return nil
         case "showDesktop":
             showDesktop()
+            return nil
+        case "askScreen":
+            CGRequestScreenCaptureAccess()
             return nil
         case "activateApp", "quitApp", "newWindow":
             guard let pid = command["pid"] as? Int, let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {
@@ -617,6 +629,40 @@ final class WindowWatcher {
             }
         default:
             return "unknown command"
+        }
+    }
+
+    // A picture of one window for the hover preview, fit inside width by
+    // height points (at twice that in pixels), through ScreenCaptureKit. The
+    // reply comes when the picture is ready. Needs Screen Recording.
+    func thumb(_ command: [String: Any], _ base: [String: Any]) {
+        var reply = base
+        func send(_ error: String?, _ image: String? = nil) {
+            reply["ok"] = error == nil
+            if let error { reply["error"] = error }
+            if let image { reply["image"] = image }
+            DispatchQueue.main.async { jsonLine(reply) }
+        }
+        guard let id = command["id"] as? String, id.hasPrefix("w"), let number = UInt32(id.dropFirst()) else { return send("no window number") }
+        guard #available(macOS 14.0, *) else { return send("needs macOS 14") }
+        let maxW = command["width"] as? Double ?? 380
+        let maxH = command["height"] as? Double ?? 240
+        SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { content, error in
+            guard let content else { return send(error?.localizedDescription ?? "no screen access") }
+            guard let window = content.windows.first(where: { $0.windowID == number }), window.frame.width > 0, window.frame.height > 0 else {
+                return send("no such window")
+            }
+            let scale = min(maxW / window.frame.width, maxH / window.frame.height, 1) * 2
+            let config = SCStreamConfiguration()
+            config.width = max(1, Int(window.frame.width * scale))
+            config.height = max(1, Int(window.frame.height * scale))
+            config.showsCursor = false
+            SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: window), configuration: config) { image, error in
+                guard let image, let data = NSBitmapImageRep(cgImage: image).representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else {
+                    return send(error?.localizedDescription ?? "no picture")
+                }
+                send(nil, "data:image/jpeg;base64," + data.base64EncodedString())
+            }
         }
     }
 
@@ -1132,7 +1178,7 @@ var statusWatcher: StatusWatcher?
 // MARK: - Entry
 
 let args = CommandLine.arguments
-let usage = "usage: startbar-helper icons <cacheDir> | startbar-helper windows | startbar-helper status"
+let usage = "usage: startbar-helper icons <cacheDir> | startbar-helper windows | startbar-helper screen-access | startbar-helper status"
 guard args.count >= 2 else { fail(usage) }
 switch args[1] {
 case "icons":
@@ -1142,6 +1188,8 @@ case "windows":
     let watcher = WindowWatcher()
     watcher.start()
     RunLoop.main.run()
+case "screen-access":
+    jsonLine(["allowed": CGPreflightScreenCaptureAccess()])
 case "status":
     statusWatcher = StatusWatcher()
     statusWatcher?.start()

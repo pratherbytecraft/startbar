@@ -373,8 +373,46 @@
     return { x: r.left, y: r.top, width: r.width, height: r.height };
   }
 
+  // MARK: window previews
+
+  // Shown after a short hover, and right away when moving from one button
+  // to the next while they're up.
+  let previewTimer = null;
+  let previewUp = false;
+  let previewLeft = 0;
+  const previewsOn = () => state.settings.taskbar.previews;
+
+  function schedulePreview(item, el) {
+    clearTimeout(previewTimer);
+    const wins = item.kind === 'group' ? item.wins : [item.win];
+    const show = () => {
+      previewUp = true;
+      api.showPreview({
+        rect: rectOf(el),
+        icon: icons.get(item.app.path) || '',
+        windows: wins.map((w) => ({ id: w.id, title: w.title || item.app.name, minimized: w.minimized, active: item.app.active && w.focused && !w.minimized }))
+      });
+    };
+    if (previewUp && Date.now() - previewLeft < 300) show();
+    else previewTimer = setTimeout(show, 500);
+  }
+
+  function leavePreview() {
+    clearTimeout(previewTimer);
+    previewLeft = Date.now();
+    api.leavePreview();
+    setTimeout(() => { if (Date.now() - previewLeft >= 300) previewUp = false; }, 320);
+  }
+
+  function hidePreview() {
+    clearTimeout(previewTimer);
+    previewUp = false;
+    api.hidePreview();
+  }
+
   function onClick(item, el) {
     hideTip();
+    hidePreview();
     const t = state.settings.taskbar;
     if (item.kind === 'app') return api.taskCommand({ cmd: 'activateApp', pid: item.app.pid });
     if (item.kind === 'group') {
@@ -454,6 +492,7 @@
       e.preventDefault();
       e.stopPropagation();
       hideTip();
+      hidePreview();
       api.taskMenu({
         kind: item.kind,
         pid: item.app.pid,
@@ -462,11 +501,17 @@
       });
     });
     b.addEventListener('mouseenter', () => {
-      if (!state.settings.taskbar.titleOnHover || tasksEl.classList.contains('reordering')) return;
+      if (tasksEl.classList.contains('reordering')) return;
+      // With previews on, the preview has the title, so no tooltip.
+      if (previewsOn() && item.kind !== 'app') return schedulePreview(item, b);
+      if (!state.settings.taskbar.titleOnHover) return;
       clearTimeout(tipTimer);
       tipTimer = setTimeout(() => api.showTip({ text: label.textContent, rect: rectOf(b) }), 500);
     });
-    b.addEventListener('mouseleave', hideTip);
+    b.addEventListener('mouseleave', () => {
+      hideTip();
+      if (previewsOn()) leavePreview();
+    });
     return b;
   }
 

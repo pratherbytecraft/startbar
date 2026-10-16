@@ -21,6 +21,7 @@ const status = require('./status');
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
 const VERSION = require('../../package.json').version;
+const { helperPath } = require('../../scripts/build-helper');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -139,11 +140,13 @@ function openSettings(page) {
     win.on('focus', () => {
       refreshDock();
       status.send({ cmd: 'access' });
+      checkScreen();
     });
   }
   app.focus({ steal: true });
   refreshDock();
   status.send({ cmd: 'access' });
+  checkScreen();
 }
 
 // The Permissions page. Each permission is allowed, notAsked, denied, off
@@ -174,7 +177,8 @@ async function placeIcons() {
 const PANES = {
   automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
-  bluetooth: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth'
+  bluetooth: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth',
+  screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
 };
 let askingFor = null; // { name, at }: the permission whose macOS prompt is up
 let shownPermissions = '';
@@ -184,7 +188,31 @@ function permissions() {
   // macOS only answers for System Events while it's running. Otherwise go
   // by the last answer Startbar saw.
   const automation = a.automation && a.automation !== 'unknown' ? a.automation : settings.get().automationAnswer || 'notAsked';
-  return { automation, location: a.location || null, bluetooth: a.bluetooth || null };
+  return { automation, location: a.location || null, bluetooth: a.bluetooth || null, screen: screenNow };
+}
+
+// Screen Recording, for window previews. A process that's already running
+// may not see a new grant, so a short helper run checks each time. macOS
+// can't say whether it was asked before, so Startbar remembers.
+let screenNow = null; // allowed | notAsked | denied
+function checkScreen() {
+  const helper = helperPath();
+  if (!helper) return;
+  execFile(helper, ['screen-access'], { timeout: 5000 }, (err, out) => {
+    let allowed = false;
+    try {
+      allowed = !err && JSON.parse(out).allowed === true;
+    } catch {
+      allowed = false;
+    }
+    const next = allowed ? 'allowed' : settings.get().screenAsked ? 'denied' : 'notAsked';
+    if (next === screenNow) return;
+    const granted = screenNow !== null && next === 'allowed';
+    screenNow = next;
+    // The window helper takes pictures, so a new one starts with the grant.
+    if (granted) tasks.restart();
+    permissionsChanged();
+  });
 }
 
 function rememberAutomation(result) {
@@ -211,6 +239,17 @@ async function askPermission(name) {
     return;
   }
   askingFor = { name, at: Date.now() };
+  if (name === 'screen') {
+    settings.update({ screenAsked: true });
+    tasks.send({ cmd: 'askScreen' });
+    // macOS answers in System Settings, so look again for a while.
+    let tries = 0;
+    const look = setInterval(() => {
+      checkScreen();
+      if (++tries >= 30 || screenNow === 'allowed') clearInterval(look);
+    }, 2000);
+    return;
+  }
   status.send({ cmd: name === 'location' ? 'askLocation' : 'askBluetooth' });
 }
 
@@ -223,7 +262,10 @@ function permissionsChanged() {
   if (key === shownPermissions) return;
   shownPermissions = key;
   pushState();
-  if (askingFor && now[askingFor.name] !== 'notAsked') {
+  // Screen Recording reads as denied as soon as it's asked, while macOS
+  // still waits on System Settings, so only an allow counts as the answer.
+  const answered = askingFor && (askingFor.name === 'screen' ? now.screen === 'allowed' : now[askingFor.name] !== 'notAsked');
+  if (answered) {
     // Only right after the prompt. A prompt left open and answered much
     // later shouldn't pull the settings window over whatever is in front.
     const recent = Date.now() - askingFor.at < 60000;
@@ -262,7 +304,7 @@ async function exportSettings() {
     filters: [{ name: 'Startbar settings', extensions: ['json'] }]
   });
   if (canceled || !filePath) return;
-  const { accessibilityAsked, hideNoteShown, automationAnswer, ...saved } = settings.get();
+  const { accessibilityAsked, hideNoteShown, automationAnswer, screenAsked, ...saved } = settings.get();
   fs.writeFileSync(filePath, JSON.stringify({ startbar: VERSION, settings: saved, pins: pins.get() }, null, 2) + '\n');
 }
 
@@ -628,7 +670,36 @@ async function showTaskMenu(target, sender) {
   popupOnBar(Menu.buildFromTemplate(items), sender);
 }
 
+// Window pictures for the hover previews, from the window helper. Kept a
+// few seconds, so moving back and forth between buttons is quick.
+const PREVIEW_SIZE = { width: 190, height: 120 };
+const pictures = new Map(); // window id -> { image, at }
+function showPreview(payload, sender) {
+  const bar = windows.barOf(sender);
+  windows.showPreview(payload, bar);
+  if (screenNow !== 'allowed') return;
+  for (const w of payload.windows) {
+    if (w.minimized) continue;
+    const kept = pictures.get(w.id);
+    if (kept && Date.now() - kept.at < 3000) {
+      windows.sendPreview('preview:image', { id: w.id, image: kept.image });
+      continue;
+    }
+    tasks.send({ cmd: 'thumb', id: w.id, ...PREVIEW_SIZE }).then((reply) => {
+      if (!reply.ok || !reply.image) return;
+      pictures.set(w.id, { image: reply.image, at: Date.now() });
+      if (pictures.size > 40) pictures.delete(pictures.keys().next().value);
+      windows.sendPreview('preview:image', { id: w.id, image: reply.image });
+    });
+  }
+}
+
 function wireIpc() {
+  ipcMain.on('preview:show', (e, payload) => showPreview(payload, e.sender));
+  ipcMain.on('preview:size', (_e, size) => windows.sizePreview(size));
+  ipcMain.on('preview:leave', () => windows.leavePreview());
+  ipcMain.on('preview:hover', (_e, on) => windows.hoverPreview(on));
+  ipcMain.on('preview:hide', () => windows.hidePreview());
   ipcMain.handle('state', () => state());
   ipcMain.on('bar:start', (e) => windows.toggleMenu(windows.barOf(e.sender)));
   ipcMain.on('bar:menu', (e) => showBarMenu(e.sender));
@@ -759,6 +830,7 @@ app.whenReady().then(() => {
   windows.createGroup(settings.get());
   windows.createCalendar(settings.get());
   windows.createPopover(settings.get());
+  windows.createPreview(settings.get());
   registerShortcut();
   updateTray();
   windows.onBarVisibility(() => {
@@ -779,8 +851,13 @@ app.whenReady().then(() => {
     permissionsChanged();
   });
   status.start();
+  checkScreen();
 
+  let previewsWere = settings.get().taskbar.previews;
   settings.onChange((s) => {
+    // Turning previews on asks for Screen Recording, the first time.
+    if (s.taskbar.previews && !previewsWere && screenNow === 'notAsked') askPermission('screen');
+    previewsWere = s.taskbar.previews;
     tasks.setSpaces(s.spaces.show === 'all');
     applyAppearance();
     windows.layout(s);
