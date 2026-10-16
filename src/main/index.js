@@ -1,6 +1,6 @@
 // Startbar main process. Owns the windows, the settings, the app list and
 // everything that touches the Mac. Renderers only draw.
-const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu } = require('electron');
+const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu, nativeTheme } = require('electron');
 const { execFile, execFileSync } = require('child_process');
 const os = require('os');
 const path = require('path');
@@ -38,9 +38,12 @@ function userName() {
   }
 }
 
+let shortcutError = null; // the Start menu shortcut couldn't be registered
+
 function state() {
   return {
     settings: settings.get(),
+    shortcutError,
     system: system.snapshot(),
     user: userName(),
     version: VERSION,
@@ -54,14 +57,47 @@ function pushState() {
 
 function registerShortcut() {
   globalShortcut.unregisterAll();
+  shortcutError = null;
   const combo = settings.get().startMenu.shortcut;
   if (!combo) return;
   try {
     const ok = globalShortcut.register(combo, () => windows.toggleMenu());
-    if (!ok) console.log(`Startbar: the shortcut ${combo} is taken by another app.`);
+    if (!ok) {
+      shortcutError = 'taken';
+      console.log(`Startbar: the shortcut ${combo} is taken by another app.`);
+    }
   } catch (err) {
+    shortcutError = 'invalid';
     console.log(`Startbar: could not register ${combo}: ${err.message}`);
   }
+}
+
+// The appearance setting also picks the window materials, so a dark choice
+// on a light Mac blurs dark too.
+function applyAppearance() {
+  const map = { auto: 'system', light: 'light', dark: 'dark' };
+  nativeTheme.themeSource = map[settings.get().appearance] || 'system';
+}
+
+// While the settings window is open Startbar is in the Dock and the app
+// switcher, so the window can't get lost behind other windows.
+function openSettings() {
+  windows.hideMenu();
+  app.setActivationPolicy('regular');
+  windows.showSettings(() => app.setActivationPolicy('accessory'));
+  app.focus({ steal: true });
+}
+
+async function resetSettings() {
+  const { response } = await dialog.showMessageBox(windows.settings, {
+    type: 'warning',
+    message: 'Reset all settings to the defaults?',
+    detail: 'The theme, the bar, the Start menu and the clock go back to how they were when Startbar was installed.',
+    buttons: ['Reset', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1
+  });
+  if (response === 0) settings.reset();
 }
 
 async function runPower(action) {
@@ -139,31 +175,28 @@ function updateTray() {
     hidden: windows.barHidden,
     toggleBar,
     openMenu: () => windows.showMenu(),
+    settings: openSettings,
     about: () => showAbout(),
     quit: () => app.quit()
   });
 }
 
 // Right click on an empty part of the bar. Kept short: everything else lives
-// in the settings window. Allow Window Buttons stays here while the permission
-// is off until the settings window has its Accessibility row.
+// in the settings window.
 function showBarMenu() {
   if (!windows.bar) return;
-  const items = [{ label: 'Hide the Bar', click: () => hideBar() }];
-  if (tasks.get().accessibility === false) {
-    items.push({ label: 'Allow Window Buttons…', click: () => access.ask() });
-  }
-  items.push(
-    { label: 'Startbar Settings', enabled: false }, // slice 3
+  Menu.buildFromTemplate([
+    { label: 'Hide the Bar', click: () => hideBar() },
+    { label: 'Startbar Settings…', click: openSettings },
     { type: 'separator' },
     { label: 'Quit Startbar', click: () => app.quit() }
-  );
-  Menu.buildFromTemplate(items).popup({ window: windows.bar });
+  ]).popup({ window: windows.bar });
 }
 
 // The menu bar while one of Startbar's windows has focus (the Start menu, a
-// group list, a dialog). Replaces Electron's default File, View, Window and
-// Help menus. Edit stays so copy and paste work in the search box.
+// group list, the settings window, a dialog). Replaces Electron's default
+// File, View, Window and Help menus. Edit stays so copy and paste work in
+// the search boxes.
 function setAppMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {
@@ -171,7 +204,10 @@ function setAppMenu() {
       submenu: [
         { label: 'About Startbar', click: () => showAbout() },
         { type: 'separator' },
+        { label: 'Settings…', accelerator: 'Command+,', click: openSettings },
+        { type: 'separator' },
         { label: 'Hide the Bar', click: () => hideBar() },
+        { label: 'Close Window', accelerator: 'Command+W', role: 'close' },
         { label: 'Quit Startbar', click: () => app.quit() }
       ]
     },
@@ -230,7 +266,7 @@ function wireIpc() {
       systemSettings: '/System/Applications/System Settings.app'
     };
     if (target === 'about') return showAbout();
-    if (target === 'settings') return; // slice 3
+    if (target === 'settings') return openSettings();
     if (places[target]) shell.openPath(places[target]);
   });
   ipcMain.on('menu:power', (_e, action) => {
@@ -238,6 +274,21 @@ function wireIpc() {
     runPower(action);
   });
   ipcMain.handle('settings:update', (_e, patch) => settings.update(patch));
+  ipcMain.on('settings:reset', () => resetSettings());
+  ipcMain.on('settings:link', (_e, name) => {
+    const links = {
+      kofi: 'https://ko-fi.com/prathercc',
+      issues: 'https://github.com/pratherbytecraft/startbar/issues'
+    };
+    if (links[name]) shell.openExternal(links[name]);
+  });
+  ipcMain.on('access:open', () => access.openPane());
+  // The shortcut field records keys, so the global shortcut steps aside.
+  ipcMain.on('shortcut:pause', () => globalShortcut.unregisterAll());
+  ipcMain.on('shortcut:resume', () => {
+    registerShortcut();
+    pushState();
+  });
   ipcMain.handle('tasks:get', () => tasks.get());
   ipcMain.handle('tasks:command', (_e, command) => tasks.send(command));
   ipcMain.handle('tasks:icons', (_e, paths) => apps.icons(Array.isArray(paths) ? paths : []));
@@ -253,6 +304,7 @@ function wireIpc() {
 app.whenReady().then(() => {
   app.setActivationPolicy('accessory'); // no Dock icon, no app switcher entry
   settings.init();
+  applyAppearance();
   setAppMenu();
   wireIpc();
   windows.createBar(settings.get());
@@ -274,6 +326,7 @@ app.whenReady().then(() => {
   tasks.start();
 
   settings.onChange((s) => {
+    applyAppearance();
     windows.layout(s);
     registerShortcut();
     updateTray();

@@ -25,7 +25,11 @@ async function ask() {
     cancelId: 1
   });
   asking = false;
-  if (response === 0) shell.openExternal(PANE);
+  if (response === 0) openPane();
+}
+
+function openPane() {
+  shell.openExternal(PANE);
 }
 
 // Called on every change to the task list. Asks only the first time the
@@ -39,4 +43,4 @@ function check(tasks) {
   setTimeout(ask, 800);
 }
 
-module.exports = { ask, check };
+module.exports = { ask, check, openPane };

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'">
+<title>Startbar Settings</title>
+<link rel="stylesheet" href="settings.css">
+</head>
+<body>
+<aside class="side">
+  <div class="drag"></div>
+  <label class="search">
+    <svg viewBox="0 0 16 16" width="12" height="12"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 10l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <input id="q" type="text" placeholder="Search" spellcheck="false" autocomplete="off">
+  </label>
+  <nav class="nav" id="nav"></nav>
+</aside>
+<section class="main">
+  <header class="titlebar" id="title"></header>
+  <div class="content" id="content">
+    <div class="preview" id="preview">
+      <div class="frame"><iframe id="pv" src="preview.html" title="Preview of the bar"></iframe></div>
+      <div class="cap">Live preview. Every change below shows here as you make it, and on the real bar.</div>
+    </div>
+    <div id="pages"></div>
+  </div>
+</section>
+<script src="../shared/theme.js"></script>
+<script src="../shared/clock.js"></script>
+<script src="settings.js"></script>
+</body>
+</html>

@@ -1,0 +1,527 @@
+// The settings window. Every page is drawn from PAGES, which also drives the
+// search box. Each control writes straight to the settings, so the real bar
+// and the preview change as you go.
+(function () {
+  const api = window.startbar;
+  const el = (id) => document.getElementById(id);
+  const navEl = el('nav'), titleEl = el('title'), pagesEl = el('pages'), contentEl = el('content');
+  const queryEl = el('q'), previewEl = el('preview'), pv = el('pv');
+
+  let state = null;
+  let tasks = { accessibility: null };
+  let page = 'appearance';
+  let syncs = []; // functions that refresh the drawn controls from the settings
+  const previewIcons = {};
+
+  const ICONS = {
+    appearance: '<circle cx="8" cy="8" r="6"/><path d="M8 2v12M2 8h12"/>',
+    taskbar: '<rect x="2" y="10" width="12" height="4" rx="1"/><rect x="4" y="3" width="8" height="5" rx="1"/>',
+    startmenu: '<rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h4"/>',
+    clock: '<circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/>',
+    general: '<circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>',
+    about: '<circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5v.5"/>'
+  };
+
+  const SYSTEM_ONLY = 'Not used by Classic 2001.';
+
+  const PAGES = [
+    {
+      id: 'appearance', title: 'Appearance', color: '#5e5ce6',
+      groups: [
+        {
+          title: 'Look',
+          rows: [
+            { label: 'Theme', note: "System uses your Mac's colors. Classic 2001 is the retro look. More themes later.",
+              control: { type: 'select', key: 'theme', options: [['system', 'System'], ['classic-2001', 'Classic 2001']] } },
+            { label: 'Appearance', systemOnly: true,
+              control: { type: 'seg', key: 'appearance', options: [['auto', 'Follow Mac'], ['light', 'Light'], ['dark', 'Dark']] } },
+            { label: 'Accent color', note: 'Follows the accent set in System Settings, or pick one here.', systemOnly: true,
+              control: { type: 'swatches', key: 'accent' } },
+            { label: 'Translucent bar', note: 'Blurs whatever is behind the bar, like the menu bar.', systemOnly: true,
+              control: { type: 'toggle', key: 'translucent' } }
+          ]
+        },
+        {
+          title: 'Size',
+          rows: [
+            { label: 'Bar height', control: { type: 'range', key: 'barHeight', min: 28, max: 56, step: 1 } },
+            { label: 'Window buttons',
+              control: { type: 'seg', key: 'labels', options: [['icon-and-title', 'Icon and title'], ['icons-only', 'Icons only']] } },
+            { label: 'Widest a button can get', control: { type: 'range', key: 'maxButtonWidth', min: 100, max: 260, step: 10 } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'taskbar', title: 'Taskbar', color: '#0a84ff',
+      groups: [
+        {
+          title: 'Window buttons',
+          rows: [
+            { label: 'Group windows from the same app',
+              control: { type: 'select', key: 'taskbar.grouping', options: [['always', 'Always'], ['full', 'When the bar is full'], ['never', 'Never']] } },
+            { label: "Clicking the active window's button minimizes it", control: { type: 'toggle', key: 'taskbar.clickActiveMinimizes' } },
+            { label: 'Show the window title when hovering a button', control: { type: 'toggle', key: 'taskbar.titleOnHover' } },
+            { label: 'Show apps that are running but have no windows', control: { type: 'toggle', key: 'taskbar.showWindowless' } },
+            { label: 'Order', note: 'New windows go on the right in either case.',
+              control: { type: 'select', key: 'taskbar.order', options: [['opened', 'In the order they opened'], ['app', 'Grouped by app']] } }
+          ]
+        },
+        {
+          title: 'Bar behavior',
+          rows: [
+            { label: 'Move windows up when they would cover the bar', note: "macOS can't reserve space for the bar, so Startbar nudges windows instead.",
+              control: { type: 'toggle', key: 'taskbar.moveWindowsUp' } },
+            { label: 'Show Startbar in the menu bar', note: 'The menu bar icon brings a hidden bar back.',
+              control: { type: 'select', key: 'menuBarIcon', options: [['hidden', 'Only while the bar is hidden'], ['always', 'Always']] } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'startmenu', title: 'Start Menu', color: '#30d158',
+      groups: [
+        {
+          title: 'Left column',
+          rows: [
+            { label: 'Recently used apps shown', control: { type: 'stepper', key: 'startMenu.recentCount', min: 0, max: 10 } },
+            { label: 'Put the cursor in the search box when the menu opens', control: { type: 'toggle', key: 'startMenu.focusSearch' } }
+          ]
+        },
+        {
+          title: 'Right column',
+          rows: [
+            { label: 'Applications', control: { type: 'toggle', key: 'startMenu.rightColumn.applications' } },
+            { label: 'Documents', control: { type: 'toggle', key: 'startMenu.rightColumn.documents' } },
+            { label: 'Downloads', control: { type: 'toggle', key: 'startMenu.rightColumn.downloads' } },
+            { label: 'Home folder', control: { type: 'toggle', key: 'startMenu.rightColumn.home' } },
+            { label: 'System Settings', control: { type: 'toggle', key: 'startMenu.rightColumn.systemSettings' } }
+          ]
+        },
+        {
+          title: 'Footer',
+          rows: [
+            { label: 'Show Sleep, Log Out and Shut Down', control: { type: 'toggle', key: 'startMenu.showPower' } },
+            { label: 'Ask before shutting down or logging out', control: { type: 'toggle', key: 'startMenu.confirmPower' } }
+          ]
+        },
+        {
+          title: 'Keyboard',
+          rows: [
+            { label: 'Open the Start menu', note: 'Click the field and press the keys you want. Delete clears it.',
+              control: { type: 'shortcut', key: 'startMenu.shortcut' } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'clock', title: 'Clock and Tray', color: '#ff9f0a',
+      groups: [
+        {
+          title: 'Clock',
+          rows: [
+            { label: 'Time format', control: { type: 'seg', key: 'clock.hour12', options: [[true, '12-hour'], [false, '24-hour']] } },
+            { label: 'Show seconds', control: { type: 'toggle', key: 'clock.seconds' } },
+            { label: 'Show the date under the time', control: { type: 'toggle', key: 'clock.showDate' } },
+            { label: 'Date style',
+              control: { type: 'select', key: 'clock.dateStyle', options: ['short', 'weekday', 'numeric', 'dayFirst'].map((v) => [v, window.dateText(new Date(), v)]) } }
+          ]
+        }
+      ],
+      note: "Other apps' menu bar icons can't be moved into the tray. macOS doesn't allow it. They stay in the menu bar at the top."
+    },
+    {
+      id: 'general', title: 'General', color: '#8e8e93',
+      groups: [
+        {
+          title: 'Permissions',
+          rows: [
+            { label: 'Accessibility', note: 'Needed to read window titles and to bring a window forward when you click its button. Without it the bar shows app icons only.',
+              control: { type: 'accessibility' } }
+          ]
+        },
+        {
+          title: 'Settings',
+          rows: [
+            { label: 'Reset everything to the defaults', control: { type: 'button', text: 'Reset…', click: () => api.resetSettings() } }
+          ]
+        }
+      ]
+    },
+    { id: 'about', title: 'About', color: '#ff375f', about: true, groups: [] }
+  ];
+
+  // MARK: settings access
+
+  function getPath(path) {
+    return path.split('.').reduce((o, k) => (o == null ? o : o[k]), state.settings);
+  }
+
+  function setPath(path, value) {
+    const keys = path.split('.');
+    const patch = {};
+    let o = patch;
+    keys.slice(0, -1).forEach((k) => { o = o[k] = {}; });
+    o[keys[keys.length - 1]] = value;
+    api.updateSettings(patch);
+  }
+
+  // MARK: controls
+
+  function node(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function toggle(c) {
+    const t = node('div', 'toggle');
+    t.addEventListener('click', () => setPath(c.key, !getPath(c.key)));
+    syncs.push(() => t.classList.toggle('on', !!getPath(c.key)));
+    return t;
+  }
+
+  function seg(c) {
+    const s = node('div', 'seg');
+    const parts = c.options.map(([v, text]) => {
+      const p = node('span', null, text);
+      p.addEventListener('click', () => setPath(c.key, v));
+      s.append(p);
+      return [v, p];
+    });
+    syncs.push(() => parts.forEach(([v, p]) => p.classList.toggle('on', getPath(c.key) === v)));
+    return s;
+  }
+
+  function select(c) {
+    const s = node('select');
+    for (const [v, text] of c.options) {
+      const o = node('option', null, text);
+      o.value = v;
+      s.append(o);
+    }
+    s.addEventListener('change', () => setPath(c.key, s.value));
+    syncs.push(() => { s.value = getPath(c.key); });
+    return s;
+  }
+
+  function swatches(c) {
+    const box = node('div', 'swatches');
+    const names = { auto: 'Follow Mac', blue: 'Blue', purple: 'Purple', pink: 'Pink', red: 'Red', orange: 'Orange', yellow: 'Yellow', green: 'Green', graphite: 'Graphite' };
+    const dots = Object.keys(names).map((v) => {
+      const d = node('i', v === 'auto' ? 'auto' : null);
+      d.title = names[v];
+      d.addEventListener('click', () => setPath(c.key, v));
+      box.append(d);
+      return [v, d];
+    });
+    syncs.push(() => {
+      const dark = window.resolveTheme(state).appearance === 'dark';
+      dots.forEach(([v, d]) => {
+        if (v !== 'auto') d.style.background = window.ACCENTS[v][dark ? 1 : 0];
+        d.classList.toggle('on', getPath(c.key) === v);
+      });
+    });
+    return box;
+  }
+
+  // Dragging writes as it goes, at most once a frame.
+  function range(c) {
+    const box = node('div', 'ctl-inner');
+    box.style.display = 'contents';
+    const r = node('input');
+    r.type = 'range';
+    r.min = c.min;
+    r.max = c.max;
+    r.step = c.step;
+    const val = node('span', 'val');
+    let frame = 0;
+    r.addEventListener('input', () => {
+      val.textContent = r.value + ' px';
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setPath(c.key, Number(r.value)));
+    });
+    syncs.push(() => {
+      if (document.activeElement !== r) r.value = getPath(c.key);
+      val.textContent = getPath(c.key) + ' px';
+    });
+    box.append(r, val);
+    return box;
+  }
+
+  function stepper(c) {
+    const s = node('div', 'stepper');
+    const boxEl = node('span', 'box');
+    const arrows = node('span', 'arrows');
+    const up = node('i', null, '▲');
+    const down = node('i', null, '▼');
+    const step = (d) => setPath(c.key, Math.max(c.min, Math.min(c.max, getPath(c.key) + d)));
+    up.addEventListener('click', () => step(1));
+    down.addEventListener('click', () => step(-1));
+    arrows.append(up, down);
+    s.append(boxEl, arrows);
+    syncs.push(() => { boxEl.textContent = getPath(c.key); });
+    return s;
+  }
+
+  function button(c) {
+    const b = node('span', 'btn', c.text);
+    b.addEventListener('click', c.click);
+    return b;
+  }
+
+  function accessibility() {
+    const box = node('div', 'ctl-inner');
+    box.style.display = 'contents';
+    const status = node('span', 'status');
+    const dot = node('i');
+    const text = node('span');
+    status.append(dot, text);
+    const b = button({ text: 'Open System Settings', click: () => api.openAccessibility() });
+    syncs.push(() => {
+      const on = tasks.accessibility;
+      dot.className = on ? '' : on === false ? 'warn' : 'wait';
+      text.textContent = on ? 'Allowed' : on === false ? 'Not allowed' : 'Checking';
+    });
+    box.append(status, b);
+    return box;
+  }
+
+  // Keyboard shortcut field. Records the next key with at least one
+  // modifier (function keys work alone) as an Electron accelerator.
+  const SYMBOLS = { Control: '⌃', Alt: '⌥', Shift: '⇧', Command: '⌘' };
+  const NAMED = {
+    Space: 'Space', Enter: 'Return', Tab: 'Tab', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
+    Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Semicolon: ';',
+    Quote: "'", Comma: ',', Period: '.', Slash: '/', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown'
+  };
+
+  function keyName(code) {
+    let m = /^Key([A-Z])$/.exec(code);
+    if (m) return m[1];
+    m = /^Digit(\d)$/.exec(code);
+    if (m) return m[1];
+    if (/^F\d{1,2}$/.test(code)) return code;
+    return NAMED[code] || null;
+  }
+
+  function mods(e) {
+    return [e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Command'].filter(Boolean);
+  }
+
+  function pretty(accel) {
+    if (!accel) return 'None';
+    return accel.split('+').map((p) => SYMBOLS[p] || p).join(' ');
+  }
+
+  function shortcut(c, rowEl) {
+    const k = node('div', 'kbd');
+    k.tabIndex = 0;
+    let recording = false;
+    const warn = node('small', 'warn hidden');
+    rowEl.querySelector('.lbl').append(warn);
+
+    function stop() {
+      if (!recording) return;
+      recording = false;
+      k.classList.remove('rec');
+      api.resumeShortcut();
+      syncs.forEach((fn) => fn());
+    }
+    k.addEventListener('click', () => {
+      if (recording) return;
+      recording = true;
+      k.classList.add('rec');
+      k.textContent = 'Press keys';
+      api.pauseShortcut();
+    });
+    k.addEventListener('blur', stop);
+    k.addEventListener('keydown', (e) => {
+      if (!recording) return;
+      e.preventDefault();
+      if (e.code === 'Escape') return stop();
+      const held = mods(e);
+      if ((e.code === 'Backspace' || e.code === 'Delete') && held.length === 0) {
+        setPath(c.key, '');
+        return stop();
+      }
+      const key = keyName(e.code);
+      if (!key) {
+        k.textContent = held.length ? held.map((m) => SYMBOLS[m]).join(' ') : 'Press keys';
+        return;
+      }
+      if (held.length === 0 && !/^F\d/.test(key)) return;
+      setPath(c.key, [...held, key].join('+'));
+      stop();
+    });
+    syncs.push(() => {
+      if (!recording) k.textContent = pretty(getPath(c.key));
+      const err = state.shortcutError;
+      warn.textContent = err === 'taken' ? 'Another app is using this shortcut. Pick another one.'
+        : err === 'invalid' ? "macOS doesn't accept this shortcut. Pick another one." : '';
+      warn.classList.toggle('hidden', !err);
+    });
+    return k;
+  }
+
+  const CONTROLS = { toggle, seg, select, swatches, range, stepper, button, accessibility, shortcut };
+
+  // MARK: drawing
+
+  function row(r) {
+    const rowEl = node('div', 'row');
+    const lbl = node('div', 'lbl', r.label);
+    if (r.note) lbl.append(node('small', null, r.note));
+    const ctl = node('div', 'ctl');
+    rowEl.append(lbl, ctl);
+    ctl.append(CONTROLS[r.control.type](r.control, rowEl));
+    if (r.systemOnly) {
+      const note = node('small', 'unused-note hidden', SYSTEM_ONLY);
+      lbl.append(note);
+      syncs.push(() => {
+        const unused = state.settings.theme !== 'system';
+        rowEl.classList.toggle('unused', unused);
+        note.classList.toggle('hidden', !unused);
+      });
+    }
+    return rowEl;
+  }
+
+  function groups(list) {
+    const out = [];
+    for (const g of list) {
+      if (g.rows.length === 0) continue;
+      out.push(node('h2', null, g.title));
+      const box = node('div', 'group');
+      g.rows.forEach((r) => box.append(row(r)));
+      out.push(box);
+    }
+    return out;
+  }
+
+  function aboutPage() {
+    const box = node('div', 'about');
+    const icon = node('div', 'icon');
+    icon.innerHTML = '<svg viewBox="0 0 20 20"><rect x="2" y="3" width="16" height="14" rx="2" fill="#fff"/><rect x="4.5" y="9" width="11" height="1.6" rx=".8" fill="#1c2541"/><rect x="4.5" y="12.2" width="7" height="1.6" rx=".8" fill="#1c2541"/></svg>';
+    const version = node('p');
+    syncs.push(() => { version.textContent = 'Version ' + state.version; });
+    const links = node('div', 'links');
+    const kofi = button({ text: 'Support on Ko-fi', click: () => api.openLink('kofi') });
+    kofi.classList.add('primary');
+    links.append(kofi, button({ text: 'Report an Issue', click: () => api.openLink('issues') }));
+    const install = node('p', null, 'Install or update with ');
+    install.append(node('code', null, 'npm install -g startbar'));
+    box.append(icon, node('h1', null, 'Startbar'), version, node('p', null, 'A taskbar for macOS. Free to use. Prather Bytecraft.'), links, install);
+    return box;
+  }
+
+  function drawNav() {
+    navEl.replaceChildren(...PAGES.map((p) => {
+      const a = node('a');
+      a.href = '#' + p.id;
+      a.dataset.page = p.id;
+      const ic = node('span', 'ic');
+      ic.style.background = p.color;
+      ic.innerHTML = `<svg viewBox="0 0 16 16">${ICONS[p.id]}</svg>`;
+      a.append(ic, document.createTextNode(p.title));
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        queryEl.value = '';
+        show(p.id);
+      });
+      return a;
+    }));
+  }
+
+  // Call before building the controls, which add their sync functions.
+  function reset() {
+    syncs = [];
+  }
+
+  function draw(children, title) {
+    titleEl.textContent = title;
+    pagesEl.replaceChildren(...children);
+    if (state) syncs.forEach((fn) => fn());
+  }
+
+  function show(id) {
+    page = id;
+    const p = PAGES.find((x) => x.id === id);
+    navEl.querySelectorAll('a').forEach((a) => a.classList.toggle('on', a.dataset.page === id));
+    previewEl.classList.toggle('hidden', !!p.about);
+    reset();
+    const children = p.about ? [aboutPage()] : groups(p.groups);
+    if (p.note) children.push(node('div', 'foot-note', p.note));
+    draw(children, p.title);
+    contentEl.scrollTop = 0;
+  }
+
+  // Search shows every matching row, under its page's name.
+  function search(q) {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return show(page);
+    navEl.querySelectorAll('a').forEach((a) => a.classList.remove('on'));
+    previewEl.classList.remove('hidden');
+    const text = (r) => [r.label, r.note, ...(r.control.options || []).map((o) => o[1])].join(' ').toLowerCase();
+    const matches = (r) => words.every((w) => text(r).includes(w));
+    const found = PAGES.filter((p) => !p.about).map((p) => ({
+      title: p.title,
+      rows: p.groups.flatMap((g) => g.rows.filter(matches))
+    }));
+    reset();
+    const children = groups(found);
+    draw(children.length ? children : [node('div', 'empty', 'No settings match.')], 'Search');
+  }
+
+  queryEl.addEventListener('input', () => search(queryEl.value.trim()));
+  queryEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      queryEl.value = '';
+      search('');
+    }
+  });
+
+  // MARK: preview and state
+
+  function pushPreview() {
+    if (!state || !pv.contentWindow) return;
+    pv.contentWindow.postMessage({ state, icons: previewIcons }, '*');
+  }
+
+  function apply(next) {
+    state = next;
+    const theme = window.resolveTheme(state);
+    const root = document.documentElement;
+    root.dataset.appearance = theme.appearance;
+    root.style.setProperty('--accent', theme.accent);
+    root.style.setProperty('--accent-text', theme.accentText);
+    syncs.forEach((fn) => fn());
+    pushPreview();
+  }
+
+  const SAMPLE_APPS = [
+    '/System/Library/CoreServices/Finder.app',
+    '/Applications/Safari.app',
+    '/System/Applications/Notes.app',
+    '/System/Applications/Utilities/Terminal.app'
+  ];
+  api.taskIcons(SAMPLE_APPS).then((found) => {
+    Object.assign(previewIcons, found);
+    pushPreview();
+  });
+
+  pv.addEventListener('load', pushPreview);
+  drawNav();
+  show(page);
+  api.getState().then(apply);
+  api.onState(apply);
+  // The task list comes in a few times a second. Only the permission row uses it.
+  const applyTasks = (t) => {
+    const changed = t.accessibility !== tasks.accessibility;
+    tasks = t;
+    if (changed && state) syncs.forEach((fn) => fn());
+  };
+  api.getTasks().then(applyTasks);
+  api.onTasks(applyTasks);
+})();

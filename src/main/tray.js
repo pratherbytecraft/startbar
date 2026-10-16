@@ -28,7 +28,7 @@ function glyph() {
   return image;
 }
 
-// actions: { hidden, toggleBar, openMenu, about, quit }
+// actions: { hidden, toggleBar, openMenu, settings, about, quit }
 function build(actions) {
   return Menu.buildFromTemplate([
     actions.hidden
@@ -36,15 +36,15 @@ function build(actions) {
       : { label: 'Hide the Bar', click: actions.toggleBar },
     { label: 'Open Start Menu', click: actions.openMenu },
     { type: 'separator' },
-    { label: 'Startbar Settings', enabled: false }, // slice 3
+    { label: 'Startbar Settings…', click: actions.settings },
     { label: 'About Startbar', click: actions.about },
     { type: 'separator' },
     { label: 'Quit Startbar', click: actions.quit }
   ]);
 }
 
-// mode is the menuBarIcon setting: hidden (only while the bar is hidden),
-// always or never. Never still shows the icon while the bar is hidden.
+// mode is the menuBarIcon setting: hidden (only while the bar is hidden) or
+// always.
 function update(mode, actions) {
   const show = actions.hidden || mode === 'always';
   if (!show) {

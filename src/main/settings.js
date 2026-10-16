@@ -41,7 +41,7 @@ const DEFAULTS = Object.freeze({
     confirmPower: true,
     shortcut: 'Control+Space'
   },
-  menuBarIcon: 'hidden', // hidden (only while the bar is hidden) | always | never
+  menuBarIcon: 'hidden', // hidden (only while the bar is hidden) | always
   accessibilityAsked: false, // the one time Accessibility dialog has been shown
   hideNoteShown: false // the one time note on how to bring a hidden bar back
 });
@@ -90,9 +90,18 @@ function update(patch) {
   return current;
 }
 
+// Back to the defaults. The one time dialogs stay answered.
+function reset() {
+  const { accessibilityAsked, hideNoteShown } = current;
+  current = merge(DEFAULTS, { accessibilityAsked, hideNoteShown });
+  fs.writeFileSync(file, JSON.stringify(current, null, 2) + '\n');
+  for (const fn of listeners) fn(current);
+  return current;
+}
+
 function onChange(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
 
-module.exports = { DEFAULTS, init, get, update, onChange, dataDir };
+module.exports = { DEFAULTS, init, get, update, reset, onChange, dataDir };

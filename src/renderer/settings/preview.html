@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'">
+<title>Bar preview</title>
+<link rel="stylesheet" href="../themes/base.css">
+<link rel="stylesheet" href="../themes/system.css" id="theme-css">
+<link rel="stylesheet" href="preview.css">
+</head>
+<body>
+<div class="wallpaper"></div>
+<div class="bar">
+  <div class="start">
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <rect class="glyph-fill" x="2" y="3" width="16" height="14" rx="2"/>
+      <rect class="glyph-ink" x="4.5" y="9" width="11" height="1.6" rx=".8"/>
+      <rect class="glyph-ink" x="4.5" y="12.2" width="7" height="1.6" rx=".8"/>
+    </svg>
+    <span>Start</span>
+  </div>
+  <div class="quick"></div>
+  <div class="grip"></div>
+  <div class="tasks" id="tasks"></div>
+  <div class="tray">
+    <span class="clock" id="clock"><span class="time" id="time"></span><span class="date" id="date"></span></span>
+  </div>
+</div>
+<script src="../shared/theme.js"></script>
+<script src="../shared/clock.js"></script>
+<script src="preview.js"></script>
+</body>
+</html>

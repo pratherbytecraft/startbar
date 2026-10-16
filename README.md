@@ -27,6 +27,8 @@ The bar follows your Mac's light or dark setting and your accent color. A Classi
 
 The Start button opens a menu that lists your apps with a search box, your recent apps, your main folders and Sleep, Log Out and Shut Down. Control Space also opens it.
 
+Open Startbar Settings from the Start menu or by right clicking the bar. The theme, colors, size, window buttons, Start menu and clock are set there, with a preview of the bar that changes as you go.
+
 Right click an empty part of the bar to hide it. While the bar is hidden, a Startbar icon sits in the menu bar. Click it, press Control Space or open Startbar again to bring the bar back.
 
 ## Limits
@@ -35,7 +37,7 @@ macOS does not let an app reserve space at the bottom of the screen. Startbar mo
 
 Other apps' menu bar icons can't be moved into the bar. They stay in the menu bar at the top.
 
-Window buttons need the Accessibility permission. Startbar asks once and explains why. Without it the bar shows one button per app. To turn it on later, right click the bar and choose Allow Window Buttons.
+Window buttons need the Accessibility permission. Startbar asks once and explains why. Without it the bar shows one button per app. To turn it on later, open Startbar Settings, go to General and click Open System Settings.
 
 ## Help
 

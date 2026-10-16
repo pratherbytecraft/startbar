@@ -1,0 +1,6 @@
+/* The bar preview at the top of the settings window: a strip of desktop
+   with the bar along its bottom. The blur stands in for the real bar's
+   vibrancy. */
+.wallpaper { position: absolute; inset: 0; background: linear-gradient(160deg, #1c2541 0%, #3a506b 45%, #5bc0be 100%); }
+[data-appearance="light"] .wallpaper { background: linear-gradient(160deg, #f6d365 0%, #fda085 50%, #a1c4fd 100%); }
+.bar { top: auto; height: var(--bar-h); backdrop-filter: blur(20px) saturate(1.6); }

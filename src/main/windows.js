@@ -22,6 +22,7 @@ let group = null;
 let groupAnchor = null; // { pid, rect } of the group button the list belongs to
 let lastGroupHide = { pid: null, at: 0 };
 let theme = 'system';
+let settingsWin = null;
 let barHidden = false; // Hide the Bar, for this session only
 const visibility = new Set();
 
@@ -274,8 +275,42 @@ function toggleMenu() {
   showMenu();
 }
 
+// The settings window is made when it's opened and dropped when it's
+// closed. onClosed runs once it's gone.
+function showSettings(onClosed) {
+  if (settingsWin) {
+    settingsWin.show();
+    settingsWin.focus();
+    return settingsWin;
+  }
+  settingsWin = new BrowserWindow({
+    width: 860,
+    height: 620,
+    minWidth: 760,
+    minHeight: 480,
+    title: 'Startbar Settings',
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 18, y: 18 },
+    vibrancy: 'sidebar',
+    visualEffectState: 'followWindow',
+    fullscreenable: false,
+    show: false,
+    webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true }
+  });
+  settingsWin.loadFile(renderer('settings'));
+  settingsWin.once('ready-to-show', () => {
+    settingsWin.show();
+    settingsWin.focus();
+  });
+  settingsWin.on('closed', () => {
+    settingsWin = null;
+    if (onClosed) onClosed();
+  });
+  return settingsWin;
+}
+
 function broadcast(channel, payload) {
-  for (const w of [bar, menu, tip, group]) {
+  for (const w of [bar, menu, tip, group, settingsWin]) {
     if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
   }
 }
@@ -283,8 +318,9 @@ function broadcast(channel, payload) {
 module.exports = {
   createBar, createMenu, createTip, createGroup, layout, showMenu, hideMenu, toggleMenu,
   showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, broadcast,
-  hideBar, showBar, onBarVisibility,
+  hideBar, showBar, onBarVisibility, showSettings,
   get bar() { return bar; },
   get barHidden() { return barHidden; },
-  get menu() { return menu; }
+  get menu() { return menu; },
+  get settings() { return settingsWin; }
 };
