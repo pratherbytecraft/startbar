@@ -50,7 +50,27 @@
     if (link.getAttribute('href') !== href) link.setAttribute('href', href);
   }
 
+  // Plays an element's opening animation again, for windows that are hidden
+  // and shown instead of made each time. See "motion" in base.css.
+  function playOpen(el) {
+    if (!el) return;
+    el.classList.remove('opening');
+    void el.offsetWidth;
+    el.classList.add('opening');
+  }
+
+  // The same for a list's rows, one after another, when it fills.
+  function playRows(el) {
+    if (!el) return;
+    [...el.children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 14)));
+    el.classList.remove('entering');
+    void el.offsetWidth;
+    el.classList.add('entering');
+  }
+
   window.applyTheme = apply;
+  window.playOpen = playOpen;
+  window.playRows = playRows;
   window.resolveTheme = resolve;
   window.ACCENTS = ACCENTS;
 })();

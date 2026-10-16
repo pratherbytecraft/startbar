@@ -28,6 +28,7 @@
 
   api.onGroupShow((group) => {
     list.replaceChildren(...group.windows.map((w) => row({ ...w, pid: group.pid }, group.icon)));
+    window.playOpen(list);
     // Measured now, not on the next frame: a hidden window gets no frames.
     api.groupSize({ height: Math.ceil(list.getBoundingClientRect().height) });
   });

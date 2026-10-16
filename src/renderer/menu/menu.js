@@ -194,7 +194,7 @@
     recentHead.classList.toggle('hidden', expanded || recentEl.children.length === 0);
     recentSep.classList.toggle('hidden', expanded || recentEl.children.length === 0);
     allToggle.classList.toggle('hidden', searching);
-    allArrow.textContent = showAll ? '▾' : '▸';
+    allArrow.classList.toggle('open', showAll);
     if (!keep) selected = -1;
     highlight();
   }
@@ -222,7 +222,26 @@
     if (selected >= 0 && items[selected]) items[selected].scrollIntoView({ block: 'nearest' });
   }
 
-  allToggle.addEventListener('click', () => { showAll = !showAll; renderList(); });
+  // All Applications slides its list in, and back out to the recent apps.
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let leaving = null;
+  allToggle.addEventListener('click', () => {
+    if (leaving) return;
+    if (!showAll) {
+      showAll = true;
+      renderList();
+      window.playRows(listEl);
+      return;
+    }
+    listEl.classList.add('leaving');
+    leaving = setTimeout(() => {
+      leaving = null;
+      listEl.classList.remove('leaving');
+      showAll = false;
+      renderList();
+      window.playRows(recentEl);
+    }, reducedMotion.matches ? 0 : 110);
+  });
   searchEl.addEventListener('input', () => {
     queueFiles();
     renderList();
@@ -248,6 +267,7 @@
   }
 
   async function onShown() {
+    window.playOpen(document.querySelector('.menu'));
     searchEl.value = '';
     showAll = false;
     queueFiles();

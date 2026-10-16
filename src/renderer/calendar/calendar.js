@@ -78,6 +78,7 @@
   api.onCalendarShow(() => {
     month = new Date();
     render();
+    window.playOpen(document.getElementById('cal'));
   });
 
   const apply = (state) => {

@@ -143,6 +143,7 @@
     slider = null;
     volumeParts = null;
     render();
+    window.playOpen(document.getElementById('pop'));
   });
   api.onStatus((s) => {
     status = s;

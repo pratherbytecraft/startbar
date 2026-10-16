@@ -120,4 +120,21 @@ svg { display: block; }
 .pop-toggle.on { background: var(--accent); }
 .pop-toggle.on::after { left: 18px; }
 
+/* motion: menus and panels rise and fade in as they open, the All
+   Applications list slides in row by row, hovers ease. All of it is off when
+   Reduce motion is on in System Settings. */
+@media (prefers-reduced-motion: no-preference) {
+  .menu.opening { animation: sb-open .16s cubic-bezier(.2, .8, .2, 1) both; }
+  .entering > .item, .entering > .list-head { animation: sb-row .2s ease-out both; animation-delay: calc(var(--i, 0) * 14ms); }
+  .list.leaving > * { animation: sb-leave .11s ease-in both; }
+  .item .arrow { display: inline-block; transition: transform .18s ease; }
+  .item, .task, .quick .icon, .tray-icon, .tray .chev, .start, .menu-foot .pw, .pw-more, .desk, .cal-nav, .cal-grid .day, .pop-dev, .pop-icon {
+    transition: background-color .12s, box-shadow .12s, filter .12s, color .12s, opacity .12s;
+  }
+}
+@keyframes sb-open { from { opacity: 0; transform: translateY(6px); } }
+@keyframes sb-row { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes sb-leave { to { opacity: 0; transform: translateY(-4px); } }
+.item .arrow.open { transform: rotate(90deg); }
+
 .tip { position: absolute; left: 8px; top: 8px; width: max-content; max-width: 480px; overflow-wrap: anywhere; }
