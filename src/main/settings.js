@@ -16,6 +16,7 @@ const DEFAULTS = Object.freeze({
   taskbar: {
     showStartLabel: true, // the word Start next to the Start button's icon
     showPins: true,
+    showDesktop: false, // a strip at the right end that hides every app, and brings them back
     pinsPlace: 'own', // own (their own spot next to Start) | row (in the row, each turning into its window buttons once open)
     grouping: 'always', // always | full | never
     clickActiveMinimizes: true,
@@ -80,14 +81,14 @@ const DEFAULTS = Object.freeze({
 // reads them as usual; switching themes swaps them with the saved ones.
 const THEME_KEYS = [
   'appearance', 'accent', 'translucent', 'barHeight', 'labels', 'maxButtonWidth',
-  'taskbar.showStartLabel', 'taskbar.showPins', 'taskbar.pinsPlace', 'taskbar.grouping',
+  'taskbar.showStartLabel', 'taskbar.showPins', 'taskbar.pinsPlace', 'taskbar.showDesktop', 'taskbar.grouping',
   'clock.showDate', 'clock.dateStyle', 'tray.collapseArrow'
 ];
 
 // A theme's own defaults over the shared ones, used the first time it's picked
 // and by its reset.
 const THEME_DEFAULTS = {
-  'classic-2009': { barHeight: 40, labels: 'icons-only', taskbar: { pinsPlace: 'row' }, clock: { showDate: true } }
+  'classic-2009': { barHeight: 40, labels: 'icons-only', taskbar: { pinsPlace: 'row', showDesktop: true }, clock: { showDate: true } }
 };
 
 // The THEME_KEYS of s, in the same nested shape.

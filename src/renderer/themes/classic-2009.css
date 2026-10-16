@@ -71,6 +71,8 @@ body { font-size: 12px; color: #fff; }
 .tray-icon { width: 22px; height: 22px; border-radius: 3px; }
 .tray-icon svg { filter: drop-shadow(0 0 2px rgba(0, 0, 0, .8)); }
 .tray .clock { line-height: 1.3; }
+.desk { width: 14px; background: var(--glass-btn); border-left: 1px solid rgba(0, 0, 0, .5); box-shadow: inset 1px 0 rgba(255, 255, 255, .35); }
+.desk:hover { background: var(--glass-hi); }
 
 /* Start menu */
 .menu:not(.popover):not(.calendar):not(.group-list) {

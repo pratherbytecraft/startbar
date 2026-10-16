@@ -29,6 +29,17 @@
   const asked = new Set(); // app paths whose icon has been requested
 
   start.addEventListener('click', () => api.clickStart());
+
+  const desk = document.getElementById('desk');
+  desk.addEventListener('click', () => {
+    hideTip();
+    api.taskCommand({ cmd: 'showDesktop' });
+  });
+  desk.addEventListener('mouseenter', () => {
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => api.showTip({ text: 'Show Desktop', rect: rectOf(desk) }), 500);
+  });
+  desk.addEventListener('mouseleave', () => hideTip());
   document.querySelector('.bar').addEventListener('contextmenu', (e) => {
     e.preventDefault();
     api.barMenu();

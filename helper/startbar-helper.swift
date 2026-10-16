@@ -176,6 +176,9 @@ final class WindowWatcher {
     var nudgeTried: [String: CGRect] = [:] // window id -> its frame after a move that didn't clear the bar
     var emitPending = false
     var allSpaces = false
+    var desktopHid: [pid_t] = [] // apps hidden by Show Desktop, to bring back on the next click
+    var desktopFront: pid_t? = nil // the app that was in front then
+    var desktopMinimized: [AXUIElement] = [] // Finder windows minimized by Show Desktop
     var remote: [pid_t: [CGWindowID: AXUIElement]] = [:] // other Spaces' windows found by token
     var searched: [pid_t: Set<CGWindowID>] = [:] // window ids already looked for that way
     let debug = ProcessInfo.processInfo.environment["STARTBAR_HELPER_DEBUG"] != nil
@@ -562,6 +565,9 @@ final class WindowWatcher {
                 keepOff.append((CGFloat(top), CGFloat(bottom), CGRect(x: x, y: y, width: w, height: h)))
             }
             return nil
+        case "showDesktop":
+            showDesktop()
+            return nil
         case "activateApp", "quitApp", "newWindow":
             guard let pid = command["pid"] as? Int, let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {
                 return "no such app"
@@ -592,6 +598,58 @@ final class WindowWatcher {
             }
         default:
             return "unknown command"
+        }
+    }
+
+    // Hides every app but Startbar, and brings back the same ones on the next
+    // click. Showing one of them by hand in between starts over. Finder's
+    // windows are minimized instead, since macOS brings Finder forward (and
+    // unhides it) when everything else is hidden. Hiding and unhiding go
+    // through Accessibility: from a background process NSRunningApplication's
+    // unhide doesn't take, and hide reports false even when it works.
+    func showDesktop() {
+        let hid = desktopHid.compactMap { NSRunningApplication(processIdentifier: $0) }
+        if !(hid.isEmpty && desktopMinimized.isEmpty) && hid.allSatisfy({ $0.isHidden }) {
+            for app in hid {
+                if !trusted || AXUIElementSetAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXHiddenAttribute as CFString, kCFBooleanFalse) != .success {
+                    app.unhide()
+                }
+            }
+            for window in desktopMinimized { AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse) }
+            if let pid = desktopFront, let front = NSRunningApplication(processIdentifier: pid) { activateApp(front) }
+            desktopHid = []
+            desktopMinimized = []
+            desktopFront = nil
+            return
+        }
+        // Startbar itself can be in front (after its settings window); opening
+        // it again on the way back would open the Start menu.
+        let front = NSWorkspace.shared.frontmostApplication
+        let frontIsUs = front?.processIdentifier == getppid() || (front?.bundleIdentifier ?? "").hasPrefix("com.pratherbytecraft.startbar")
+        desktopFront = frontIsUs ? nil : front?.processIdentifier
+        desktopHid = []
+        desktopMinimized = []
+        for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular && !app.isHidden {
+            let id = app.bundleIdentifier ?? ""
+            if app.processIdentifier == getppid() || id.hasPrefix("com.pratherbytecraft.startbar") { continue }
+            if id == "com.apple.finder" {
+                guard trusted else { continue }
+                var value: CFTypeRef?
+                AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute as CFString, &value)
+                for window in value as? [AXUIElement] ?? [] {
+                    var minimized: CFTypeRef?
+                    AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimized)
+                    if (minimized as? Bool) == true { continue }
+                    if AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanTrue) == .success {
+                        desktopMinimized.append(window)
+                    }
+                }
+            } else {
+                if !trusted || AXUIElementSetAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXHiddenAttribute as CFString, kCFBooleanTrue) != .success {
+                    app.hide()
+                }
+                desktopHid.append(app.processIdentifier)
+            }
         }
     }
 

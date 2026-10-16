@@ -99,6 +99,8 @@
         {
           title: 'Bar behavior',
           rows: [
+            { label: 'Show Desktop strip at the right end', note: 'Click it to hide every app, and again to bring them back.',
+              control: { type: 'toggle', key: 'taskbar.showDesktop' } },
             { label: 'Hide the bar when an app is full screen', control: { type: 'toggle', key: 'taskbar.hideInFullScreen' } },
             { label: 'Hide the bar until the mouse reaches the bottom edge', note: 'The bar also comes up while the Start menu is open.',
               control: { type: 'toggle', key: 'taskbar.autoHide' } },

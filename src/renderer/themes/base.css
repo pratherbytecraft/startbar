@@ -45,6 +45,9 @@ svg { display: block; }
 .tray-icon svg { width: 16px; height: 16px; fill: currentColor; stroke: currentColor; }
 .tray .clock { font-variant-numeric: tabular-nums; text-align: center; line-height: 1.15; }
 .tray .clock .date { display: none; }
+.desk { display: none; width: 10px; flex: none; border-left: 1px solid rgba(127, 127, 127, .35); }
+[data-show-desktop="on"] .desk { display: block; }
+.desk:hover { background: rgba(127, 127, 127, .25); }
 .tray .clock.with-date .date { display: block; }
 
 /* menu */
