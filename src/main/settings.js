@@ -55,6 +55,11 @@ const DEFAULTS = Object.freeze({
     confirmPower: true,
     shortcut: 'Control+Space'
   },
+  displays: {
+    bars: 'all', // all | main: a bar on every display or the main one only
+    buttons: 'display', // display | all: each bar's buttons are that display's windows, or every window
+    tray: 'every' // every | main: the clock and tray on every bar or the main one only
+  },
   menuBarIcon: 'hidden', // hidden (only while the bar is hidden) | always
   updates: {
     auto: true // check npm for a newer version now and then, never installs

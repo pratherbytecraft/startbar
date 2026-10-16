@@ -18,6 +18,8 @@
   const GAP = 4;
 
   let tasks = { accessibility: null, apps: [] };
+  // Which display this bar is on: { id, main, bars, displays: [{ id, main, bounds }] }.
+  let place = null;
   let drawn = '';
   let pinsDrawn = '';
   let tipTimer = null;
@@ -84,6 +86,14 @@
     if (key === trayDrawn) return;
     trayDrawn = key;
     trayEl.replaceChildren(...kinds.map(trayIcon));
+  }
+
+  // The clock and tray can stay on the main display's bar only.
+  function renderPlace() {
+    if (!state || !place) return;
+    const d = state.settings.displays;
+    const hide = place.bars > 1 && d.bars === 'all' && d.tray === 'main' && !place.main;
+    document.querySelector('.tray').classList.toggle('hidden', hide);
   }
 
   function applyStatus(next) {
@@ -166,18 +176,37 @@
     }
   });
 
+  // With a bar on each display and buttons per display, whether this bar
+  // shows only its own display's windows.
+  function perDisplay() {
+    const d = state.settings.displays;
+    return !!place && place.bars > 1 && d.bars === 'all' && d.buttons === 'display';
+  }
+
+  // The display a window is on: the one with its middle, else the main one.
+  function displayOf(w) {
+    const cx = w.x + w.w / 2;
+    const cy = w.y + w.h / 2;
+    const hit = place.displays.find(({ bounds: b }) => cx >= b.x && cx < b.x + b.width && cy >= b.y && cy < b.y + b.height);
+    return (hit || place.displays.find((d) => d.main) || place.displays[0]).id;
+  }
+
   // The buttons, left to right, before grouping. Without the Accessibility
   // permission there are no windows to show, so every app gets one button.
+  // Buttons that aren't windows go on the main display's bar.
   function buildItems(t) {
-    if (!tasks.accessibility) return tasks.apps.map((a) => ({ kind: 'app', app: a }));
+    const mine = perDisplay() ? (w) => displayOf(w) === place.id : () => true;
+    const appsHere = !perDisplay() || place.main;
+    if (!tasks.accessibility) return appsHere ? tasks.apps.map((a) => ({ kind: 'app', app: a })) : [];
     const wins = [];
     const windowless = [];
     for (const a of tasks.apps) {
       // Minimized windows and hidden apps are off screen but still belong
       // on the bar. Windows on other Spaces only show when asked for.
-      const list = a.windows.filter((w) => w.onScreen || w.minimized || a.hidden);
-      if (list.length === 0) {
-        if (t.showWindowless) windowless.push({ kind: 'app', app: a });
+      const all = a.windows.filter((w) => w.onScreen || w.minimized || a.hidden);
+      const list = all.filter(mine);
+      if (all.length === 0) {
+        if (t.showWindowless && appsHere) windowless.push({ kind: 'app', app: a });
         continue;
       }
       for (const w of list) wins.push({ kind: 'window', app: a, win: w });
@@ -328,7 +357,7 @@
     const t = state.settings.taskbar;
     const width = tasksEl.clientWidth - 8; // .tasks has 4px padding each side
     const { list, compact } = arrange(buildItems(t), t.grouping, width);
-    const key = JSON.stringify([compact, t, list.map((item) => [
+    const key = JSON.stringify([compact, t, place, state.settings.displays, list.map((item) => [
       item.kind, item.app.pid, item.app.path, isActive(item), isDim(item),
       item.kind === 'window' ? [item.win.id, item.win.title] : item.kind === 'group' ? item.wins.map((w) => [w.id, w.title, w.minimized, w.focused]) : item.app.name
     ])]);
@@ -351,8 +380,15 @@
     tick();
     renderPins();
     renderTray();
+    renderPlace();
     renderTasks();
   }
+
+  api.onBarPlace((next) => {
+    place = next;
+    renderPlace();
+    renderTasks();
+  });
 
   new ResizeObserver(() => renderTasks()).observe(tasksEl);
   api.getState().then(apply);

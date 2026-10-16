@@ -14,7 +14,7 @@ let restarts = 0;
 let relaunch = false;
 let seq = 0;
 let state = { accessibility: null, apps: [] };
-let keepOff = { cmd: 'keepOff' }; // resent to every new helper
+let keepOff = { cmd: 'keepOff', areas: [] }; // resent to every new helper
 
 function update(patch) {
   state = { ...state, ...patch };
@@ -107,10 +107,11 @@ function send(command) {
   });
 }
 
-// Where the bar is, so the helper can move windows up off it. Pass null to
-// stop, for example while the bar is hidden or the setting is off.
-function setKeepOff(area) {
-  keepOff = { cmd: 'keepOff', ...(area || {}) };
+// Where the bars are, so the helper can move windows up off them, one area
+// per bar. An empty list stops it, for example while the bar is hidden or
+// the setting is off.
+function setKeepOff(areas) {
+  keepOff = { cmd: 'keepOff', areas: areas || [] };
   if (child) send(keepOff);
 }
 

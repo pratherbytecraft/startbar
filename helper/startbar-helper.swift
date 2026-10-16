@@ -135,7 +135,8 @@ let axCallback: AXObserverCallback = { _, _, _, refcon in
 //   {"cmd":"activateApp","pid":501}   {"cmd":"quitApp","pid":501}
 //   {"cmd":"newWindow","pid":501}     bring the app forward and press Command N
 //   {"cmd":"refresh"}                 send the state now, even if unchanged
-//   {"cmd":"keepOff","top":25,"bottom":830,"screen":{"x":0,"y":0,"w":1512,"h":866}}
+//   {"cmd":"keepOff","areas":[{"top":25,"bottom":830,"screen":{"x":0,"y":0,"w":1512,"h":866}}]}
+//     one area per bar, or a single area's keys at the top level
 //     move windows on that screen up when they would cover the bar, which
 //     starts at "bottom". "top" is the bottom of the menu bar. Without
 //     "bottom" it stops.
@@ -156,7 +157,7 @@ final class WindowWatcher {
     var watchedWindows: [pid_t: [AXUIElement]] = [:]
     var counter = 0
     var lastLine = ""
-    var keepOff: (top: CGFloat, bottom: CGFloat, screen: CGRect)?
+    var keepOff: [(top: CGFloat, bottom: CGFloat, screen: CGRect)] = []
     var nudgeTried: [String: CGRect] = [:] // window id -> its frame after a move that didn't clear the bar
     var emitPending = false
     let debug = ProcessInfo.processInfo.environment["STARTBAR_HELPER_DEBUG"] != nil
@@ -360,9 +361,10 @@ final class WindowWatcher {
     // the screen, and anything while a mouse button is down (a drag). A
     // window that refused to move isn't tried again until its frame changes.
     func nudge(_ window: AXUIElement, id: String, frame: CGRect) {
-        guard let k = keepOff, NSEvent.pressedMouseButtons == 0 else { return }
+        // The bar on the display the window's top edge is on.
+        guard NSEvent.pressedMouseButtons == 0,
+              let k = keepOff.first(where: { $0.screen.contains(CGPoint(x: frame.midX, y: frame.minY)) }) else { return }
         guard frame.maxY > k.bottom + 1, frame.maxY <= k.screen.maxY + 1,
-              frame.midX >= k.screen.minX, frame.midX < k.screen.maxX,
               frame.height <= k.screen.height else { return }
         if nudgeTried[id] == frame { return }
         if axBool(window, "AXFullScreen") { return }
@@ -476,13 +478,14 @@ final class WindowWatcher {
             return nil
         case "keepOff":
             nudgeTried.removeAll()
-            guard let bottom = command["bottom"] as? Double, let top = command["top"] as? Double,
-                  let screen = command["screen"] as? [String: Double],
-                  let x = screen["x"], let y = screen["y"], let w = screen["w"], let h = screen["h"] else {
-                keepOff = nil
-                return nil
+            keepOff = []
+            let areas = command["areas"] as? [[String: Any]] ?? [command]
+            for area in areas {
+                guard let bottom = area["bottom"] as? Double, let top = area["top"] as? Double,
+                      let screen = area["screen"] as? [String: Double],
+                      let x = screen["x"], let y = screen["y"], let w = screen["w"], let h = screen["h"] else { continue }
+                keepOff.append((CGFloat(top), CGFloat(bottom), CGRect(x: x, y: y, width: w, height: h)))
             }
-            keepOff = (CGFloat(top), CGFloat(bottom), CGRect(x: x, y: y, width: w, height: h))
             return nil
         case "activateApp", "quitApp", "newWindow":
             guard let pid = command["pid"] as? Int, let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {

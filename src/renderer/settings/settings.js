@@ -19,6 +19,7 @@
     taskbar: '<rect x="2" y="10" width="12" height="4" rx="1"/><rect x="4" y="3" width="8" height="5" rx="1"/>',
     startmenu: '<rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h4"/>',
     clock: '<circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/>',
+    displays: '<rect x="2" y="3" width="12" height="8" rx="1.5"/><path d="M6 13.5h4"/>',
     general: '<circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>',
     about: '<circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5v.5"/>'
   };
@@ -168,6 +169,22 @@
         }
       ],
       note: "Other apps' menu bar icons can't be moved into the tray. macOS doesn't allow it. They stay in the menu bar at the top."
+    },
+    {
+      id: 'displays', title: 'Displays', color: '#64d2ff',
+      groups: [
+        {
+          title: 'Which screens',
+          rows: [
+            { label: 'Show the bar on',
+              control: { type: 'seg', key: 'displays.bars', options: [['all', 'All displays'], ['main', 'Main display only']] } },
+            { label: 'On each display, show buttons for', onlyWith: { when: (s) => s.displays.bars === 'all', note: 'Used when there is a bar on every display.' },
+              control: { type: 'select', key: 'displays.buttons', options: [['display', 'Windows on that display'], ['all', 'All windows']] } },
+            { label: 'Show the clock and tray on', onlyWith: { when: (s) => s.displays.bars === 'all', note: 'Used when there is a bar on every display.' },
+              control: { type: 'seg', key: 'displays.tray', options: [['every', 'Every bar'], ['main', 'Main display only']] } }
+          ]
+        }
+      ]
     },
     {
       id: 'general', title: 'General', color: '#8e8e93',
@@ -528,7 +545,8 @@
     const ctl = node('div', 'ctl');
     rowEl.append(lbl, ctl);
     ctl.append(CONTROLS[r.control.type](r.control, rowEl));
-    const unusedIf = r.systemOnly ? SYSTEM_ONLY : r.unused;
+    const unusedIf = r.systemOnly ? SYSTEM_ONLY
+      : r.onlyWith ? { when: (s) => !r.onlyWith.when(s), note: r.onlyWith.note } : r.unused;
     if (unusedIf) {
       const note = node('small', 'unused-note hidden', unusedIf.note);
       lbl.append(note);

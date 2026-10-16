@@ -1,6 +1,6 @@
 // Startbar main process. Owns the windows, the settings, the app list and
 // everything that touches the Mac. Renderers only draw.
-const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu, nativeTheme } = require('electron');
+const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu, nativeTheme, BrowserWindow } = require('electron');
 const { execFile, execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -288,18 +288,17 @@ function toggleBar() {
   else hideBar();
 }
 
-// Tells the helper where the bar is so it can move windows up off it. Not
-// while the bar hides itself, since then windows can use the whole screen.
+// Tells the helper where the bars are so it can move windows up off them.
+// Not while the bars hide themselves, since then windows can use the whole
+// screen.
 function updateKeepOff() {
-  const bar = windows.bar;
   const t = settings.get().taskbar;
-  if (!bar || windows.barHidden || t.autoHide || !t.moveWindowsUp) return tasks.setKeepOff(null);
-  const { bounds, workArea } = screen.getPrimaryDisplay();
-  tasks.setKeepOff({
-    top: workArea.y,
-    bottom: bar.getBounds().y,
-    screen: { x: bounds.x, y: bounds.y, w: bounds.width, h: bounds.height }
-  });
+  if (windows.barHidden || t.autoHide || !t.moveWindowsUp) return tasks.setKeepOff([]);
+  tasks.setKeepOff(windows.barAreas().map(({ top, bottom, screen: b }) => ({
+    top,
+    bottom,
+    screen: { x: b.x, y: b.y, w: b.width, h: b.height }
+  })));
 }
 
 function updateTray() {
@@ -313,30 +312,36 @@ function updateTray() {
   });
 }
 
-// A full screen window in front on the main display. The bar steps aside for
-// it unless the setting says otherwise.
-function fullScreenUp(t) {
-  const { bounds } = screen.getPrimaryDisplay();
-  const onMain = (w) => w.x >= bounds.x && w.x < bounds.x + bounds.width && w.y >= bounds.y && w.y < bounds.y + bounds.height;
-  return t.apps.some((a) => a.windows.some((w) => w.fullScreen && w.onScreen && onMain(w)));
+// The displays with a full screen window in front, by id. The bar there
+// steps aside unless the setting says otherwise.
+function fullScreenDisplays(t) {
+  const ids = new Set();
+  for (const a of t.apps) {
+    for (const w of a.windows) {
+      if (w.fullScreen && w.onScreen) ids.add(screen.getDisplayNearestPoint({ x: w.x + w.w / 2, y: w.y + w.h / 2 }).id);
+    }
+  }
+  return [...ids];
 }
 
-// Menus that open from the bar keep an auto hidden bar up until they close.
-function popupOnBar(menu) {
-  if (!windows.bar) return;
-  menu.popup({ window: windows.bar, callback: windows.holdBar() });
+// Menus that open from a bar keep it up (with auto hide on) until they
+// close. A menu from another window, the group list for one, opens there.
+function popupOnBar(menu, sender) {
+  const barWin = sender ? windows.barOf(sender) : windows.bar;
+  const win = barWin || (sender && BrowserWindow.fromWebContents(sender)) || windows.bar;
+  if (!win) return;
+  menu.popup({ window: win, callback: windows.holdBar(barWin) });
 }
 
 // Right click on an empty part of the bar. Kept short: everything else lives
 // in the settings window.
-function showBarMenu() {
-  if (!windows.bar) return;
+function showBarMenu(sender) {
   popupOnBar(Menu.buildFromTemplate([
     { label: 'Hide the Bar', click: () => hideBar() },
     { label: 'Startbar Settings…', click: openSettings },
     { type: 'separator' },
     { label: 'Quit Startbar', click: () => app.quit() }
-  ]));
+  ]), sender);
 }
 
 // The menu bar while one of Startbar's windows has focus (the Start menu, a
@@ -374,9 +379,9 @@ function pinItem(appPath) {
 }
 
 // Right click on a pinned app.
-function showPinMenu(appPath) {
-  if (!windows.bar || !pins.has(appPath)) return;
-  popupOnBar(Menu.buildFromTemplate([pinItem(appPath)]));
+function showPinMenu(appPath, sender) {
+  if (!pins.has(appPath)) return;
+  popupOnBar(Menu.buildFromTemplate([pinItem(appPath)]), sender);
 }
 
 // Right click on an app in the Start menu.
@@ -428,9 +433,9 @@ async function addPins() {
 }
 
 // Right click on a window, group or app button.
-function showTaskMenu(target) {
+function showTaskMenu(target, sender) {
   const app = tasks.get().apps.find((a) => a.pid === target.pid);
-  if (!app || !windows.bar) return;
+  if (!app) return;
   const send = (cmd, extra) => tasks.send({ cmd, ...extra });
   const items = [];
   if (target.kind === 'window') {
@@ -453,13 +458,13 @@ function showTaskMenu(target) {
   }
   if (pins.isApp(app.path)) items.push(pinItem(app.path), { type: 'separator' });
   items.push({ label: `Quit ${app.name}`, click: () => send('quitApp', { pid: app.pid }) });
-  popupOnBar(Menu.buildFromTemplate(items));
+  popupOnBar(Menu.buildFromTemplate(items), sender);
 }
 
 function wireIpc() {
   ipcMain.handle('state', () => state());
-  ipcMain.on('bar:start', () => windows.toggleMenu());
-  ipcMain.on('bar:menu', () => showBarMenu());
+  ipcMain.on('bar:start', (e) => windows.toggleMenu(windows.barOf(e.sender)));
+  ipcMain.on('bar:menu', (e) => showBarMenu(e.sender));
   ipcMain.on('menu:hide', () => windows.hideMenu());
   ipcMain.handle('menu:apps', () => apps.load());
   ipcMain.handle('menu:recent', () => apps.recent(settings.get().startMenu.recentCount));
@@ -508,7 +513,7 @@ function wireIpc() {
   ipcMain.on('pins:launch', (_e, appPath) => {
     if (pins.has(appPath)) shell.openPath(appPath);
   });
-  ipcMain.on('pins:menu', (_e, appPath) => showPinMenu(appPath));
+  ipcMain.on('pins:menu', (e, appPath) => showPinMenu(appPath, e.sender));
   ipcMain.on('pins:set', (_e, list) => pins.set(list));
   ipcMain.on('pins:remove', (_e, appPath) => pins.remove(appPath));
   ipcMain.on('pins:add', () => addPins());
@@ -528,22 +533,22 @@ function wireIpc() {
   ipcMain.handle('tasks:get', () => tasks.get());
   ipcMain.handle('tasks:command', (_e, command) => tasks.send(command));
   ipcMain.handle('tasks:icons', (_e, paths) => apps.icons(Array.isArray(paths) ? paths : []));
-  ipcMain.on('tasks:menu', (_e, target) => showTaskMenu(target || {}));
-  ipcMain.on('tip:show', (_e, { text, rect }) => windows.showTip(String(text), rect));
+  ipcMain.on('tasks:menu', (e, target) => showTaskMenu(target || {}, e.sender));
+  ipcMain.on('tip:show', (e, { text, rect }) => windows.showTip(String(text), rect, windows.barOf(e.sender)));
   ipcMain.on('tip:size', (_e, size) => windows.sizeTip(size));
   ipcMain.on('tip:hide', () => windows.hideTip());
-  ipcMain.on('group:show', (_e, payload) => windows.showGroup(payload));
+  ipcMain.on('group:show', (e, payload) => windows.showGroup(payload, windows.barOf(e.sender)));
   ipcMain.on('group:size', (_e, size) => windows.sizeGroup(size));
   ipcMain.on('group:hide', () => windows.hideGroup());
-  ipcMain.on('clock:click', (_e, rect) => {
+  ipcMain.on('clock:click', (e, rect) => {
     const action = settings.get().clock.click;
-    if (action === 'calendar') windows.toggleCalendar(rect);
+    if (action === 'calendar') windows.toggleCalendar(rect, windows.barOf(e.sender));
     else if (action === 'app') shell.openPath('/System/Applications/Calendar.app');
   });
   ipcMain.on('calendar:size', (_e, size) => windows.sizeCalendar(size));
   ipcMain.handle('status:get', () => status.get());
-  ipcMain.on('tray:click', (_e, { kind, rect }) => {
-    if (['volume', 'wifi', 'battery'].includes(kind)) windows.togglePopover(kind, rect);
+  ipcMain.on('tray:click', (e, { kind, rect }) => {
+    if (['volume', 'wifi', 'battery'].includes(kind)) windows.togglePopover(kind, rect, windows.barOf(e.sender));
   });
   ipcMain.on('tray:command', (_e, command) => {
     if (!command) return;
@@ -572,7 +577,7 @@ app.whenReady().then(() => {
   applyAppearance();
   setAppMenu();
   wireIpc();
-  windows.createBar(settings.get());
+  windows.createBars(settings.get());
   windows.createMenu(settings.get());
   windows.createTip();
   windows.createGroup(settings.get());
@@ -586,7 +591,7 @@ app.whenReady().then(() => {
   });
   apps.load(); // warm the icon cache before the first click
   tasks.onChange((t) => {
-    windows.setFullScreenUp(fullScreenUp(t));
+    windows.setFullScreenDisplays(fullScreenDisplays(t));
     windows.broadcast('tasks', t);
     access.check(t);
   });

@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('startbar', {
   getState: () => ipcRenderer.invoke('state'),
   onState: on('state'),
   onMenuState: on('menu:state'),
+  onBarPlace: on('bar:place'),
   onMenuShown: on('menu:shown'),
   clickStart: () => ipcRenderer.send('bar:start'),
   barMenu: () => ipcRenderer.send('bar:menu'),

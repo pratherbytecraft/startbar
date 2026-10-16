@@ -1,6 +1,8 @@
-// The bar window and the Start menu window. Both are frameless, both sit
-// above other windows, both get the same state push (settings plus what
-// the Mac looks like right now).
+// The bars (one per display, or only on the main one), the Start menu and
+// the small windows that open above a bar. All frameless, all above other
+// windows, all get the same state push (settings plus what the Mac looks
+// like right now). Each popup remembers the bar it opened from and sits
+// above that one.
 const { app, BrowserWindow, screen } = require('electron');
 const path = require('path');
 
@@ -17,31 +19,33 @@ const LEAVE_DELAY = 600; // auto hide: how long the bar stays after the mouse le
 const preload = path.join(__dirname, '..', 'preload.js');
 const renderer = (name) => path.join(__dirname, '..', 'renderer', name, 'index.html');
 
-let bar = null;
+// One entry per bar: { win, displayId, peek, peekTimer, holds }. peek is
+// auto hide's "the mouse is at this bar's edge or on it", holds counts the
+// native menus open on it.
+const bars = new Map();
+let current = null; // the settings the bars were last laid out with
 let menu = null;
+let menuBar = null; // the bar the Start menu opened on
 let lastMenuHide = 0;
 let tip = null;
-let tipAnchor = null; // the hovered button, in bar coordinates
+let tipAnchor = null; // { rect, bar } of the hovered button, rect in bar coordinates
 let group = null;
-let groupAnchor = null; // { pid, rect } of the group button the list belongs to
+let groupAnchor = null; // { pid, rect, bar } of the group button the list belongs to
 let lastGroupHide = { pid: null, at: 0 };
 let calendar = null;
-let calendarAnchor = null; // the clock, in bar coordinates
+let calendarAnchor = null; // { rect, bar } of the clock
 let lastCalendarHide = 0;
 let popover = null;
-let popoverAnchor = null; // { kind, rect } of the tray icon it belongs to
+let popoverAnchor = null; // { kind, rect, bar } of the tray icon it belongs to
 let lastPopoverHide = { kind: null, at: 0 };
 let theme = 'system';
 let settingsWin = null;
 let barHidden = false; // Hide the Bar, for this session only
 const visibility = new Set();
-let overFullScreen = false; // keep the bar up over full screen apps
-let fullScreenUp = false; // a full screen window is in front on the main display
+let overFullScreen = false; // keep the bars up over full screen apps
+let fullScreenOn = new Set(); // displays with a full screen window in front
 let autoHide = false;
-let peek = false; // auto hide: the mouse is at the edge or on the bar
-let peekTimer = null;
 let edgeWatch = null;
-let holds = 0; // native menus open on the bar
 
 // Every Space, full screen apps included. Whether the bar stays up over a
 // full screen app is up to barWanted. The Start menu and the popups can
@@ -55,14 +59,49 @@ function vibrancyFor(settings) {
   return settings.theme === 'system' && settings.translucent ? 'menu' : null;
 }
 
-function barBounds(settings) {
-  const { bounds } = screen.getPrimaryDisplay();
+function barBounds(settings, display) {
+  const { bounds } = display;
   const height = Number(settings.barHeight) || 36;
   return { x: bounds.x, y: bounds.y + bounds.height - height, width: bounds.width, height };
 }
 
-function menuBounds(settings) {
-  const b = barBounds(settings);
+// MARK: which bar is which
+
+function displayById(id) {
+  return screen.getAllDisplays().find((d) => d.id === id) || screen.getPrimaryDisplay();
+}
+
+function entryOf(win) {
+  for (const entry of bars.values()) if (entry.win === win) return entry;
+  return null;
+}
+
+// The bar a renderer message came from, or null when it came from
+// another window (the group list, for one).
+function barOf(webContents) {
+  for (const entry of bars.values()) if (entry.win.webContents === webContents) return entry.win;
+  return null;
+}
+
+// The main display's bar, or any bar when there's none there.
+function mainBar() {
+  const main = bars.get(screen.getPrimaryDisplay().id);
+  if (main) return main.win;
+  const first = bars.values().next().value;
+  return first ? first.win : null;
+}
+
+// The bar on the display the mouse is on, for the shortcut and for opening
+// Startbar again. The main bar when that display has none.
+function barUnderMouse() {
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const entry = bars.get(display.id);
+  return entry ? entry.win : mainBar();
+}
+
+function menuBounds(settings, barWin) {
+  const entry = barWin && entryOf(barWin);
+  const b = barBounds(settings, entry ? displayById(entry.displayId) : screen.getPrimaryDisplay());
   const isClassic = settings.theme === 'classic-2001';
   return {
     x: b.x + (isClassic ? 0 : MENU_GAP),
@@ -72,11 +111,22 @@ function menuBounds(settings) {
   };
 }
 
-function createBar(settings) {
-  theme = settings.theme;
-  overFullScreen = !settings.taskbar.hideInFullScreen;
-  bar = new BrowserWindow({
-    ...barBounds(settings),
+// What a bar needs to know about where it is: its display, whether that's
+// the main one, and where every display is (to sort windows by display).
+function sendPlace(entry) {
+  if (entry.win.isDestroyed()) return;
+  const main = screen.getPrimaryDisplay();
+  entry.win.webContents.send('bar:place', {
+    id: entry.displayId,
+    main: entry.displayId === main.id,
+    bars: bars.size,
+    displays: screen.getAllDisplays().map((d) => ({ id: d.id, main: d.id === main.id, bounds: d.bounds }))
+  });
+}
+
+function createBar(settings, display) {
+  const bar = new BrowserWindow({
+    ...barBounds(settings, display),
     // A non-activating panel gets mouse moves (hover, tooltips) while another
     // app is in front. A plain window that can't take focus doesn't.
     type: 'panel',
@@ -98,18 +148,52 @@ function createBar(settings) {
   });
   bar.setAlwaysOnTop(true, 'floating');
   onAllSpaces(bar);
+  const entry = { win: bar, displayId: display.id, peek: false, peekTimer: null, holds: 0 };
+  bars.set(display.id, entry);
   bar.loadFile(renderer('bar'));
-  bar.once('ready-to-show', () => {
-    setAutoHide(settings.taskbar.autoHide);
-    syncBar();
+  bar.webContents.on('did-finish-load', () => sendPlace(entry));
+  bar.once('ready-to-show', () => syncBar(entry));
+  bar.on('closed', () => {
+    clearTimeout(entry.peekTimer);
+    if (bars.get(entry.displayId) === entry) bars.delete(entry.displayId);
   });
-  bar.on('closed', () => { bar = null; });
   return bar;
+}
+
+// A bar for each display that should have one, at the bottom of it. Bars
+// for displays that went away (or that shouldn't have one any more) close.
+function syncDisplays(settings) {
+  const main = screen.getPrimaryDisplay();
+  const wanted = settings.displays.bars === 'main' ? [main] : screen.getAllDisplays();
+  const ids = new Set(wanted.map((d) => d.id));
+  for (const [id, entry] of bars) {
+    if (ids.has(id)) continue;
+    bars.delete(id);
+    for (const anchor of [tipAnchor, groupAnchor, calendarAnchor, popoverAnchor]) {
+      if (anchor && anchor.bar === entry.win) anchor.bar = null;
+    }
+    if (menuBar === entry.win) menuBar = null;
+    entry.win.destroy();
+  }
+  for (const display of wanted) {
+    const entry = bars.get(display.id);
+    if (!entry) createBar(settings, display);
+    else entry.win.setBounds(barBounds(settings, display));
+  }
+  for (const entry of bars.values()) sendPlace(entry);
+}
+
+function createBars(settings) {
+  current = settings;
+  theme = settings.theme;
+  overFullScreen = !settings.taskbar.hideInFullScreen;
+  syncDisplays(settings);
+  setAutoHide(settings.taskbar.autoHide);
 }
 
 function createMenu(settings) {
   menu = new BrowserWindow({
-    ...menuBounds(settings),
+    ...menuBounds(settings, mainBar()),
     frame: false,
     transparent: true,
     hasShadow: true,
@@ -241,24 +325,29 @@ function createCalendar(settings) {
 }
 
 // Keeps a window of this width inside the display the bar is on.
-function clampX(x, width) {
-  const { bounds } = screen.getPrimaryDisplay();
+function clampX(x, width, barWin) {
+  const entry = barWin && entryOf(barWin);
+  const { bounds } = entry ? displayById(entry.displayId) : screen.getPrimaryDisplay();
   return Math.round(Math.max(bounds.x + 4, Math.min(x, bounds.x + bounds.width - width - 4)));
 }
 
-function showTip(text, rect) {
-  if (!tip || !bar) return;
-  tipAnchor = rect;
+// A popup anchored to a bar that has gone away has nothing to sit on.
+const liveBar = (barWin) => barWin && !barWin.isDestroyed() && entryOf(barWin) ? barWin : null;
+
+function showTip(text, rect, barWin) {
+  if (!tip || !liveBar(barWin)) return;
+  tipAnchor = { rect, bar: barWin };
   tip.webContents.send('tip:text', text);
 }
 
 // The tooltip renderer measured its text. Center it over the button.
 function sizeTip({ width, height }) {
-  if (!tip || !bar || !tipAnchor) return;
-  const b = bar.getBounds();
+  if (!tip || !tipAnchor || !liveBar(tipAnchor.bar)) return;
+  const b = tipAnchor.bar.getBounds();
+  const { rect } = tipAnchor;
   const w = width + TIP_MARGIN * 2;
   const h = height + TIP_MARGIN * 2;
-  const x = clampX(b.x + tipAnchor.x + tipAnchor.width / 2 - w / 2, w);
+  const x = clampX(b.x + rect.x + rect.width / 2 - w / 2, w, tipAnchor.bar);
   const y = b.y - 6 - height - TIP_MARGIN;
   tip.setBounds({ x, y, width: w, height: h });
   tip.showInactive();
@@ -269,23 +358,23 @@ function hideTip() {
   if (tip && tip.isVisible()) tip.hide();
 }
 
-function showGroup(payload) {
-  if (!group || !bar) return;
+function showGroup(payload, barWin) {
+  if (!group || !liveBar(barWin)) return;
   // Clicking the group button while its list is open blurs the list first,
   // which hides it. Treat that click as "close", like the Start button.
   if (lastGroupHide.pid === payload.pid && Date.now() - lastGroupHide.at < 250) return;
-  groupAnchor = { pid: payload.pid, rect: payload.rect };
+  groupAnchor = { pid: payload.pid, rect: payload.rect, bar: barWin };
   group.webContents.send('group:show', payload);
 }
 
 // The group list renderer laid out its rows. Open it above the button.
 function sizeGroup({ height }) {
-  if (!group || !bar || !groupAnchor) return;
-  const b = bar.getBounds();
-  const { workArea } = screen.getPrimaryDisplay();
+  if (!group || !groupAnchor || !liveBar(groupAnchor.bar)) return;
+  const b = groupAnchor.bar.getBounds();
+  const { workArea } = displayById(entryOf(groupAnchor.bar).displayId);
   const h = Math.min(height, Math.round(workArea.height * 0.6));
   const gap = theme === 'classic-2001' ? 0 : MENU_GAP;
-  const x = clampX(b.x + groupAnchor.rect.x, GROUP_WIDTH);
+  const x = clampX(b.x + groupAnchor.rect.x, GROUP_WIDTH, groupAnchor.bar);
   group.setBounds({ x, y: b.y - h - gap, width: GROUP_WIDTH, height: h });
   group.show();
   group.focus();
@@ -296,26 +385,27 @@ function hideGroup() {
   lastGroupHide = { pid: groupAnchor && groupAnchor.pid, at: Date.now() };
   groupAnchor = null;
   group.hide();
-  syncBar();
+  syncBars();
 }
 
-function toggleCalendar(rect) {
-  if (!calendar || !bar) return;
+function toggleCalendar(rect, barWin) {
+  if (!calendar || !liveBar(barWin)) return;
   if (calendar.isVisible()) return hideCalendar();
   // When a click on the clock does blur the calendar, that hides it first.
   // Treat that click as "close" too.
   if (Date.now() - lastCalendarHide < 250) return;
-  calendarAnchor = rect;
+  calendarAnchor = { rect, bar: barWin };
   calendar.webContents.send('calendar:show');
 }
 
 // The calendar laid out this month. Open it above the clock, lined up with
 // its right edge.
 function sizeCalendar({ height }) {
-  if (!calendar || !bar || !calendarAnchor) return;
-  const b = bar.getBounds();
+  if (!calendar || !calendarAnchor || !liveBar(calendarAnchor.bar)) return;
+  const b = calendarAnchor.bar.getBounds();
+  const { rect } = calendarAnchor;
   const gap = theme === 'classic-2001' ? 0 : MENU_GAP;
-  const x = clampX(b.x + calendarAnchor.x + calendarAnchor.width - CALENDAR_WIDTH, CALENDAR_WIDTH);
+  const x = clampX(b.x + rect.x + rect.width - CALENDAR_WIDTH, CALENDAR_WIDTH, calendarAnchor.bar);
   calendar.setBounds({ x, y: b.y - height - gap, width: CALENDAR_WIDTH, height });
   if (!calendar.isVisible()) {
     calendar.show();
@@ -328,26 +418,26 @@ function hideCalendar() {
   lastCalendarHide = Date.now();
   calendarAnchor = null;
   calendar.hide();
-  syncBar();
+  syncBars();
 }
 
 // A click on a tray icon opens its panel, or closes it when it's the one open.
-function togglePopover(kind, rect) {
-  if (!popover || !bar) return;
-  const same = popoverAnchor && popoverAnchor.kind === kind;
+function togglePopover(kind, rect, barWin) {
+  if (!popover || !liveBar(barWin)) return;
+  const same = popoverAnchor && popoverAnchor.kind === kind && popoverAnchor.bar === barWin;
   if (popover.isVisible() && same) return hidePopover();
   if (lastPopoverHide.kind === kind && Date.now() - lastPopoverHide.at < 250) return;
-  popoverAnchor = { kind, rect };
+  popoverAnchor = { kind, rect, bar: barWin };
   popover.webContents.send('popover:show', kind);
 }
 
 // The panel laid out its content. Open it above the icon, centered on it.
 function sizePopover({ height }) {
-  if (!popover || !bar || !popoverAnchor) return;
-  const b = bar.getBounds();
+  if (!popover || !popoverAnchor || !liveBar(popoverAnchor.bar)) return;
+  const b = popoverAnchor.bar.getBounds();
   const gap = theme === 'classic-2001' ? 0 : MENU_GAP;
   const { rect } = popoverAnchor;
-  const x = clampX(b.x + rect.x + rect.width / 2 - POPOVER_WIDTH / 2, POPOVER_WIDTH);
+  const x = clampX(b.x + rect.x + rect.width / 2 - POPOVER_WIDTH / 2, POPOVER_WIDTH, popoverAnchor.bar);
   popover.setBounds({ x, y: b.y - height - gap, width: POPOVER_WIDTH, height });
   if (!popover.isVisible()) {
     popover.show();
@@ -360,51 +450,61 @@ function hidePopover() {
   lastPopoverHide = { kind: popoverAnchor && popoverAnchor.kind, at: Date.now() };
   popoverAnchor = null;
   popover.hide();
-  syncBar();
+  syncBars();
 }
 
-// MARK: showing and hiding the bar
+// MARK: showing and hiding the bars
 
-// Hide the Bar wins, then a full screen app when the bar hides for those.
-// With auto hide on, the bar shows while the mouse is at the edge or on it,
-// or while the Start menu, a group list, the calendar or one of the bar's
-// right click menus is open.
-function barWanted() {
-  if (barHidden || (fullScreenUp && !overFullScreen)) return false;
+// Hide the Bar wins, then a full screen app on that display when the bars
+// hide for those. With auto hide on, a bar shows while the mouse is at its
+// edge or on it, or while something opened from it is up: the Start menu,
+// a group list, the calendar, a tray panel or a right click menu.
+function barWanted(entry) {
+  if (barHidden || (fullScreenOn.has(entry.displayId) && !overFullScreen)) return false;
   if (!autoHide) return true;
-  return peek || holds > 0 || [menu, group, calendar, popover].some((w) => w && w.isVisible());
+  if (entry.peek || entry.holds > 0) return true;
+  const open = (win, anchorBar) => win && win.isVisible() && anchorBar === entry.win;
+  return open(menu, menuBar) || open(group, groupAnchor && groupAnchor.bar)
+    || open(calendar, calendarAnchor && calendarAnchor.bar) || open(popover, popoverAnchor && popoverAnchor.bar);
 }
 
-function syncBar() {
-  if (!bar) return;
-  const want = barWanted();
-  if (want && !bar.isVisible()) bar.showInactive();
-  else if (!want && bar.isVisible()) {
-    hideTip();
-    bar.hide();
+function syncBar(entry) {
+  if (entry.win.isDestroyed()) return;
+  const want = barWanted(entry);
+  if (want && !entry.win.isVisible()) entry.win.showInactive();
+  else if (!want && entry.win.isVisible()) {
+    if (tipAnchor && tipAnchor.bar === entry.win) hideTip();
+    entry.win.hide();
   }
 }
 
+function syncBars() {
+  for (const entry of bars.values()) syncBar(entry);
+}
+
 function watchEdge() {
-  if (!bar) return;
   const p = screen.getCursorScreenPoint();
-  const { bounds } = screen.getPrimaryDisplay();
-  const inX = p.x >= bounds.x && p.x < bounds.x + bounds.width;
-  const atEdge = inX && p.y >= bounds.y + bounds.height - EDGE;
-  const onBar = inX && bar.isVisible() && p.y >= bar.getBounds().y;
-  if (atEdge || onBar) {
-    clearTimeout(peekTimer);
-    peekTimer = null;
-    if (!peek) {
-      peek = true;
-      syncBar();
+  for (const entry of bars.values()) {
+    if (entry.win.isDestroyed()) continue;
+    const { bounds } = displayById(entry.displayId);
+    const inX = p.x >= bounds.x && p.x < bounds.x + bounds.width;
+    const inDisplay = inX && p.y >= bounds.y && p.y < bounds.y + bounds.height;
+    const atEdge = inDisplay && p.y >= bounds.y + bounds.height - EDGE;
+    const onBar = inDisplay && entry.win.isVisible() && p.y >= entry.win.getBounds().y;
+    if (atEdge || onBar) {
+      clearTimeout(entry.peekTimer);
+      entry.peekTimer = null;
+      if (!entry.peek) {
+        entry.peek = true;
+        syncBar(entry);
+      }
+    } else if (entry.peek && !entry.peekTimer) {
+      entry.peekTimer = setTimeout(() => {
+        entry.peekTimer = null;
+        entry.peek = false;
+        syncBar(entry);
+      }, LEAVE_DELAY);
     }
-  } else if (peek && !peekTimer) {
-    peekTimer = setTimeout(() => {
-      peekTimer = null;
-      peek = false;
-      syncBar();
-    }, LEAVE_DELAY);
   }
 }
 
@@ -412,50 +512,64 @@ function setAutoHide(on) {
   if (!!on === autoHide) return;
   autoHide = !!on;
   clearInterval(edgeWatch);
-  clearTimeout(peekTimer);
   edgeWatch = null;
-  peekTimer = null;
-  peek = false;
+  for (const entry of bars.values()) {
+    clearTimeout(entry.peekTimer);
+    entry.peekTimer = null;
+    entry.peek = false;
+  }
   if (autoHide) edgeWatch = setInterval(watchEdge, 80);
-  syncBar();
+  syncBars();
 }
 
 // Keeps an auto hidden bar up while a native menu from it is open. Call the
 // returned function when the menu closes.
-function holdBar() {
-  holds += 1;
-  syncBar();
+function holdBar(barWin) {
+  const entry = barWin && entryOf(barWin);
+  if (!entry) return () => {};
+  entry.holds += 1;
+  syncBar(entry);
   let released = false;
   return () => {
     if (released) return;
     released = true;
-    holds -= 1;
-    syncBar();
+    entry.holds -= 1;
+    syncBar(entry);
   };
 }
 
 function setOverFullScreen(show) {
   if (show === overFullScreen) return;
   overFullScreen = show;
-  syncBar();
+  syncBars();
 }
 
-function setFullScreenUp(up) {
-  if (up === fullScreenUp) return;
-  fullScreenUp = up;
-  syncBar();
+// The displays that have a full screen window in front, by id.
+function setFullScreenDisplays(ids) {
+  const next = new Set(ids);
+  if (next.size === fullScreenOn.size && [...next].every((id) => fullScreenOn.has(id))) return;
+  fullScreenOn = next;
+  syncBars();
+}
+
+// Where each bar is, for moving windows up off them.
+function barAreas() {
+  if (barHidden) return [];
+  return [...bars.values()].filter((e) => !e.win.isDestroyed()).map((entry) => {
+    const display = displayById(entry.displayId);
+    return { top: display.workArea.y, bottom: entry.win.getBounds().y, screen: display.bounds };
+  });
 }
 
 function layout(settings) {
+  current = settings;
   theme = settings.theme;
   setOverFullScreen(!settings.taskbar.hideInFullScreen);
+  syncDisplays(settings);
   setAutoHide(settings.taskbar.autoHide);
-  if (bar) {
-    bar.setBounds(barBounds(settings));
-    bar.setVibrancy(vibrancyFor(settings));
-  }
+  for (const entry of bars.values()) entry.win.setVibrancy(vibrancyFor(settings));
   if (menu) {
-    menu.setBounds(menuBounds(settings));
+    menu.setBounds(menuBounds(settings, menuBar || mainBar()));
     menu.setVibrancy(vibrancyFor(settings));
   }
   if (group) group.setVibrancy(vibrancyFor(settings));
@@ -468,21 +582,21 @@ function layout(settings) {
 }
 
 function hideBar() {
-  if (!bar || barHidden) return;
+  if (bars.size === 0 || barHidden) return;
   barHidden = true;
   hideMenu();
   hideTip();
   hideGroup();
   hideCalendar();
   hidePopover();
-  syncBar();
+  syncBars();
   for (const fn of visibility) fn(true);
 }
 
 function showBar() {
-  if (!bar || !barHidden) return;
+  if (bars.size === 0 || !barHidden) return;
   barHidden = false;
-  syncBar();
+  syncBars();
   for (const fn of visibility) fn(false);
 }
 
@@ -491,31 +605,35 @@ function onBarVisibility(fn) {
   return () => visibility.delete(fn);
 }
 
-function showMenu() {
+// Opens the Start menu above barWin's Start button, or above the bar on the
+// display the mouse is on.
+function showMenu(barWin) {
   if (!menu) return;
   showBar(); // the Start menu sits on the bar, so opening it brings a hidden bar back
+  menuBar = liveBar(barWin) || barUnderMouse();
+  if (current) menu.setBounds(menuBounds(current, menuBar));
   menu.show();
-  syncBar();
+  syncBars();
   menu.focus();
   menu.webContents.send('menu:shown');
-  if (bar) bar.webContents.send('menu:state', true);
+  if (menuBar) menuBar.webContents.send('menu:state', true);
 }
 
 function hideMenu() {
   if (!menu || !menu.isVisible()) return;
   lastMenuHide = Date.now();
   menu.hide();
-  if (bar) bar.webContents.send('menu:state', false);
-  syncBar();
+  for (const entry of bars.values()) entry.win.webContents.send('menu:state', false);
+  syncBars();
 }
 
-function toggleMenu() {
+function toggleMenu(barWin) {
   if (!menu) return;
   // Clicking Start while the menu is open blurs the menu first, which hides it.
   // Treat a click right after that hide as "close", not "open again".
   if (menu.isVisible()) return hideMenu();
   if (Date.now() - lastMenuHide < 250) return;
-  showMenu();
+  showMenu(barWin);
 }
 
 // The settings window is made when it's opened and dropped when it's
@@ -558,17 +676,18 @@ function showSettings(onClosed, page) {
 }
 
 function broadcast(channel, payload) {
-  for (const w of [bar, menu, tip, group, calendar, popover, settingsWin]) {
+  const wins = [...[...bars.values()].map((e) => e.win), menu, tip, group, calendar, popover, settingsWin];
+  for (const w of wins) {
     if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
   }
 }
 
 module.exports = {
-  createBar, createMenu, createTip, createGroup, createCalendar, createPopover, layout, showMenu, hideMenu, toggleMenu,
+  createBars, createMenu, createTip, createGroup, createCalendar, createPopover, layout, showMenu, hideMenu, toggleMenu,
   showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, toggleCalendar, sizeCalendar, hideCalendar,
   togglePopover, sizePopover, hidePopover, broadcast,
-  hideBar, showBar, onBarVisibility, holdBar, setFullScreenUp, showSettings,
-  get bar() { return bar; },
+  hideBar, showBar, onBarVisibility, holdBar, setFullScreenDisplays, barAreas, barOf, showSettings,
+  get bar() { return mainBar(); },
   get barHidden() { return barHidden; },
   get menu() { return menu; },
   get settings() { return settingsWin; }
