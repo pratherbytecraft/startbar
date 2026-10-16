@@ -23,7 +23,7 @@ Then move Startbar from the Applications folder in your home folder to the Trash
 
 ## What it does
 
-The bar follows your Mac's light or dark setting and your accent color. A Classic 2001 theme is in the settings if you want the retro look.
+The bar follows your Mac's light or dark setting and your accent color. Classic 2001 and Classic 1995 themes are in the settings if you want a retro look.
 
 The Start button opens a menu that lists your apps with a search box, your recent apps, your main folders and Sleep, Log Out and Shut Down. Control Space also opens it. Search can also find files in your home folder, and you can add your own folders to the menu.
 

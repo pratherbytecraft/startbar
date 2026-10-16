@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULTS = Object.freeze({
-  theme: 'system', // system | classic-2001
+  theme: 'system', // system | classic-2001 | classic-1995
   appearance: 'auto', // auto | light | dark
   accent: 'auto', // auto | blue | purple | pink | red | orange | yellow | green | graphite
   translucent: true,

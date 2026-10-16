@@ -25,7 +25,7 @@
     about: '<circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5v.5"/>'
   };
 
-  const SYSTEM_ONLY = { when: (s) => s.theme !== 'system', note: 'Not used by Classic 2001.' };
+  const SYSTEM_ONLY = { when: (s) => s.theme !== 'system', note: 'Not used by the classic themes.' };
 
   const PAGES = [
     {
@@ -34,8 +34,8 @@
         {
           title: 'Look',
           rows: [
-            { label: 'Theme', note: "System uses your Mac's colors. Classic 2001 is the retro look. More themes later.",
-              control: { type: 'select', key: 'theme', options: [['system', 'System'], ['classic-2001', 'Classic 2001']] } },
+            { label: 'Theme', note: "System uses your Mac's colors. Classic 2001 and Classic 1995 are retro looks.",
+              control: { type: 'select', key: 'theme', options: [['system', 'System'], ['classic-2001', 'Classic 2001'], ['classic-1995', 'Classic 1995']] } },
             { label: 'Appearance', systemOnly: true,
               control: { type: 'seg', key: 'appearance', options: [['auto', 'Follow Mac'], ['light', 'Light'], ['dark', 'Dark']] } },
             { label: 'Accent color', note: 'Follows the accent set in System Settings, or pick one here.', systemOnly: true,

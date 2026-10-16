@@ -100,7 +100,7 @@ function barUnderMouse() {
 }
 
 // The classic themes' Start menus sit right on the bar, each at its own size.
-const CLASSIC_MENUS = { 'classic-2001': { width: 400, height: 480 } };
+const CLASSIC_MENUS = { 'classic-2001': { width: 400, height: 480 }, 'classic-1995': { width: 380, height: 460 } };
 const gapFor = (name) => (CLASSIC_MENUS[name] ? 0 : MENU_GAP);
 const isClassic = (settings) => !!CLASSIC_MENUS[settings.theme];
 
