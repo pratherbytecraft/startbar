@@ -290,6 +290,7 @@ function checkScreen() {
     } catch {
       allowed = false;
     }
+    if (screenAfterUpdate(allowed)) return;
     const next = allowed ? 'allowed' : settings.get().screenAsked ? 'denied' : 'notAsked';
     if (next === screenNow) return;
     const granted = screenNow !== null && next === 'allowed';
@@ -298,6 +299,26 @@ function checkScreen() {
     if (granted) tasks.restart();
     permissionsChanged();
   });
+}
+
+// An update that rebuilt Startbar.app can leave the old Screen Recording
+// entry in the list, switched on but no longer counting (it happened with the
+// move to name based signing in 0.2.0). With previews on, when it worked under
+// another build, or before builds were stamped, Startbar clears its entry and
+// asks once more, the way access.js does for Accessibility.
+function screenAfterUpdate(allowed) {
+  const s = settings.get();
+  const now = access.buildStamp();
+  if (!now) return false;
+  if (allowed) {
+    if (s.screenStamp !== now) settings.update({ screenStamp: now });
+    return false;
+  }
+  if (!s.taskbar.previews || !s.screenAsked || s.screenStamp === now) return false;
+  settings.update({ screenStamp: now, screenAsked: false });
+  screenNow = 'notAsked';
+  execFile('tccutil', ['reset', 'ScreenCapture', access.BUNDLE_ID], () => askPermission('screen'));
+  return true;
 }
 
 function rememberAutomation(result) {
@@ -389,7 +410,7 @@ async function exportSettings() {
     filters: [{ name: 'Startbar settings', extensions: ['json'] }]
   });
   if (canceled || !filePath) return;
-  const { accessibilityAsked, accessibilityStamp, hideNoteShown, automationAnswer, screenAsked, ...saved } = settings.get();
+  const { accessibilityAsked, accessibilityStamp, hideNoteShown, automationAnswer, screenAsked, screenStamp, ...saved } = settings.get();
   fs.writeFileSync(filePath, JSON.stringify({ startbar: VERSION, settings: saved, pins: pins.get() }, null, 2) + '\n');
 }
 

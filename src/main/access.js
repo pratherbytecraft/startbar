@@ -91,4 +91,4 @@ function check(tasks, { restartHelper } = {}) {
   }
 }
 
-module.exports = { ask, check, openPane };
+module.exports = { ask, check, openPane, buildStamp, BUNDLE_ID };
