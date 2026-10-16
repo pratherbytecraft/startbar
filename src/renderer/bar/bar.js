@@ -535,7 +535,10 @@
     ])]);
     if (key === drawn) return;
     drawn = key;
-    hideTip(); // the hovered button may be gone
+    // The hovered button may be gone, but only if it was one of these: a
+    // window whose title keeps changing (a spinner in Terminal) shouldn't
+    // take the tooltip away from a pin, the clock or the tray.
+    if (tasksEl.matches(':hover')) hideTip();
     tasksEl.classList.toggle('compact', compact);
     tasksEl.replaceChildren(...list.map(button));
     fetchIcons(tasks.apps.map((a) => a.path).concat(pinList));
