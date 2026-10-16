@@ -2,6 +2,7 @@ node_modules/
 .DS_Store
 *.png
 *.jpg
+!docs/screenshots/*.png
 *.mov
 helper/startbar-helper
 helper/status.noindex/

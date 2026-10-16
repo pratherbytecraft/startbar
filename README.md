@@ -2,6 +2,8 @@
 
 A taskbar for macOS. A bar along the bottom of the screen with a Start button, one button per open window, pinned apps and a clock. Free to use.
 
+![Startbar with the Start menu open](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/menu-system.png)
+
 ## Install
 
 ```
@@ -25,17 +27,37 @@ Then move Startbar from the Applications folder in your home folder to the Trash
 
 The bar follows your Mac's light or dark setting and your accent color, with a round Start button and window buttons that light up in each app's color. Classic 2009, Classic 2001 and Classic 1995 themes are in the settings if you want a retro look, each with its own color schemes, and Classic 1995 lets you pick your own colors. Each theme keeps its own look and size settings, and each can be reset on its own.
 
+![Classic 2009 theme](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/menu-2009.png)
+
+![Classic 2001 theme](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/menu-2001.png)
+
+![Classic 1995 theme](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/menu-1995.png)
+
+Some of the color schemes: Classic 2009 in Ruby, Classic 2001 in Olive Green and Silver, Classic 1995 in Rose and Marine.
+
+![Classic 2009 in Ruby](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/bar-2009-ruby.png)
+![Classic 2001 in Olive Green](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/bar-2001-olive.png)
+![Classic 2001 in Silver](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/bar-2001-silver.png)
+![Classic 1995 in Rose](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/bar-1995-rose.png)
+![Classic 1995 in Marine](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/bar-1995-marine.png)
+
 The Start button opens a menu that lists your apps with a search box, up to five recent apps, your main folders and Sleep, Log Out and Shut Down. Control Space also opens it, or throw the mouse into the bottom left corner and click. Start typing to search. Search can also find files in your home folder, and you can add your own folders to the menu. Right click a recent app to remove it from the list.
 
 Apps pinned next to the Start button open with one click, and an app that already has a window open gets a new one. Drag them to reorder them. Right click an app in the Start menu or a window button and pick Pin to Bar to add one. Pins can also sit in the row with the window buttons, where a pinned app's button turns into its window buttons once it opens.
 
 Right click a window button to minimize, close or quit, pin the app, or open a new window. Turn on previews and hovering a window button shows a picture of each of its windows. A strip at the right end of the bar can hide every app to show the desktop, and a second click brings them back.
 
+![Window previews over a Finder group](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/preview-system.png)
+
 The tray shows Bluetooth, the volume, Wi-Fi and the battery next to the clock. Click one for a small panel to change the volume, turn Wi-Fi or Bluetooth on or off, connect a Bluetooth device, or see how much charge is left. Click the clock for a small calendar.
+
+![The calendar above the clock](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/calendar-system.png)
 
 With more than one display, each display gets its own bar with that display's windows. The bar can also show windows from every Space, and clicking one switches to its Space.
 
 Open Startbar Settings from the Start menu or by right clicking the bar. Everything above is set there, with a preview of the bar that changes as you go. Settings also has Open at login, export and import of your settings, and buttons that hide the Dock or move it to the bottom.
+
+![Startbar Settings](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/settings-appearance.png)
 
 Right click an empty part of the bar to hide it. While the bar is hidden, a Startbar icon sits in the menu bar. Click it, press Control Space or open Startbar again to bring the bar back.
 
