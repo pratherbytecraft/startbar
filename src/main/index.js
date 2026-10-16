@@ -614,19 +614,24 @@ function wireIpc() {
   ipcMain.on('calendar:size', (_e, size) => windows.sizeCalendar(size));
   ipcMain.handle('status:get', () => status.get());
   ipcMain.on('tray:click', (e, { kind, rect }) => {
-    if (['volume', 'wifi', 'battery'].includes(kind)) windows.togglePopover(kind, rect, windows.barOf(e.sender));
+    if (['volume', 'wifi', 'battery', 'bluetooth'].includes(kind)) windows.togglePopover(kind, rect, windows.barOf(e.sender));
   });
   ipcMain.on('tray:command', (_e, command) => {
     if (!command) return;
     if (command.cmd === 'setVolume') status.send({ cmd: 'setVolume', level: Math.max(0, Math.min(1, Number(command.level) || 0)) });
     if (command.cmd === 'setMuted') status.send({ cmd: 'setMuted', muted: !!command.muted });
     if (command.cmd === 'setWifi') status.send({ cmd: 'setWifi', on: !!command.on });
+    if (command.cmd === 'setBluetooth') status.send({ cmd: 'setBluetooth', on: !!command.on });
+    if (command.cmd === 'setConnected' && /^[0-9a-f]{2}([-:][0-9a-f]{2}){5}$/i.test(command.address)) {
+      status.send({ cmd: 'setConnected', address: command.address, on: !!command.on });
+    }
   });
   ipcMain.on('tray:settings', (_e, name) => {
     const panes = {
       volume: 'x-apple.systempreferences:com.apple.Sound-Settings.extension',
       wifi: 'x-apple.systempreferences:com.apple.wifi-settings-extension',
-      battery: 'x-apple.systempreferences:com.apple.Battery-Settings.extension'
+      battery: 'x-apple.systempreferences:com.apple.Battery-Settings.extension',
+      bluetooth: 'x-apple.systempreferences:com.apple.BluetoothSettings'
     };
     if (!panes[name]) return;
     windows.hidePopover();

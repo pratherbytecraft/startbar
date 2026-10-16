@@ -1,11 +1,11 @@
 // The panel above a tray icon: volume with a slider and mute, Wi-Fi with an
-// on and off switch, or the battery's charge. Follows the live reading and
+// on and off switch, the battery's charge, or Bluetooth with its devices. Follows the live reading and
 // reports its height so the main process can size the window to fit.
 (function () {
   const api = window.startbar;
   const pop = document.getElementById('pop');
   let kind = null;
-  let status = { volume: null, wifi: null, battery: null };
+  let status = { volume: null, wifi: null, battery: null, bluetooth: null };
   let slider = null; // kept across redraws so a drag isn't interrupted
   let volumeParts = null; // { value, mute } of the volume panel on screen
   let frame = 0;
@@ -90,6 +90,34 @@
     return [head('Battery', node('span', 'pop-value', `${b.percent}%`)), bar, node('div', 'pop-note', line), settingsLink('battery', 'Battery Settings…')];
   }
 
+  function deviceRow(d) {
+    const r = node('div', 'pop-dev');
+    r.title = d.connected ? 'Disconnect' : 'Connect';
+    const icon = node('span', 'pop-dev-icon');
+    icon.innerHTML = window.trayIcons.device(d.kind);
+    const name = node('div', 'pop-dev-name', d.name);
+    name.append(node('small', null, d.connected ? 'Connected' : 'Not connected'));
+    r.append(icon, name);
+    if (d.battery != null) r.append(node('span', 'pop-value', `${d.battery}%`));
+    r.addEventListener('click', () => api.trayCommand({ cmd: 'setConnected', address: d.address, on: !d.connected }));
+    return r;
+  }
+
+  function bluetoothPanel(b) {
+    const parts = [head('Bluetooth', toggle(b.on, () => api.trayCommand({ cmd: 'setBluetooth', on: !b.on })))];
+    if (!b.on) parts.push(node('div', 'pop-note', 'Off'));
+    else if (b.devices.length === 0) parts.push(node('div', 'pop-note', 'No devices paired.'));
+    else {
+      // Connected first, then the rest in the order macOS keeps them.
+      const devices = [...b.devices].sort((x, y) => y.connected - x.connected).slice(0, 8);
+      const list = node('div', 'pop-devices');
+      list.append(...devices.map(deviceRow));
+      parts.push(list);
+    }
+    parts.push(settingsLink('bluetooth', 'Bluetooth Settings…'));
+    return parts;
+  }
+
   function render() {
     const s = kind && status[kind];
     if (!s) {
@@ -103,7 +131,8 @@
       volumeParts.mute.innerHTML = window.trayIcons.volume(s);
       return;
     }
-    const parts = kind === 'volume' ? volumePanel(s) : kind === 'wifi' ? wifiPanel(s) : batteryPanel(s);
+    const panels = { volume: volumePanel, wifi: wifiPanel, battery: batteryPanel, bluetooth: bluetoothPanel };
+    const parts = panels[kind](s);
     pop.replaceChildren(...parts);
     // Measured now, not on the next frame: a hidden window gets no frames.
     api.popoverSize({ height: Math.ceil(pop.getBoundingClientRect().height) });

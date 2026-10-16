@@ -166,6 +166,10 @@
               hint: { when: (s) => s.permissions.location !== 'allowed', text: 'To see the network name, allow Location on the ', link: 'Permissions page', after: '.',
                 click: () => show('permissions') } },
             { label: 'Battery', note: 'Shown on laptops only.', control: { type: 'toggle', key: 'tray.battery' } },
+            { label: 'Bluetooth', note: 'Your devices, their battery and an on and off switch. Shown when the Mac has Bluetooth.',
+              control: { type: 'toggle', key: 'tray.bluetooth' },
+              hint: { when: (s) => s.permissions.bluetooth !== 'allowed', text: 'Needs the Bluetooth permission on the ', link: 'Permissions page', after: '.',
+                click: () => show('permissions') } },
             { label: 'Show the collapse arrow', note: 'Hides the tray icons behind one click, like the original.',
               control: { type: 'toggle', key: 'tray.collapseArrow' } }
           ]

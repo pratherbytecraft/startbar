@@ -1,6 +1,6 @@
-// The tray's volume, Wi-Fi and battery icons and their tooltips, drawn from
-// a reading of `startbar-helper status`. Shared by the bar and the settings
-// preview.
+// The tray's volume, Wi-Fi, battery and Bluetooth icons and their tooltips,
+// drawn from a reading of `startbar-helper status`. Shared by the bar, the
+// settings preview and the Bluetooth panel's device list.
 (function () {
   const svg = (body) => `<svg viewBox="0 0 16 16" aria-hidden="true">${body}</svg>`;
 
@@ -33,12 +33,37 @@
       + '<path d="M14.5 6.5v3" fill="none" stroke-width="1.4" stroke-linecap="round"/>' + (b.charging ? bolt : fill));
   }
 
+  const RUNE = 'M4.5 5l7 6-3.5 3V2l3.5 3-7 6';
+
+  function bluetooth(b) {
+    return svg(`<path d="${RUNE}" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="${b.on ? 1 : 0.4}"/>`);
+  }
+
+  const DEVICES = {
+    audio: '<path d="M3 10V8.5a5 5 0 0110 0V10"/><rect x="2.5" y="9.5" width="3" height="4.5" rx="1"/><rect x="10.5" y="9.5" width="3" height="4.5" rx="1"/>',
+    keyboard: '<rect x="1.5" y="4.5" width="13" height="7" rx="1.2"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 9.5h6"/>',
+    mouse: '<rect x="4.5" y="1.5" width="7" height="13" rx="3.5"/><path d="M8 4v2.5"/>',
+    phone: '<rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/><path d="M7 12.5h2"/>',
+    computer: '<rect x="2" y="3" width="12" height="8" rx="1"/><path d="M1 13.5h14"/>',
+    other: `<path d="${RUNE}"/>`
+  };
+
+  function device(kind) {
+    return svg(`<g fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${DEVICES[kind] || DEVICES.other}</g>`);
+  }
+
   function hours(minutes) {
     return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
   }
 
   function tip(kind, s) {
     if (kind === 'volume') return s.muted ? 'Volume: muted' : `Volume: ${Math.round(s.level * 100)}%`;
+    if (kind === 'bluetooth') {
+      if (!s.on) return 'Bluetooth: off';
+      const connected = s.devices.filter((d) => d.connected);
+      if (connected.length === 0) return 'Bluetooth: on, nothing connected';
+      return connected.length === 1 ? `Bluetooth: ${connected[0].name} connected` : `Bluetooth: ${connected.length} devices connected`;
+    }
     if (kind === 'wifi') {
       if (!s.on) return 'Wi-Fi: off';
       if (!s.connected) return 'Wi-Fi: not connected';
@@ -53,8 +78,8 @@
 
   // The kinds to draw, in order, for these settings and this reading.
   function shown(settings, status) {
-    return ['volume', 'wifi', 'battery'].filter((k) => settings.tray[k] && status && status[k]);
+    return ['bluetooth', 'volume', 'wifi', 'battery'].filter((k) => settings.tray[k] && status && status[k]);
   }
 
-  window.trayIcons = { volume, wifi, battery, tip, shown, hours };
+  window.trayIcons = { volume, wifi, battery, bluetooth, device, tip, shown, hours };
 })();

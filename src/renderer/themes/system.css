@@ -91,6 +91,8 @@ body { color: var(--text); }
 .pop-icon { border-radius: 6px; }
 .pop-icon:hover { background: var(--fill-hover); }
 .pop-link { border-radius: 7px; }
+.pop-dev { border-radius: 7px; }
+.pop-dev:hover { background: var(--fill-hover); }
 .pop-link:hover { background: var(--accent); color: var(--accent-text); }
 
 /* tooltip */

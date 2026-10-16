@@ -92,6 +92,12 @@ svg { display: block; }
 .pop-icon svg { width: 16px; height: 16px; fill: currentColor; stroke: currentColor; }
 .pop-slider { flex: 1; min-width: 0; accent-color: var(--accent); }
 .pop-note { font-size: 12px; opacity: .7; margin: 8px 0 2px; }
+.pop-devices { margin: 6px -6px 0; }
+.pop-dev { display: flex; align-items: center; gap: 9px; padding: 5px 6px; }
+.pop-dev-icon { width: 20px; height: 20px; display: grid; place-items: center; flex: none; }
+.pop-dev-icon svg { width: 18px; height: 18px; stroke: currentColor; }
+.pop-dev-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pop-dev-name small { display: block; font-size: 11px; opacity: .7; }
 .pop-name { font-weight: 500; margin: 8px 0 -4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pop-link { margin-top: 8px; padding: 6px 8px; }
 .pop-meter { height: 8px; border-radius: 4px; margin: 10px 0 2px; overflow: hidden; background: rgba(127, 127, 127, .3); }

@@ -93,6 +93,7 @@ body { font-size: 11px; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); 
 .pop-toggle.on { background: #3a9e3a; }
 .pop-link { color: #1b3f8f; padding: 4px 0 0; border-top: 1px solid #c0c0c0; }
 .pop-link:hover { text-decoration: underline; }
+.pop-dev:hover { background: #316ac5; color: #fff; }
 .cal-head { background: linear-gradient(180deg, #2f6fe0 0, #1d50c4 100%); color: #fff; padding: 4px 6px; margin-bottom: 4px; text-shadow: 0 1px 1px rgba(0, 0, 0, .4); }
 .cal-nav:hover { background: rgba(255, 255, 255, .2); }
 .cal-grid { padding: 0 6px; }
