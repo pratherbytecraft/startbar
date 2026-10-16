@@ -58,5 +58,13 @@ contextBridge.exposeInMainWorld('startbar', {
   clockClick: (rect) => ipcRenderer.send('clock:click', rect),
   onCalendarShow: on('calendar:show'),
   calendarSize: (size) => ipcRenderer.send('calendar:size', size),
-  hideCalendar: () => ipcRenderer.send('calendar:hide')
+  hideCalendar: () => ipcRenderer.send('calendar:hide'),
+  getStatus: () => ipcRenderer.invoke('status:get'),
+  onStatus: on('status'),
+  trayClick: (kind, rect) => ipcRenderer.send('tray:click', { kind, rect }),
+  trayCommand: (command) => ipcRenderer.send('tray:command', command),
+  traySettings: (name) => ipcRenderer.send('tray:settings', name),
+  onPopoverShow: on('popover:show'),
+  popoverSize: (size) => ipcRenderer.send('popover:size', size),
+  hidePopover: () => ipcRenderer.send('popover:hide')
 });

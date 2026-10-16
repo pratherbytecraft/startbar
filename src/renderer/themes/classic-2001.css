@@ -79,6 +79,15 @@ body { font-size: 11px; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); 
 .empty { color: #777; padding: 10px; }
 .menu.group-list { border-radius: 0; padding: 2px 0; }
 .menu.calendar { border-radius: 0; padding: 0 0 6px; }
+.tray-icon { width: 20px; height: 20px; }
+.tray-icon:hover { background: rgba(255, 255, 255, .18); }
+.menu.popover { border-radius: 0; padding: 0 10px 8px; }
+.popover .pop-head { margin: 0 -10px; padding: 4px 10px; background: linear-gradient(180deg, #2f6fe0 0, #1d50c4 100%); color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .4); }
+.popover .pop-value { opacity: .9; }
+.pop-meter i { background: #316ac5; }
+.pop-toggle.on { background: #3a9e3a; }
+.pop-link { color: #1b3f8f; padding: 4px 0 0; border-top: 1px solid #c0c0c0; }
+.pop-link:hover { text-decoration: underline; }
 .cal-head { background: linear-gradient(180deg, #2f6fe0 0, #1d50c4 100%); color: #fff; padding: 4px 6px; margin-bottom: 4px; text-shadow: 0 1px 1px rgba(0, 0, 0, .4); }
 .cal-nav:hover { background: rgba(255, 255, 255, .2); }
 .cal-grid { padding: 0 6px; }

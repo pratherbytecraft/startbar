@@ -12,9 +12,18 @@
 //     times a second, and a {"type":"permission"} line at start and whenever
 //     the Accessibility permission changes. Takes one JSON command per line
 //     on stdin and answers each with a {"type":"reply"} line. See WindowWatcher.
+//
+//   startbar-helper status
+//     Runs until stdin closes. Prints the volume, Wi-Fi and battery for the
+//     tray as one {"type":"status"} line whenever one changes, and takes
+//     commands to change them. See StatusWatcher.
 import AppKit
 import ApplicationServices
+import AudioToolbox
+import CoreAudio
+import CoreWLAN
 import Foundation
+import IOKit.ps
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
@@ -550,10 +559,222 @@ final class WindowWatcher {
     }
 }
 
+// MARK: - Tray status
+
+// Out:
+//   {"type":"status","volume":{"level":0.5,"muted":false,"settable":true} or null,
+//    "wifi":{"on":true,"connected":true,"bars":3} or null,
+//    "battery":{"percent":80,"charging":true,"plugged":true,"minutes":95} or null}
+//   null means the Mac has no such thing (no output device, no Wi-Fi, no battery).
+//   minutes is the time to empty, or to full while charging, or -1 when unknown.
+//   The Wi-Fi network name isn't included: macOS only gives it out with the
+//   Location permission, which Startbar doesn't ask for.
+// In, each with an optional "seq" echoed in a {"type":"reply"} line:
+//   {"cmd":"setVolume","level":0.4}   {"cmd":"setMuted","muted":true}
+//   {"cmd":"setWifi","on":false}      {"cmd":"refresh"}
+final class StatusWatcher: NSObject, CWEventDelegate {
+    var lastLine = ""
+    var pending = false
+    var device = AudioObjectID(kAudioObjectUnknown)
+    let wifiClient = CWWiFiClient.shared()
+
+    func start() {
+        watchDefaultDevice()
+        watchDevice()
+        wifiClient.delegate = self
+        for event in [CWEventType.powerDidChange, .linkDidChange, .linkQualityDidChange] {
+            try? wifiClient.startMonitoringEvent(with: event)
+        }
+        if let source = IOPSNotificationCreateRunLoopSource({ _ in statusWatcher?.changed() }, nil)?.takeRetainedValue() {
+            CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+        }
+        // Signal strength and battery time drift without events. A slow poll
+        // catches them; the line is only printed when something changed.
+        Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in self?.emit() }
+        readCommands()
+        emit()
+    }
+
+    func changed() {
+        guard !pending else { return }
+        pending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.pending = false
+            self.emit()
+        }
+    }
+
+    func emit() {
+        var out: [String: Any] = ["type": "status"]
+        out["volume"] = volume() ?? NSNull()
+        out["wifi"] = wifi() ?? NSNull()
+        out["battery"] = battery() ?? NSNull()
+        guard let line = jsonText(out), line != lastLine else { return }
+        lastLine = line
+        print(line)
+        fflush(stdout)
+    }
+
+    // MARK: Volume
+
+    func address(_ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeOutput) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+    }
+
+    func defaultDevice() -> AudioObjectID {
+        var id = AudioObjectID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        var addr = address(kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal)
+        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &id)
+        return id
+    }
+
+    func watchDefaultDevice() {
+        var addr = address(kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal)
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, DispatchQueue.main) { [weak self] _, _ in
+            self?.watchDevice()
+            self?.changed()
+        }
+    }
+
+    // Listens to the current output device's volume and mute. A new default
+    // device gets its own listeners; the old device's stay but only nudge a
+    // redraw that finds nothing changed.
+    func watchDevice() {
+        device = defaultDevice()
+        guard device != kAudioObjectUnknown else { return }
+        for selector in [kAudioHardwareServiceDeviceProperty_VirtualMainVolume, kAudioDevicePropertyMute] {
+            var addr = address(selector)
+            AudioObjectAddPropertyListenerBlock(device, &addr, DispatchQueue.main) { [weak self] _, _ in self?.changed() }
+        }
+    }
+
+    func volume() -> [String: Any]? {
+        guard device != kAudioObjectUnknown else { return nil }
+        var level = Float32(0)
+        var size = UInt32(MemoryLayout<Float32>.size)
+        var addr = address(kAudioHardwareServiceDeviceProperty_VirtualMainVolume)
+        guard AudioObjectHasProperty(device, &addr),
+              AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &level) == noErr else {
+            return ["level": 1, "muted": false, "settable": false]
+        }
+        var settable = DarwinBoolean(false)
+        AudioObjectIsPropertySettable(device, &addr, &settable)
+        var muted = UInt32(0)
+        size = UInt32(MemoryLayout<UInt32>.size)
+        var muteAddr = address(kAudioDevicePropertyMute)
+        if AudioObjectHasProperty(device, &muteAddr) {
+            AudioObjectGetPropertyData(device, &muteAddr, 0, nil, &size, &muted)
+        }
+        return ["level": (Double(level) * 100).rounded() / 100, "muted": muted != 0, "settable": settable.boolValue]
+    }
+
+    func setVolume(_ level: Double) -> String? {
+        var value = Float32(max(0, min(1, level)))
+        var addr = address(kAudioHardwareServiceDeviceProperty_VirtualMainVolume)
+        let size = UInt32(MemoryLayout<Float32>.size)
+        guard AudioObjectSetPropertyData(device, &addr, 0, nil, size, &value) == noErr else { return "the volume can't be changed" }
+        // Turning the volume up from muted unmutes, like the volume keys do.
+        if value > 0 { _ = setMuted(false) }
+        return nil
+    }
+
+    func setMuted(_ muted: Bool) -> String? {
+        var value = UInt32(muted ? 1 : 0)
+        var addr = address(kAudioDevicePropertyMute)
+        let size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectHasProperty(device, &addr),
+              AudioObjectSetPropertyData(device, &addr, 0, nil, size, &value) == noErr else { return "this output can't be muted" }
+        return nil
+    }
+
+    // MARK: Wi-Fi
+
+    func wifi() -> [String: Any]? {
+        guard let iface = wifiClient.interface() else { return nil }
+        let on = iface.powerOn()
+        let rssi = iface.rssiValue()
+        let connected = on && rssi != 0
+        // Rough bars from the signal, the way the menu bar draws them.
+        let bars = !connected ? 0 : rssi >= -60 ? 3 : rssi >= -70 ? 2 : 1
+        return ["on": on, "connected": connected, "bars": bars]
+    }
+
+    func setWifi(_ on: Bool) -> String? {
+        guard let iface = wifiClient.interface() else { return "this Mac has no Wi-Fi" }
+        do {
+            try iface.setPower(on)
+            return nil
+        } catch {
+            return "Wi-Fi didn't change"
+        }
+    }
+
+    func powerStateDidChangeForWiFiInterface(withName interfaceName: String) { changed() }
+    func linkDidChangeForWiFiInterface(withName interfaceName: String) { changed() }
+    func linkQualityDidChangeForWiFiInterface(withName interfaceName: String, rssi: Int, transmitRate: Double) { changed() }
+
+    // MARK: Battery
+
+    func battery() -> [String: Any]? {
+        guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] else { return nil }
+        for source in list {
+            guard let desc = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any],
+                  desc[kIOPSTypeKey] as? String == kIOPSInternalBatteryType,
+                  desc[kIOPSIsPresentKey] as? Bool != false else { continue }
+            let current = desc[kIOPSCurrentCapacityKey] as? Int ?? 0
+            let max = desc[kIOPSMaxCapacityKey] as? Int ?? 100
+            let charging = desc[kIOPSIsChargingKey] as? Bool ?? false
+            let plugged = desc[kIOPSPowerSourceStateKey] as? String == kIOPSACPowerValue
+            let minutes = (charging ? desc[kIOPSTimeToFullChargeKey] : desc[kIOPSTimeToEmptyKey]) as? Int ?? -1
+            let percent = max > 0 ? Int((Double(current) / Double(max) * 100).rounded()) : current
+            return ["percent": percent, "charging": charging, "plugged": plugged, "minutes": minutes]
+        }
+        return nil
+    }
+
+    // MARK: Commands
+
+    func readCommands() {
+        Thread.detachNewThread {
+            while let line = readLine(strippingNewline: true) {
+                DispatchQueue.main.async { self.handle(line) }
+            }
+            DispatchQueue.main.async { exit(0) }
+        }
+    }
+
+    func handle(_ line: String) {
+        guard let data = line.data(using: .utf8),
+              let command = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let name = command["cmd"] as? String else {
+            jsonLine(["type": "reply", "ok": false, "error": "not a command"])
+            return
+        }
+        var reply: [String: Any] = ["type": "reply", "cmd": name]
+        if let seq = command["seq"] { reply["seq"] = seq }
+        var error: String?
+        switch name {
+        case "setVolume": error = setVolume(command["level"] as? Double ?? 0)
+        case "setMuted": error = setMuted(command["muted"] as? Bool ?? false)
+        case "setWifi": error = setWifi(command["on"] as? Bool ?? true)
+        case "refresh": lastLine = ""
+        default: error = "unknown command"
+        }
+        reply["ok"] = error == nil
+        if let error { reply["error"] = error }
+        jsonLine(reply)
+        emit()
+    }
+}
+
+var statusWatcher: StatusWatcher?
+
 // MARK: - Entry
 
 let args = CommandLine.arguments
-let usage = "usage: startbar-helper icons <cacheDir> | startbar-helper windows"
+let usage = "usage: startbar-helper icons <cacheDir> | startbar-helper windows | startbar-helper status"
 guard args.count >= 2 else { fail(usage) }
 switch args[1] {
 case "icons":
@@ -562,6 +783,10 @@ case "icons":
 case "windows":
     let watcher = WindowWatcher()
     watcher.start()
+    RunLoop.main.run()
+case "status":
+    statusWatcher = StatusWatcher()
+    statusWatcher?.start()
     RunLoop.main.run()
 default:
     fail("unknown command \(args[1])")

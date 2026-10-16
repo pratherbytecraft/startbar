@@ -4,6 +4,8 @@
 (function () {
   const tasksEl = document.getElementById('tasks');
   const quickEl = document.querySelector('.quick');
+  const trayEl = document.getElementById('tray-icons');
+  let status = null;
   const clock = document.getElementById('clock');
   const timeEl = document.getElementById('time');
   const dateEl = document.getElementById('date');
@@ -54,6 +56,13 @@
       d.append(img);
       return d;
     }));
+    // The tray as the real bar has it, from the Mac's own reading.
+    trayEl.replaceChildren(...window.trayIcons.shown(state.settings, status).map((kind) => {
+      const s = document.createElement('span');
+      s.className = 'tray-icon';
+      s.innerHTML = window.trayIcons[kind](status[kind]);
+      return s;
+    }));
     const grouped = state.settings.taskbar.grouping === 'always';
     const list = [];
     for (const app of SAMPLE) {
@@ -77,6 +86,7 @@
     if (e.source !== window.parent || !e.data || !e.data.state) return;
     state = e.data.state;
     icons = e.data.icons || {};
+    status = e.data.status || null;
     window.applyTheme(state);
     render();
   });

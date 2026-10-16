@@ -25,6 +25,11 @@ const DEFAULTS = Object.freeze({
     autoHide: false, // hide the bar until the mouse reaches the bottom edge
     moveWindowsUp: true // macOS can't reserve the bar's space, so windows are nudged up off it
   },
+  tray: {
+    volume: true,
+    wifi: true, // shown when the Mac has Wi-Fi
+    battery: true // shown on laptops
+  },
   clock: {
     hour12: true,
     seconds: false,

@@ -7,6 +7,9 @@
   const dateEl = document.getElementById('date');
   const tasksEl = document.getElementById('tasks');
   const quickEl = document.getElementById('quick');
+  const trayEl = document.getElementById('tray-icons');
+  let status = { volume: null, wifi: null, battery: null };
+  let trayDrawn = '';
 
   // Narrowest a button with a label gets before windows are grouped or
   // labels drop.
@@ -34,6 +37,40 @@
     timeEl.textContent = text.time;
     dateEl.textContent = text.date;
     clock.classList.toggle('with-date', !!c.showDate);
+  }
+
+  // MARK: tray
+
+  function trayIcon(kind) {
+    const b = document.createElement('span');
+    b.className = 'tray-icon';
+    b.dataset.kind = kind;
+    b.innerHTML = window.trayIcons[kind](status[kind]);
+    b.addEventListener('click', () => {
+      hideTip();
+      api.trayClick(kind, rectOf(b));
+    });
+    b.addEventListener('mouseenter', () => {
+      clearTimeout(tipTimer);
+      tipTimer = setTimeout(() => status[kind] && api.showTip({ text: window.trayIcons.tip(kind, status[kind]), rect: rectOf(b) }), 500);
+    });
+    b.addEventListener('mouseleave', hideTip);
+    return b;
+  }
+
+  // Redrawn only when an icon would look different.
+  function renderTray() {
+    if (!state) return;
+    const kinds = window.trayIcons.shown(state.settings, status);
+    const key = JSON.stringify(kinds.map((k) => window.trayIcons[k](status[k])));
+    if (key === trayDrawn) return;
+    trayDrawn = key;
+    trayEl.replaceChildren(...kinds.map(trayIcon));
+  }
+
+  function applyStatus(next) {
+    status = next || status;
+    renderTray();
   }
 
   // The full date in our tooltip on hover, whatever the click does.
@@ -295,6 +332,7 @@
     window.applyTheme(state);
     tick();
     renderPins();
+    renderTray();
     renderTasks();
   }
 
@@ -302,6 +340,8 @@
   api.getState().then(apply);
   api.onState(apply);
   api.getTasks().then(applyTasks);
+  api.getStatus().then(applyStatus);
+  api.onStatus(applyStatus);
   api.onTasks(applyTasks);
   setInterval(tick, 1000);
 })();

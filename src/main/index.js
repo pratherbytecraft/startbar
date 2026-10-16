@@ -16,6 +16,7 @@ const pins = require('./pins');
 const dock = require('./dock');
 const files = require('./files');
 const updates = require('./updates');
+const status = require('./status');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
@@ -540,6 +541,28 @@ function wireIpc() {
     else if (action === 'app') shell.openPath('/System/Applications/Calendar.app');
   });
   ipcMain.on('calendar:size', (_e, size) => windows.sizeCalendar(size));
+  ipcMain.handle('status:get', () => status.get());
+  ipcMain.on('tray:click', (_e, { kind, rect }) => {
+    if (['volume', 'wifi', 'battery'].includes(kind)) windows.togglePopover(kind, rect);
+  });
+  ipcMain.on('tray:command', (_e, command) => {
+    if (!command) return;
+    if (command.cmd === 'setVolume') status.send({ cmd: 'setVolume', level: Math.max(0, Math.min(1, Number(command.level) || 0)) });
+    if (command.cmd === 'setMuted') status.send({ cmd: 'setMuted', muted: !!command.muted });
+    if (command.cmd === 'setWifi') status.send({ cmd: 'setWifi', on: !!command.on });
+  });
+  ipcMain.on('tray:settings', (_e, name) => {
+    const panes = {
+      volume: 'x-apple.systempreferences:com.apple.Sound-Settings.extension',
+      wifi: 'x-apple.systempreferences:com.apple.wifi-settings-extension',
+      battery: 'x-apple.systempreferences:com.apple.Battery-Settings.extension'
+    };
+    if (!panes[name]) return;
+    windows.hidePopover();
+    shell.openExternal(panes[name]);
+  });
+  ipcMain.on('popover:size', (_e, size) => windows.sizePopover(size));
+  ipcMain.on('popover:hide', () => windows.hidePopover());
   ipcMain.on('calendar:hide', () => windows.hideCalendar());
 }
 
@@ -554,6 +577,7 @@ app.whenReady().then(() => {
   windows.createTip();
   windows.createGroup(settings.get());
   windows.createCalendar(settings.get());
+  windows.createPopover(settings.get());
   registerShortcut();
   updateTray();
   windows.onBarVisibility(() => {
@@ -568,6 +592,8 @@ app.whenReady().then(() => {
   });
   updateKeepOff();
   tasks.start();
+  status.onChange((s) => windows.broadcast('status', s));
+  status.start();
 
   settings.onChange((s) => {
     applyAppearance();
@@ -592,4 +618,5 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => app.quit());
 app.on('will-quit', () => tasks.stop());
+app.on('will-quit', () => status.stop());
 app.on('will-quit', () => globalShortcut.unregisterAll());

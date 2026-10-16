@@ -12,6 +12,7 @@
   let page = 'appearance';
   let syncs = []; // functions that refresh the drawn controls from the settings
   const previewIcons = {};
+  let trayStatus = null; // volume, Wi-Fi and battery, for the preview's tray
 
   const ICONS = {
     appearance: '<circle cx="8" cy="8" r="6"/><path d="M8 2v12M2 8h12"/>',
@@ -153,6 +154,14 @@
               control: { type: 'select', key: 'clock.dateStyle', options: ['short', 'weekday', 'numeric', 'dayFirst'].map((v) => [v, window.dateText(new Date(), v)]) } },
             { label: 'Clicking the clock opens', note: 'Hovering always shows the full date.',
               control: { type: 'select', key: 'clock.click', options: [['calendar', 'A small calendar'], ['app', 'The Calendar app'], ['nothing', 'Nothing']] } }
+          ]
+        },
+        {
+          title: 'Tray',
+          rows: [
+            { label: 'Volume', control: { type: 'toggle', key: 'tray.volume' } },
+            { label: 'Wi-Fi', note: 'Shown when the Mac has Wi-Fi.', control: { type: 'toggle', key: 'tray.wifi' } },
+            { label: 'Battery', note: 'Shown on laptops only.', control: { type: 'toggle', key: 'tray.battery' } }
           ]
         }
       ],
@@ -639,7 +648,7 @@
 
   function pushPreview() {
     if (!state || !pv.contentWindow) return;
-    pv.contentWindow.postMessage({ state, icons: previewIcons }, '*');
+    pv.contentWindow.postMessage({ state, icons: previewIcons, status: trayStatus }, '*');
   }
 
   // Icons for the sample apps and the pins, fetched once each.
@@ -695,5 +704,11 @@
     if (changed && state) syncs.forEach((fn) => fn());
   };
   api.getTasks().then(applyTasks);
+  const applyStatus = (s) => {
+    trayStatus = s;
+    pushPreview();
+  };
+  api.getStatus().then(applyStatus);
+  api.onStatus(applyStatus);
   api.onTasks(applyTasks);
 })();

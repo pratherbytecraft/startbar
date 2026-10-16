@@ -9,6 +9,7 @@ const MENU_HEIGHT = 500;
 const MENU_GAP = 8;
 const GROUP_WIDTH = 300;
 const CALENDAR_WIDTH = 252;
+const POPOVER_WIDTH = 260;
 const TIP_MARGIN = 8; // room around the tooltip for its shadow
 const EDGE = 2; // auto hide: how close to the bottom the mouse has to get
 const LEAVE_DELAY = 600; // auto hide: how long the bar stays after the mouse leaves
@@ -27,6 +28,9 @@ let lastGroupHide = { pid: null, at: 0 };
 let calendar = null;
 let calendarAnchor = null; // the clock, in bar coordinates
 let lastCalendarHide = 0;
+let popover = null;
+let popoverAnchor = null; // { kind, rect } of the tray icon it belongs to
+let lastPopoverHide = { kind: null, at: 0 };
 let theme = 'system';
 let settingsWin = null;
 let barHidden = false; // Hide the Bar, for this session only
@@ -180,6 +184,34 @@ function createGroup(settings) {
   return group;
 }
 
+// The tray's volume, Wi-Fi and battery panels share one window.
+function createPopover(settings) {
+  popover = new BrowserWindow({
+    width: POPOVER_WIDTH,
+    height: 120,
+    frame: false,
+    transparent: true,
+    hasShadow: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    acceptFirstMouse: true,
+    skipTaskbar: true,
+    show: false,
+    vibrancy: vibrancyFor(settings),
+    visualEffectState: 'active',
+    webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true }
+  });
+  popover.setAlwaysOnTop(true, 'pop-up-menu');
+  onAllSpaces(popover);
+  popover.loadFile(renderer('popover'));
+  popover.on('blur', () => hidePopover());
+  popover.on('closed', () => { popover = null; });
+  return popover;
+}
+
 // The small calendar above the clock.
 function createCalendar(settings) {
   calendar = new BrowserWindow({
@@ -299,6 +331,38 @@ function hideCalendar() {
   syncBar();
 }
 
+// A click on a tray icon opens its panel, or closes it when it's the one open.
+function togglePopover(kind, rect) {
+  if (!popover || !bar) return;
+  const same = popoverAnchor && popoverAnchor.kind === kind;
+  if (popover.isVisible() && same) return hidePopover();
+  if (lastPopoverHide.kind === kind && Date.now() - lastPopoverHide.at < 250) return;
+  popoverAnchor = { kind, rect };
+  popover.webContents.send('popover:show', kind);
+}
+
+// The panel laid out its content. Open it above the icon, centered on it.
+function sizePopover({ height }) {
+  if (!popover || !bar || !popoverAnchor) return;
+  const b = bar.getBounds();
+  const gap = theme === 'classic-2001' ? 0 : MENU_GAP;
+  const { rect } = popoverAnchor;
+  const x = clampX(b.x + rect.x + rect.width / 2 - POPOVER_WIDTH / 2, POPOVER_WIDTH);
+  popover.setBounds({ x, y: b.y - height - gap, width: POPOVER_WIDTH, height });
+  if (!popover.isVisible()) {
+    popover.show();
+    popover.focus();
+  }
+}
+
+function hidePopover() {
+  if (!popover || !popover.isVisible()) return;
+  lastPopoverHide = { kind: popoverAnchor && popoverAnchor.kind, at: Date.now() };
+  popoverAnchor = null;
+  popover.hide();
+  syncBar();
+}
+
 // MARK: showing and hiding the bar
 
 // Hide the Bar wins, then a full screen app when the bar hides for those.
@@ -308,7 +372,7 @@ function hideCalendar() {
 function barWanted() {
   if (barHidden || (fullScreenUp && !overFullScreen)) return false;
   if (!autoHide) return true;
-  return peek || holds > 0 || [menu, group, calendar].some((w) => w && w.isVisible());
+  return peek || holds > 0 || [menu, group, calendar, popover].some((w) => w && w.isVisible());
 }
 
 function syncBar() {
@@ -396,9 +460,11 @@ function layout(settings) {
   }
   if (group) group.setVibrancy(vibrancyFor(settings));
   if (calendar) calendar.setVibrancy(vibrancyFor(settings));
+  if (popover) popover.setVibrancy(vibrancyFor(settings));
   hideTip();
   hideGroup();
   hideCalendar();
+  hidePopover();
 }
 
 function hideBar() {
@@ -408,6 +474,7 @@ function hideBar() {
   hideTip();
   hideGroup();
   hideCalendar();
+  hidePopover();
   syncBar();
   for (const fn of visibility) fn(true);
 }
@@ -491,14 +558,15 @@ function showSettings(onClosed, page) {
 }
 
 function broadcast(channel, payload) {
-  for (const w of [bar, menu, tip, group, calendar, settingsWin]) {
+  for (const w of [bar, menu, tip, group, calendar, popover, settingsWin]) {
     if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
   }
 }
 
 module.exports = {
-  createBar, createMenu, createTip, createGroup, createCalendar, layout, showMenu, hideMenu, toggleMenu,
-  showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, toggleCalendar, sizeCalendar, hideCalendar, broadcast,
+  createBar, createMenu, createTip, createGroup, createCalendar, createPopover, layout, showMenu, hideMenu, toggleMenu,
+  showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, toggleCalendar, sizeCalendar, hideCalendar,
+  togglePopover, sizePopover, hidePopover, broadcast,
   hideBar, showBar, onBarVisibility, holdBar, setFullScreenUp, showSettings,
   get bar() { return bar; },
   get barHidden() { return barHidden; },
