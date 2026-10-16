@@ -32,10 +32,30 @@ app.on('second-instance', () => {
   windows.showMenu();
 });
 
+// When Startbar opens itself to come forward (see bringForward), that's
+// not a reopen from Spotlight, so no Start menu.
+let selfOpenAt = 0;
+
 app.on('activate', () => {
+  if (Date.now() - selfOpenAt < 3000) {
+    if (windows.settings) windows.settings.focus();
+    return;
+  }
   // Startbar.app opened again from Spotlight, the Start menu or `startbar`.
   if (app.isReady()) windows.showMenu();
 });
+
+// Since macOS 14 an app's own request to come forward can be turned down
+// while another app is in front, which left the settings window behind
+// it. Opening Startbar.app through Launch Services is allowed, as it is
+// for the window helper's clicks.
+function bringForward() {
+  app.focus({ steal: true });
+  const bundle = process.execPath.replace(/\/Contents\/MacOS\/[^/]+$/, '');
+  if (!bundle.endsWith('.app')) return;
+  selfOpenAt = Date.now();
+  execFile('open', ['-a', bundle]);
+}
 
 function userName() {
   try {
@@ -137,13 +157,16 @@ function openSettings(page) {
   const win = windows.showSettings(() => app.setActivationPolicy('accessory'), typeof page === 'string' ? page : undefined);
   // The Dock, the login item and the permissions may have changed in System Settings.
   if (fresh) {
+    // A new window can show before the switch to a regular app has taken,
+    // when the first ask to come forward goes nowhere, so ask again.
+    win.once('ready-to-show', bringForward);
     win.on('focus', () => {
       refreshDock();
       status.send({ cmd: 'access' });
       checkScreen();
     });
   }
-  app.focus({ steal: true });
+  bringForward();
   refreshDock();
   status.send({ cmd: 'access' });
   checkScreen();
