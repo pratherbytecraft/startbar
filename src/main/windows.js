@@ -203,6 +203,10 @@ function createMenu(settings) {
   popupsClassic = isClassic(settings);
   menu = new BrowserWindow({
     ...menuBounds(settings, mainBar()),
+    // A non-activating panel takes typing without making Startbar the
+    // active app, which macOS doesn't always allow, so the search box gets
+    // the keys while the app in front stays in front.
+    type: 'panel',
     frame: false,
     transparent: true,
     hasShadow: true,
