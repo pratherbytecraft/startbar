@@ -68,6 +68,8 @@ Open Startbar Settings from the Start menu or by right clicking the bar. Everyth
 
 ![Startbar Settings](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/settings-appearance.png)
 
+With [Filedrawer](https://github.com/pratherbytecraft/filedrawer) installed, the General page can open the Start menu's folders in Filedrawer instead of Finder.
+
 Right click an empty part of the bar to hide it. While the bar is hidden, a Startbar icon sits in the menu bar. Click it, press Control Space or open Startbar again to bring the bar back.
 
 ## Updates
