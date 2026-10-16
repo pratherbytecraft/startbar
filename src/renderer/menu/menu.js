@@ -132,6 +132,12 @@
       head.className = 'list-head';
       head.textContent = 'Files';
       listEl.append(head, ...files.map(fileItem));
+    } else if (searching && filesPending) {
+      // Spotlight can take a few seconds, the first search after launch most of all.
+      const head = document.createElement('div');
+      head.className = 'list-head';
+      head.textContent = 'Searching files…';
+      listEl.append(head);
     }
     if ((searching || showAll) && visible.length === 0 && files.length === 0 && !filesPending) {
       const e = document.createElement('div'); e.className = 'empty'; e.textContent = searching ? 'Nothing matches.' : 'No apps found.';
