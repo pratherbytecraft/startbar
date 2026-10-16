@@ -8,6 +8,7 @@ const MENU_WIDTH = 420;
 const MENU_HEIGHT = 500;
 const MENU_GAP = 8;
 const GROUP_WIDTH = 300;
+const CALENDAR_WIDTH = 252;
 const TIP_MARGIN = 8; // room around the tooltip for its shadow
 const EDGE = 2; // auto hide: how close to the bottom the mouse has to get
 const LEAVE_DELAY = 600; // auto hide: how long the bar stays after the mouse leaves
@@ -23,6 +24,9 @@ let tipAnchor = null; // the hovered button, in bar coordinates
 let group = null;
 let groupAnchor = null; // { pid, rect } of the group button the list belongs to
 let lastGroupHide = { pid: null, at: 0 };
+let calendar = null;
+let calendarAnchor = null; // the clock, in bar coordinates
+let lastCalendarHide = 0;
 let theme = 'system';
 let settingsWin = null;
 let barHidden = false; // Hide the Bar, for this session only
@@ -176,6 +180,34 @@ function createGroup(settings) {
   return group;
 }
 
+// The small calendar above the clock.
+function createCalendar(settings) {
+  calendar = new BrowserWindow({
+    width: CALENDAR_WIDTH,
+    height: 280,
+    frame: false,
+    transparent: true,
+    hasShadow: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    acceptFirstMouse: true,
+    skipTaskbar: true,
+    show: false,
+    vibrancy: vibrancyFor(settings),
+    visualEffectState: 'active',
+    webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true }
+  });
+  calendar.setAlwaysOnTop(true, 'pop-up-menu');
+  onAllSpaces(calendar);
+  calendar.loadFile(renderer('calendar'));
+  calendar.on('blur', () => hideCalendar());
+  calendar.on('closed', () => { calendar = null; });
+  return calendar;
+}
+
 // Keeps a window of this width inside the display the bar is on.
 function clampX(x, width) {
   const { bounds } = screen.getPrimaryDisplay();
@@ -235,16 +267,48 @@ function hideGroup() {
   syncBar();
 }
 
+function toggleCalendar(rect) {
+  if (!calendar || !bar) return;
+  if (calendar.isVisible()) return hideCalendar();
+  // When a click on the clock does blur the calendar, that hides it first.
+  // Treat that click as "close" too.
+  if (Date.now() - lastCalendarHide < 250) return;
+  calendarAnchor = rect;
+  calendar.webContents.send('calendar:show');
+}
+
+// The calendar laid out this month. Open it above the clock, lined up with
+// its right edge.
+function sizeCalendar({ height }) {
+  if (!calendar || !bar || !calendarAnchor) return;
+  const b = bar.getBounds();
+  const gap = theme === 'classic-2001' ? 0 : MENU_GAP;
+  const x = clampX(b.x + calendarAnchor.x + calendarAnchor.width - CALENDAR_WIDTH, CALENDAR_WIDTH);
+  calendar.setBounds({ x, y: b.y - height - gap, width: CALENDAR_WIDTH, height });
+  if (!calendar.isVisible()) {
+    calendar.show();
+    calendar.focus();
+  }
+}
+
+function hideCalendar() {
+  if (!calendar || !calendar.isVisible()) return;
+  lastCalendarHide = Date.now();
+  calendarAnchor = null;
+  calendar.hide();
+  syncBar();
+}
+
 // MARK: showing and hiding the bar
 
 // Hide the Bar wins, then a full screen app when the bar hides for those.
 // With auto hide on, the bar shows while the mouse is at the edge or on it,
-// or while the Start menu, a group list or one of the bar's right click
-// menus is open.
+// or while the Start menu, a group list, the calendar or one of the bar's
+// right click menus is open.
 function barWanted() {
   if (barHidden || (fullScreenUp && !overFullScreen)) return false;
   if (!autoHide) return true;
-  return peek || holds > 0 || !!(menu && menu.isVisible()) || !!(group && group.isVisible());
+  return peek || holds > 0 || [menu, group, calendar].some((w) => w && w.isVisible());
 }
 
 function syncBar() {
@@ -331,8 +395,10 @@ function layout(settings) {
     menu.setVibrancy(vibrancyFor(settings));
   }
   if (group) group.setVibrancy(vibrancyFor(settings));
+  if (calendar) calendar.setVibrancy(vibrancyFor(settings));
   hideTip();
   hideGroup();
+  hideCalendar();
 }
 
 function hideBar() {
@@ -341,6 +407,7 @@ function hideBar() {
   hideMenu();
   hideTip();
   hideGroup();
+  hideCalendar();
   syncBar();
   for (const fn of visibility) fn(true);
 }
@@ -423,14 +490,14 @@ function showSettings(onClosed) {
 }
 
 function broadcast(channel, payload) {
-  for (const w of [bar, menu, tip, group, settingsWin]) {
+  for (const w of [bar, menu, tip, group, calendar, settingsWin]) {
     if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
   }
 }
 
 module.exports = {
-  createBar, createMenu, createTip, createGroup, layout, showMenu, hideMenu, toggleMenu,
-  showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, broadcast,
+  createBar, createMenu, createTip, createGroup, createCalendar, layout, showMenu, hideMenu, toggleMenu,
+  showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, toggleCalendar, sizeCalendar, hideCalendar, broadcast,
   hideBar, showBar, onBarVisibility, holdBar, setFullScreenUp, showSettings,
   get bar() { return bar; },
   get barHidden() { return barHidden; },

@@ -452,6 +452,13 @@ function wireIpc() {
   ipcMain.on('group:show', (_e, payload) => windows.showGroup(payload));
   ipcMain.on('group:size', (_e, size) => windows.sizeGroup(size));
   ipcMain.on('group:hide', () => windows.hideGroup());
+  ipcMain.on('clock:click', (_e, rect) => {
+    const action = settings.get().clock.click;
+    if (action === 'calendar') windows.toggleCalendar(rect);
+    else if (action === 'app') shell.openPath('/System/Applications/Calendar.app');
+  });
+  ipcMain.on('calendar:size', (_e, size) => windows.sizeCalendar(size));
+  ipcMain.on('calendar:hide', () => windows.hideCalendar());
 }
 
 app.whenReady().then(() => {
@@ -464,6 +471,7 @@ app.whenReady().then(() => {
   windows.createMenu(settings.get());
   windows.createTip();
   windows.createGroup(settings.get());
+  windows.createCalendar(settings.get());
   registerShortcut();
   updateTray();
   windows.onBarVisibility(() => {

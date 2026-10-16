@@ -34,8 +34,18 @@
     timeEl.textContent = text.time;
     dateEl.textContent = text.date;
     clock.classList.toggle('with-date', !!c.showDate);
-    clock.title = text.full;
   }
+
+  // The full date in our tooltip on hover, whatever the click does.
+  clock.addEventListener('mouseenter', () => {
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => api.showTip({ text: window.clockText(new Date(), state.settings.clock).full, rect: rectOf(clock) }), 500);
+  });
+  clock.addEventListener('mouseleave', () => hideTip());
+  clock.addEventListener('click', () => {
+    hideTip();
+    api.clockClick(rectOf(clock));
+  });
 
   function fetchIcons(paths) {
     const missing = paths.filter((p) => p && !asked.has(p));

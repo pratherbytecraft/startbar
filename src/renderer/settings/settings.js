@@ -150,7 +150,9 @@
             { label: 'Show seconds', control: { type: 'toggle', key: 'clock.seconds' } },
             { label: 'Show the date under the time', control: { type: 'toggle', key: 'clock.showDate' } },
             { label: 'Date style',
-              control: { type: 'select', key: 'clock.dateStyle', options: ['short', 'weekday', 'numeric', 'dayFirst'].map((v) => [v, window.dateText(new Date(), v)]) } }
+              control: { type: 'select', key: 'clock.dateStyle', options: ['short', 'weekday', 'numeric', 'dayFirst'].map((v) => [v, window.dateText(new Date(), v)]) } },
+            { label: 'Clicking the clock opens', note: 'Hovering always shows the full date.',
+              control: { type: 'select', key: 'clock.click', options: [['calendar', 'A small calendar'], ['app', 'The Calendar app'], ['nothing', 'Nothing']] } }
           ]
         }
       ],

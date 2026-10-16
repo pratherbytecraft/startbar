@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'">
+<title>Calendar</title>
+<link rel="stylesheet" href="../themes/base.css">
+<link rel="stylesheet" href="../themes/system.css" id="theme-css">
+</head>
+<body>
+<div class="menu calendar" id="cal">
+  <div class="cal-head">
+    <span class="cal-nav" id="prev" title="Previous month">&#8249;</span>
+    <span class="cal-title" id="title"></span>
+    <span class="cal-nav" id="next" title="Next month">&#8250;</span>
+  </div>
+  <div class="cal-grid" id="names"></div>
+  <div class="cal-grid" id="days"></div>
+  <div class="cal-foot" id="today"></div>
+</div>
+<script src="../shared/theme.js"></script>
+<script src="calendar.js"></script>
+</body>
+</html>

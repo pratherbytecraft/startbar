@@ -49,5 +49,9 @@ contextBridge.exposeInMainWorld('startbar', {
   showGroup: (group) => ipcRenderer.send('group:show', group),
   hideGroup: () => ipcRenderer.send('group:hide'),
   onGroupShow: on('group:show'),
-  groupSize: (size) => ipcRenderer.send('group:size', size)
+  groupSize: (size) => ipcRenderer.send('group:size', size),
+  clockClick: (rect) => ipcRenderer.send('clock:click', rect),
+  onCalendarShow: on('calendar:show'),
+  calendarSize: (size) => ipcRenderer.send('calendar:size', size),
+  hideCalendar: () => ipcRenderer.send('calendar:hide')
 });

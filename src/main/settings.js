@@ -29,7 +29,8 @@ const DEFAULTS = Object.freeze({
     hour12: true,
     seconds: false,
     showDate: false,
-    dateStyle: 'short' // short (Oct 18) | weekday (Sat, Oct 18) | numeric (10/18/26) | dayFirst (18 Oct)
+    dateStyle: 'short', // short (Oct 18) | weekday (Sat, Oct 18) | numeric (10/18/26) | dayFirst (18 Oct)
+    click: 'calendar' // calendar (a small one above the clock) | app (the Calendar app) | nothing
   },
   startMenu: {
     recentCount: 6,
