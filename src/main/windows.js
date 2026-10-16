@@ -334,8 +334,14 @@ function clampX(x, width, barWin) {
 // A popup anchored to a bar that has gone away has nothing to sit on.
 const liveBar = (barWin) => barWin && !barWin.isDestroyed() && entryOf(barWin) ? barWin : null;
 
+// A button whose own panel is open doesn't get a tooltip on top of it.
+function panelOpenAt(rect, barWin) {
+  return [[popover, popoverAnchor], [calendar, calendarAnchor], [group, groupAnchor]].some(([win, anchor]) =>
+    win && win.isVisible() && anchor && anchor.bar === barWin && anchor.rect.x === rect.x && anchor.rect.width === rect.width);
+}
+
 function showTip(text, rect, barWin) {
-  if (!tip || !liveBar(barWin)) return;
+  if (!tip || !liveBar(barWin) || panelOpenAt(rect, barWin)) return;
   tipAnchor = { rect, bar: barWin };
   tip.webContents.send('tip:text', text);
 }
