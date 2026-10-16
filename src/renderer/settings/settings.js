@@ -165,12 +165,12 @@
             { label: 'Volume', control: { type: 'toggle', key: 'tray.volume' } },
             { label: 'Wi-Fi', note: 'Shown when the Mac has Wi-Fi.', control: { type: 'toggle', key: 'tray.wifi' },
               hint: { when: (s) => s.permissions.location !== 'allowed', text: 'To see the network name, allow Location on the ', link: 'Permissions page', after: '.',
-                click: () => show('permissions') } },
+                click: () => openPage('permissions') } },
             { label: 'Battery', note: 'Shown on laptops only.', control: { type: 'toggle', key: 'tray.battery' } },
             { label: 'Bluetooth', note: 'Your devices, their battery and an on and off switch. Shown when the Mac has Bluetooth.',
               control: { type: 'toggle', key: 'tray.bluetooth' },
               hint: { when: (s) => s.permissions.bluetooth !== 'allowed', text: 'Needs the Bluetooth permission on the ', link: 'Permissions page', after: '.',
-                click: () => show('permissions') } },
+                click: () => openPage('permissions') } },
             { label: 'Show the collapse arrow', note: 'Hides the tray icons behind one click, like the original.',
               control: { type: 'toggle', key: 'tray.collapseArrow' } }
           ]
@@ -701,6 +701,13 @@
     contentEl.scrollTop = 0;
   }
 
+  // A page from a link or from the main process. Leaves search, like the sidebar does.
+  function openPage(id) {
+    if (!PAGES.some((p) => p.id === id)) return;
+    queryEl.value = '';
+    show(id);
+  }
+
   // Search shows every matching row, under its page's name.
   function search(q) {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -772,11 +779,7 @@
   const asked = location.hash.slice(1);
   if (PAGES.some((p) => p.id === asked)) page = asked;
   show(page);
-  api.onSettingsPage((id) => {
-    if (!PAGES.some((p) => p.id === id)) return;
-    queryEl.value = '';
-    show(id);
-  });
+  api.onSettingsPage(openPage);
   api.getState().then(apply);
   api.onState(apply);
   // The task list comes in a few times a second. Only the permission row uses it.
