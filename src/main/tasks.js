@@ -18,6 +18,7 @@ let seq = 0;
 let state = { accessibility: null, apps: [] };
 let keepOff = { cmd: 'keepOff', areas: [] }; // resent to every new helper
 let spaces = { cmd: 'spaces', all: false }; // this one too
+let rawApps = []; // the helper's list, before held back Finder windows come out
 
 // Apps that /Applications only links to (Safari, which lives in a system
 // folder since macOS 13) come from the helper at their real path. They're
@@ -60,7 +61,8 @@ function onLine(line) {
     // place instead of relying on a process that began without it.
     if (wasOff && msg.accessibility) restart();
   } else if (msg.type === 'state') {
-    update({ apps: msg.apps.map((a) => (linkedApps().has(a.path) ? { ...a, path: linkedApps().get(a.path) } : a)) });
+    rawApps = msg.apps.map((a) => (linkedApps().has(a.path) ? { ...a, path: linkedApps().get(a.path) } : a));
+    update({ apps: heldBack(rawApps) });
   } else if (msg.type === 'reply') {
     const resolve = pending.get(msg.seq);
     if (resolve) {
@@ -107,6 +109,40 @@ function restart() {
   child.kill();
 }
 
+// While Filedrawer opens Finder's folder windows as its own, a new Finder
+// window's button waits a second. The windows Filedrawer takes over close
+// before then and never flash on the bar; the ones it leaves to Finder show.
+const HOLD = 1000;
+let holdFinder = () => false;
+const finderSeen = new Map(); // window id -> when it was first listed
+let firstList = true;
+let holdTimer = null;
+
+function heldBack(apps) {
+  const now = Date.now();
+  const finder = apps.find((a) => a.bundleId === 'com.apple.finder');
+  const ids = new Set();
+  for (const w of finder ? finder.windows : []) {
+    ids.add(w.id);
+    // The windows open when Startbar starts aren't new.
+    if (!finderSeen.has(w.id)) finderSeen.set(w.id, firstList ? 0 : now);
+  }
+  for (const id of finderSeen.keys()) if (!ids.has(id)) finderSeen.delete(id);
+  firstList = false;
+  if (!finder || !holdFinder(apps)) return apps;
+  const young = finder.windows.filter((w) => now - finderSeen.get(w.id) < HOLD);
+  if (!young.length) return apps;
+  const oldest = Math.max(...young.map((w) => now - finderSeen.get(w.id)));
+  clearTimeout(holdTimer);
+  holdTimer = setTimeout(() => update({ apps: heldBack(rawApps) }), HOLD - oldest + 20);
+  return apps.map((a) => (a === finder ? { ...a, windows: a.windows.filter((w) => !young.includes(w)) } : a));
+}
+
+// fn(apps) says whether new Finder windows are held back right now.
+function setHoldFinder(fn) {
+  holdFinder = fn;
+}
+
 function stop() {
   stopping = true;
   if (child) child.kill();
@@ -149,6 +185,7 @@ module.exports = {
   start,
   setKeepOff,
   setSpaces,
+  setHoldFinder,
   stop,
   restart,
   send,

@@ -145,6 +145,25 @@ function filedrawerApp() {
   return found;
 }
 
+// Whether Filedrawer is running and opening Finder's folder windows as its
+// own (its takeOverFinder setting, on unless turned off). Its settings file
+// is read now and then, not on every redraw.
+let takeOverSeen = { at: 0, on: false };
+
+function filedrawerTakesFinder(apps) {
+  if (!apps.some((a) => a.bundleId === FILEDRAWER_ID)) return false;
+  if (Date.now() - takeOverSeen.at < 5 * 1000) return takeOverSeen.on;
+  let on = true;
+  try {
+    const file = path.join(os.homedir(), 'Library', 'Application Support', 'Filedrawer', 'settings.json');
+    on = JSON.parse(fs.readFileSync(file, 'utf8')).takeOverFinder !== false;
+  } catch {
+    // no settings saved yet, so it's on
+  }
+  takeOverSeen = { at: Date.now(), on };
+  return on;
+}
+
 // A folder from the Start menu opens in Filedrawer when that's picked and
 // installed, and in Finder otherwise. Apps and files open as usual.
 function openFolder(p) {
@@ -923,6 +942,7 @@ app.whenReady().then(() => {
   });
   updateKeepOff();
   tasks.setSpaces(settings.get().spaces.show === 'all');
+  tasks.setHoldFinder(filedrawerTakesFinder);
   tasks.start();
   status.onChange((s) => {
     windows.broadcast('status', s);
