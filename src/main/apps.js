@@ -144,6 +144,10 @@ function noteLaunch(appPath) {
   fs.writeFileSync(recentFile(), JSON.stringify(list.slice(0, 30), null, 2) + '\n');
 }
 
+function forgetRecent(appPath) {
+  fs.writeFileSync(recentFile(), JSON.stringify(readRecent().filter((p) => p !== appPath), null, 2) + '\n');
+}
+
 async function recent(count) {
   const all = await load();
   const byPath = new Map(all.map((a) => [a.path, a]));
@@ -153,4 +157,4 @@ async function recent(count) {
     .slice(0, count);
 }
 
-module.exports = { load, recent, noteLaunch, iconFor, icons };
+module.exports = { load, recent, noteLaunch, forgetRecent, iconFor, icons };

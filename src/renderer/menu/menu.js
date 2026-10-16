@@ -34,7 +34,7 @@
     shutdown: '<path d="M8 2.6v5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M4.9 4.6a4.6 4.6 0 1 0 6.2 0" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>'
   };
 
-  function appItem(a) {
+  function appItem(a, fromRecent) {
     const d = document.createElement('div');
     d.className = 'item';
     d.dataset.path = a.path;
@@ -48,7 +48,7 @@
     d.addEventListener('click', () => api.launch(a.path));
     d.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      api.appMenu(a.path);
+      api.appMenu(a.path, fromRecent);
     });
     return d;
   }
@@ -161,7 +161,7 @@
 
   async function renderRecent() {
     const list = await api.recent();
-    recentEl.replaceChildren(...list.map(appItem));
+    recentEl.replaceChildren(...list.map((a) => appItem(a, true)));
     recentHead.classList.toggle('hidden', list.length === 0);
     recentSep.classList.toggle('hidden', list.length === 0);
   }
@@ -172,7 +172,7 @@
     const q = searchEl.value.trim().toLowerCase();
     const searching = q.length > 0;
     const visible = searching ? allApps.filter((a) => a.name.toLowerCase().includes(q)) : (showAll ? allApps : []);
-    listEl.replaceChildren(...visible.map(appItem));
+    listEl.replaceChildren(...visible.map((a) => appItem(a)));
     if (searching && files.length) {
       const head = document.createElement('div');
       head.className = 'list-head';
@@ -292,4 +292,5 @@
   });
   api.onState(apply);
   api.onMenuShown(onShown);
+  api.onRecentChanged(() => renderRecent());
 })();

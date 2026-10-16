@@ -542,13 +542,19 @@ function showPinMenu(appPath, sender) {
 }
 
 // Right click on an app in the Start menu.
-function showAppMenu(appPath) {
+function showAppMenu(appPath, fromRecent) {
   if (!windows.menu || !pins.isApp(appPath)) return;
-  Menu.buildFromTemplate([
-    { label: 'Open', click: () => launchApp(appPath) },
-    { type: 'separator' },
-    pinItem(appPath)
-  ]).popup({ window: windows.menu });
+  const items = [{ label: 'Open', click: () => launchApp(appPath) }, { type: 'separator' }, pinItem(appPath)];
+  if (fromRecent) {
+    items.push({
+      label: 'Remove from Recent',
+      click: () => {
+        apps.forgetRecent(appPath);
+        windows.menu.webContents.send('menu:recentChanged');
+      }
+    });
+  }
+  Menu.buildFromTemplate(items).popup({ window: windows.menu });
 }
 
 // Folders added to the Start menu's right column.
@@ -630,7 +636,7 @@ function wireIpc() {
   ipcMain.handle('menu:apps', () => apps.load());
   ipcMain.handle('menu:recent', () => (settings.get().startMenu.showRecent ? apps.recent(settings.get().startMenu.recentCount) : []));
   ipcMain.on('menu:launch', (_e, appPath) => launchApp(appPath));
-  ipcMain.on('menu:appMenu', (_e, appPath) => showAppMenu(appPath));
+  ipcMain.on('menu:appMenu', (_e, appPath, fromRecent) => showAppMenu(appPath, !!fromRecent));
   ipcMain.on('menu:open', (_e, target) => {
     windows.hideMenu();
     const home = os.homedir();
