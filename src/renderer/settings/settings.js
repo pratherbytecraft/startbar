@@ -27,6 +27,12 @@
 
   const SYSTEM_ONLY = { when: (s) => s.theme !== 'system', note: 'Not used by the classic themes.' };
   const GLASS = { when: (s) => s.theme !== 'system' && s.theme !== 'classic-2009', note: 'Not used by Classic 2001 and Classic 1995.' };
+  // The accent color shows in the System theme, and in a classic theme set
+  // to its System color scheme.
+  const ACCENT = {
+    when: (s) => s.theme !== 'system' && s.colors.scheme !== 'system' && !(s.theme === 'classic-2009' && s.colors.scheme === 'default'),
+    note: "Used by this theme's System color scheme."
+  };
 
   const PAGES = [
     {
@@ -39,7 +45,10 @@
               control: { type: 'select', key: 'theme', options: [['system', 'System'], ['classic-2009', 'Classic 2009'], ['classic-2001', 'Classic 2001'], ['classic-1995', 'Classic 1995']] } },
             { label: 'Appearance', systemOnly: true,
               control: { type: 'seg', key: 'appearance', options: [['auto', 'Follow Mac'], ['light', 'Light'], ['dark', 'Dark']] } },
-            { label: 'Accent color', note: 'Follows the accent set in System Settings, or pick one here.', unused: GLASS,
+            { label: 'Color scheme', note: 'The three color schemes this look came with, or System for your accent color and light or dark.',
+              showWhen: (s) => s.theme === 'classic-2001',
+              control: { type: 'select', key: 'colors.scheme', options: [['system', 'System'], ['blue', 'Blue'], ['olive', 'Olive Green'], ['silver', 'Silver']] } },
+            { label: 'Accent color', note: 'Follows the accent set in System Settings, or pick one here.', unused: ACCENT,
               control: { type: 'swatches', key: 'accent' } },
             { label: 'Translucent bar', note: 'Blurs whatever is behind the bar, like the menu bar.', unused: GLASS,
               control: { type: 'toggle', key: 'translucent' } }
@@ -623,6 +632,7 @@
       lbl.append(hint);
       syncs.push(() => hint.classList.toggle('hidden', !r.hint.when(state)));
     }
+    if (r.showWhen) syncs.push(() => rowEl.classList.toggle('hidden', !r.showWhen(state.settings)));
     const unusedIf = r.systemOnly ? SYSTEM_ONLY
       : r.onlyWith ? { when: (s) => !r.onlyWith.when(s), note: r.onlyWith.note } : r.unused;
     if (unusedIf) {

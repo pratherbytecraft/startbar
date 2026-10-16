@@ -102,6 +102,7 @@ const THEME_KEYS = [
 // A theme's own defaults over the shared ones, used the first time it's picked
 // and by its reset.
 const THEME_DEFAULTS = {
+  'classic-2001': { colors: { scheme: 'blue' } },
   'classic-2009': { barHeight: 40, labels: 'icons-only', taskbar: { pinsPlace: 'row', showDesktop: true }, clock: { showDate: true } }
 };
 
@@ -126,6 +127,13 @@ const THEME_SHAPE = pick(DEFAULTS);
 
 function themeDefaults(theme) {
   return merge(THEME_SHAPE, THEME_DEFAULTS[theme]);
+}
+
+// A color scheme saved before the theme had a list of them reads as the
+// theme's own default one.
+function withScheme(s) {
+  if (s.colors.scheme !== 'default') return s;
+  return merge(s, { colors: { scheme: themeDefaults(s.theme).colors.scheme } });
 }
 
 let dir;
@@ -155,7 +163,7 @@ function init() {
   }
   // A value of the wrong kind, from a hand-edited file say, falls back to
   // the default instead of being taken as it is ("false" would read as on).
-  current = merge(DEFAULTS, clean(saved, DEFAULTS));
+  current = withScheme(merge(DEFAULTS, clean(saved, DEFAULTS)));
   return current;
 }
 
@@ -182,7 +190,7 @@ function update(patch) {
     delete themes[patch.theme];
     current = merge({ ...current, themes }, own);
   }
-  current = merge(current, patch);
+  current = withScheme(merge(current, patch));
   return save();
 }
 
@@ -224,7 +232,7 @@ function clean(saved, base) {
 // time dialogs stay answered.
 function replace(saved) {
   const { accessibilityAsked, hideNoteShown, automationAnswer } = current;
-  current = merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, hideNoteShown, automationAnswer });
+  current = withScheme(merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, hideNoteShown, automationAnswer }));
   return save();
 }
 
