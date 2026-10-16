@@ -8,6 +8,7 @@ const settings = require('./settings');
 const system = require('./system');
 const apps = require('./apps');
 const windows = require('./windows');
+const tasks = require('./tasks');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
@@ -124,6 +125,8 @@ function wireIpc() {
     runPower(action);
   });
   ipcMain.handle('settings:update', (_e, patch) => settings.update(patch));
+  ipcMain.handle('tasks:get', () => tasks.get());
+  ipcMain.handle('tasks:command', (_e, command) => tasks.send(command));
 }
 
 app.whenReady().then(() => {
@@ -134,6 +137,8 @@ app.whenReady().then(() => {
   windows.createMenu(settings.get());
   registerShortcut();
   apps.load(); // warm the icon cache before the first click
+  tasks.onChange((t) => windows.broadcast('tasks', t));
+  tasks.start();
 
   settings.onChange((s) => {
     windows.layout(s);
@@ -147,4 +152,5 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => tasks.stop());
 app.on('will-quit', () => globalShortcut.unregisterAll());

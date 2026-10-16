@@ -18,5 +18,8 @@ contextBridge.exposeInMainWorld('startbar', {
   launch: (appPath) => ipcRenderer.send('menu:launch', appPath),
   open: (target) => ipcRenderer.send('menu:open', target),
   power: (action) => ipcRenderer.send('menu:power', action),
-  updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch)
+  updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
+  getTasks: () => ipcRenderer.invoke('tasks:get'),
+  onTasks: on('tasks'),
+  taskCommand: (command) => ipcRenderer.invoke('tasks:command', command)
 });
