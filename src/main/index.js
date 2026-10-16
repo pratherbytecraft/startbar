@@ -12,6 +12,7 @@ const tasks = require('./tasks');
 const access = require('./access');
 const tray = require('./tray');
 const pins = require('./pins');
+const dock = require('./dock');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
@@ -40,11 +41,13 @@ function userName() {
 }
 
 let shortcutError = null; // the Start menu shortcut couldn't be registered
+let dockStatus = null; // { autohide, position }, read when the settings window opens
 
 function state() {
   return {
     settings: settings.get(),
     pins: pins.get(),
+    dock: dockStatus,
     shortcutError,
     system: system.snapshot(),
     user: userName(),
@@ -86,8 +89,54 @@ function applyAppearance() {
 function openSettings() {
   windows.hideMenu();
   app.setActivationPolicy('regular');
-  windows.showSettings(() => app.setActivationPolicy('accessory'));
+  const fresh = !windows.settings;
+  const win = windows.showSettings(() => app.setActivationPolicy('accessory'));
+  if (fresh) win.on('focus', refreshDock); // the Dock may have changed in System Settings
   app.focus({ steal: true });
+  refreshDock();
+}
+
+async function refreshDock() {
+  dockStatus = await dock.status();
+  pushState();
+}
+
+async function setDockHidden(hide) {
+  if (hide) {
+    const { response } = await dialog.showMessageBox(windows.settings, {
+      type: 'question',
+      message: 'Hide the Dock?',
+      detail: 'The Dock will stay out of sight until the mouse reaches the bottom of the screen, the same as "Automatically hide and show the Dock" in System Settings. You can show it again here.',
+      buttons: ['Hide the Dock', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1
+    });
+    if (response !== 0) return;
+  }
+  const result = await dock.setAutohide(hide);
+  await refreshDock();
+  // The first time, macOS asks for the permission, and closing its prompt
+  // hands focus to the app that was in front before Startbar.
+  if (windows.settings) {
+    app.focus({ steal: true });
+    windows.settings.focus();
+  }
+  if (result === 'ok') return;
+  const { response } = await dialog.showMessageBox(windows.settings, {
+    type: 'warning',
+    message: result === 'notAllowed' ? "Startbar isn't allowed to change the Dock" : "The Dock didn't change",
+    detail: result === 'notAllowed'
+      ? 'Turn on System Events under Startbar in Privacy and Security, Automation, then try again. Or turn on "Automatically hide and show the Dock" in Desktop and Dock.'
+      : 'Try "Automatically hide and show the Dock" in System Settings, under Desktop and Dock.',
+    buttons: ['Open System Settings', 'OK'],
+    defaultId: 1,
+    cancelId: 1
+  });
+  if (response === 0) {
+    shell.openExternal(result === 'notAllowed'
+      ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation'
+      : 'x-apple.systempreferences:com.apple.Desktop-Settings.extension');
+  }
 }
 
 async function resetSettings() {
@@ -160,10 +209,12 @@ function toggleBar() {
   else hideBar();
 }
 
-// Tells the helper where the bar is so it can move windows up off it.
+// Tells the helper where the bar is so it can move windows up off it. Not
+// while the bar hides itself, since then windows can use the whole screen.
 function updateKeepOff() {
   const bar = windows.bar;
-  if (!bar || windows.barHidden || !settings.get().taskbar.moveWindowsUp) return tasks.setKeepOff(null);
+  const t = settings.get().taskbar;
+  if (!bar || windows.barHidden || t.autoHide || !t.moveWindowsUp) return tasks.setKeepOff(null);
   const { bounds, workArea } = screen.getPrimaryDisplay();
   tasks.setKeepOff({
     top: workArea.y,
@@ -183,16 +234,30 @@ function updateTray() {
   });
 }
 
+// A full screen window in front on the main display. The bar steps aside for
+// it unless the setting says otherwise.
+function fullScreenUp(t) {
+  const { bounds } = screen.getPrimaryDisplay();
+  const onMain = (w) => w.x >= bounds.x && w.x < bounds.x + bounds.width && w.y >= bounds.y && w.y < bounds.y + bounds.height;
+  return t.apps.some((a) => a.windows.some((w) => w.fullScreen && w.onScreen && onMain(w)));
+}
+
+// Menus that open from the bar keep an auto hidden bar up until they close.
+function popupOnBar(menu) {
+  if (!windows.bar) return;
+  menu.popup({ window: windows.bar, callback: windows.holdBar() });
+}
+
 // Right click on an empty part of the bar. Kept short: everything else lives
 // in the settings window.
 function showBarMenu() {
   if (!windows.bar) return;
-  Menu.buildFromTemplate([
+  popupOnBar(Menu.buildFromTemplate([
     { label: 'Hide the Bar', click: () => hideBar() },
     { label: 'Startbar Settings…', click: openSettings },
     { type: 'separator' },
     { label: 'Quit Startbar', click: () => app.quit() }
-  ]).popup({ window: windows.bar });
+  ]));
 }
 
 // The menu bar while one of Startbar's windows has focus (the Start menu, a
@@ -232,7 +297,7 @@ function pinItem(appPath) {
 // Right click on a pinned app.
 function showPinMenu(appPath) {
   if (!windows.bar || !pins.has(appPath)) return;
-  Menu.buildFromTemplate([pinItem(appPath)]).popup({ window: windows.bar });
+  popupOnBar(Menu.buildFromTemplate([pinItem(appPath)]));
 }
 
 // Right click on an app in the Start menu.
@@ -282,7 +347,7 @@ function showTaskMenu(target) {
   }
   if (pins.isApp(app.path)) items.push(pinItem(app.path), { type: 'separator' });
   items.push({ label: `Quit ${app.name}`, click: () => send('quitApp', { pid: app.pid }) });
-  Menu.buildFromTemplate(items).popup({ window: windows.bar });
+  popupOnBar(Menu.buildFromTemplate(items));
 }
 
 function wireIpc() {
@@ -329,6 +394,7 @@ function wireIpc() {
   ipcMain.on('pins:set', (_e, list) => pins.set(list));
   ipcMain.on('pins:remove', (_e, appPath) => pins.remove(appPath));
   ipcMain.on('pins:add', () => addPins());
+  ipcMain.on('dock:hidden', (_e, hide) => setDockHidden(!!hide));
   // The shortcut field records keys, so the global shortcut steps aside.
   ipcMain.on('shortcut:pause', () => globalShortcut.unregisterAll());
   ipcMain.on('shortcut:resume', () => {
@@ -365,6 +431,7 @@ app.whenReady().then(() => {
   });
   apps.load(); // warm the icon cache before the first click
   tasks.onChange((t) => {
+    windows.setFullScreenUp(fullScreenUp(t));
     windows.broadcast('tasks', t);
     access.check(t);
   });

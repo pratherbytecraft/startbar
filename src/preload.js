@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('startbar', {
   setPins: (list) => ipcRenderer.send('pins:set', list),
   unpin: (appPath) => ipcRenderer.send('pins:remove', appPath),
   addPins: () => ipcRenderer.send('pins:add'),
+  setDockHidden: (hide) => ipcRenderer.send('dock:hidden', hide),
   pauseShortcut: () => ipcRenderer.send('shortcut:pause'),
   resumeShortcut: () => ipcRenderer.send('shortcut:resume'),
   getTasks: () => ipcRenderer.invoke('tasks:get'),

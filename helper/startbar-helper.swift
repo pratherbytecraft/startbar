@@ -113,7 +113,7 @@ let axCallback: AXObserverCallback = { _, _, _, refcon in
 // Out, one JSON object per line:
 //   {"type":"permission","accessibility":true}
 //   {"type":"state","apps":[{"pid","name","bundleId","path","active","hidden",
-//     "windows":[{"id","order","title","minimized","focused","onScreen","x","y","w","h"}]}]}
+//     "windows":[{"id","order","title","minimized","focused","onScreen","fullScreen","x","y","w","h"}]}]}
 //     Regular apps only. Windows are standard windows and dialogs, empty
 //     without the permission. "order" counts up as windows are first seen,
 //     "focused" is the app's own focused window, "onScreen" is false for
@@ -331,6 +331,7 @@ final class WindowWatcher {
                 "minimized": axBool(window, kAXMinimizedAttribute),
                 "focused": focused.map { CFEqual($0, window) } ?? false,
                 "onScreen": onScreen,
+                "fullScreen": axBool(window, "AXFullScreen"),
                 "x": Int(frame?.origin.x ?? 0), "y": Int(frame?.origin.y ?? 0),
                 "w": Int(frame?.size.width ?? 0), "h": Int(frame?.size.height ?? 0)
             ])

@@ -22,7 +22,7 @@
     about: '<circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5v.5"/>'
   };
 
-  const SYSTEM_ONLY = 'Not used by Classic 2001.';
+  const SYSTEM_ONLY = { when: (s) => s.theme !== 'system', note: 'Not used by Classic 2001.' };
 
   const PAGES = [
     {
@@ -84,8 +84,14 @@
         {
           title: 'Bar behavior',
           rows: [
+            { label: 'Hide the bar when an app is full screen', control: { type: 'toggle', key: 'taskbar.hideInFullScreen' } },
+            { label: 'Hide the bar until the mouse reaches the bottom edge', note: 'The bar also comes up while the Start menu is open.',
+              control: { type: 'toggle', key: 'taskbar.autoHide' } },
             { label: 'Move windows up when they would cover the bar', note: "macOS can't reserve space for the bar, so Startbar nudges windows instead.",
+              unused: { when: (s) => s.taskbar.autoHide, note: 'Not used while the bar hides itself.' },
               control: { type: 'toggle', key: 'taskbar.moveWindowsUp' } },
+            { label: 'The Dock', note: 'The Dock and the bar share the bottom edge. Hiding the Dock is the usual setup.',
+              control: { type: 'dock' } },
             { label: 'Show Startbar in the menu bar', note: 'The menu bar icon brings a hidden bar back.',
               control: { type: 'select', key: 'menuBarIcon', options: [['hidden', 'Only while the bar is hidden'], ['always', 'Always']] } }
           ]
@@ -302,6 +308,28 @@
     return box;
   }
 
+  // Whether the Dock hides itself, with a button to change it. A Dock on
+  // the left or right doesn't share the bottom edge, so there's nothing to do.
+  function dock() {
+    const box = node('div', 'ctl-inner');
+    box.style.display = 'contents';
+    const status = node('span', 'status');
+    const dot = node('i');
+    const text = node('span');
+    status.append(dot, text);
+    const b = button({ text: '', click: () => state.dock && api.setDockHidden(!state.dock.autohide) });
+    syncs.push(() => {
+      const d = state.dock;
+      const side = d && d.position !== 'bottom';
+      dot.className = !d ? 'wait' : side || d.autohide ? '' : 'warn';
+      text.textContent = !d ? 'Checking' : side ? `The Dock is on the ${d.position}` : d.autohide ? 'The Dock hides itself' : 'The Dock is visible';
+      b.textContent = d && d.autohide ? 'Show the Dock' : 'Hide the Dock';
+      b.classList.toggle('hidden', !d || side);
+    });
+    box.append(status, b);
+    return box;
+  }
+
   // Keyboard shortcut field. Records the next key with at least one
   // modifier (function keys work alone) as an Electron accelerator.
   const SYMBOLS = { Control: '⌃', Alt: '⌥', Shift: '⇧', Command: '⌘' };
@@ -379,7 +407,7 @@
     return k;
   }
 
-  const CONTROLS = { toggle, seg, select, swatches, range, stepper, button, accessibility, shortcut };
+  const CONTROLS = { toggle, seg, select, swatches, range, stepper, button, accessibility, dock, shortcut };
 
   // The pinned apps, one row each, drag to reorder.
   const appName = (p) => p.split('/').pop().replace(/\.app$/, '');
@@ -427,11 +455,12 @@
     const ctl = node('div', 'ctl');
     rowEl.append(lbl, ctl);
     ctl.append(CONTROLS[r.control.type](r.control, rowEl));
-    if (r.systemOnly) {
-      const note = node('small', 'unused-note hidden', SYSTEM_ONLY);
+    const unusedIf = r.systemOnly ? SYSTEM_ONLY : r.unused;
+    if (unusedIf) {
+      const note = node('small', 'unused-note hidden', unusedIf.note);
       lbl.append(note);
       syncs.push(() => {
-        const unused = state.settings.theme !== 'system';
+        const unused = unusedIf.when(state.settings);
         rowEl.classList.toggle('unused', unused);
         note.classList.toggle('hidden', !unused);
       });
