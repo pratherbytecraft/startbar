@@ -15,6 +15,7 @@ svg { display: block; }
 .bar { position: absolute; inset: 0; display: flex; align-items: stretch; }
 .start { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .start svg { width: 16px; height: 16px; }
+.start .badge { display: none; } /* the app icon, shown by the System theme */
 .quick { display: flex; align-items: center; gap: 2px; padding: 0 2px; }
 .quick:empty, .quick:empty + .grip { display: none; }
 .quick .icon { display: grid; place-items: center; }

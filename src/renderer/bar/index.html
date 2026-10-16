@@ -10,10 +10,20 @@
 <body>
 <div class="bar">
   <div class="start" id="start">
-    <svg viewBox="0 0 20 20" aria-hidden="true">
+    <svg class="glyph" viewBox="0 0 20 20" aria-hidden="true">
       <rect class="glyph-fill" x="2" y="3" width="16" height="14" rx="2"/>
       <rect class="glyph-ink" x="4.5" y="9" width="11" height="1.6" rx=".8"/>
       <rect class="glyph-ink" x="4.5" y="12.2" width="7" height="1.6" rx=".8"/>
+    </svg>
+    <svg class="badge" viewBox="0 0 120 120" aria-hidden="true">
+    <defs>
+    <linearGradient id="badge-ring" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="120" y2="120"><stop offset="0%" stop-color="#9fa8ff"/><stop offset="55%" stop-color="#5865F2"/><stop offset="100%" stop-color="#4c46d6"/></linearGradient>
+    <linearGradient id="badge-go" gradientUnits="userSpaceOnUse" x1="0" y1="44" x2="0" y2="76"><stop offset="0%" stop-color="#b6f47a"/><stop offset="100%" stop-color="#2fae57"/></linearGradient>
+    </defs>
+    <circle cx="60" cy="60" r="54" fill="#0b0e1a" stroke="url(#badge-ring)" stroke-width="6"/>
+    <rect x="22" y="44" width="76" height="32" rx="16" fill="url(#badge-go)"/>
+    <circle cx="40" cy="60" r="8" fill="#0b0e1a"/>
+    <path d="M52 55 H84 M52 65 H74" stroke="#0b0e1a" stroke-width="5" stroke-linecap="round"/>
     </svg>
     <span>Start</span>
   </div>

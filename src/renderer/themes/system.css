@@ -28,23 +28,19 @@ body { color: var(--text); }
 .bar { background: var(--surface); border-top: 1px solid var(--line); }
 [data-translucent="off"] .bar { background: var(--surface-solid); }
 
-/* the round Start button, in the accent color, sized to the bar */
+/* the round Start button is Startbar's own badge, sized to the bar */
 .start {
   align-self: center; width: calc(var(--bar-h) - 6px); height: calc(var(--bar-h) - 6px); flex: none;
   margin: 0 8px 0 6px; padding: 0; justify-content: center; border-radius: 50%;
-  background:
-    radial-gradient(ellipse 60% 38% at 50% 24%, rgba(255, 255, 255, .55) 0, rgba(255, 255, 255, .06) 96%, transparent 100%),
-    radial-gradient(circle at 50% 85%, color-mix(in srgb, var(--accent) 55%, #fff) 0, var(--accent) 45%, color-mix(in srgb, var(--accent) 55%, #000) 100%);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
 }
-.start:hover, .start.hot { filter: brightness(1.12); box-shadow: 0 1px 3px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .4), 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent); }
+.start:hover, .start.hot { filter: brightness(1.15); box-shadow: 0 1px 3px rgba(0, 0, 0, .35), 0 0 10px rgba(126, 224, 106, .55); }
 .start.open { filter: brightness(.85); }
-.start span { display: none; }
-.start svg { width: 50%; height: 50%; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
-.start .glyph-fill { fill: #fff; }
-.start .glyph-ink { fill: color-mix(in srgb, var(--accent) 70%, #000); }
+.start span, .start .glyph { display: none; }
+.start .badge { display: block; width: 100%; height: 100%; }
 
-.quick .icon { width: calc(var(--bar-h) - 10px); height: calc(var(--bar-h) - 10px); border-radius: 6px; }
+.quick .icon { width: calc(var(--bar-h) - 6px); height: calc(var(--bar-h) - 6px); border-radius: 7px; }
+.quick .icon img { width: calc(var(--bar-h) - 12px); height: calc(var(--bar-h) - 12px); }
 .quick .icon:hover { background: var(--fill-hover); }
 .grip { width: 1px; height: calc(var(--bar-h) - 16px); margin: 0 6px; background: var(--line); }
 
