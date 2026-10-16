@@ -3,6 +3,8 @@
 // it stops. The bar draws its buttons from this list.
 const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
+const fs = require('fs');
+const path = require('path');
 const readline = require('readline');
 const { helperPath } = require('../../scripts/build-helper');
 
@@ -16,6 +18,25 @@ let seq = 0;
 let state = { accessibility: null, apps: [] };
 let keepOff = { cmd: 'keepOff', areas: [] }; // resent to every new helper
 let spaces = { cmd: 'spaces', all: false }; // this one too
+
+// Apps that /Applications only links to (Safari, which lives in a system
+// folder since macOS 13) come from the helper at their real path. They're
+// given the link's path, the one the Start menu and the pins use.
+let links = null;
+function linkedApps() {
+  if (links) return links;
+  links = new Map();
+  try {
+    for (const name of fs.readdirSync('/Applications')) {
+      if (!name.endsWith('.app')) continue;
+      const p = path.join('/Applications', name);
+      try {
+        if (fs.lstatSync(p).isSymbolicLink()) links.set(fs.realpathSync(p), p);
+      } catch {}
+    }
+  } catch {}
+  return links;
+}
 
 function update(patch) {
   state = { ...state, ...patch };
@@ -39,7 +60,7 @@ function onLine(line) {
     // place instead of relying on a process that began without it.
     if (wasOff && msg.accessibility) restart();
   } else if (msg.type === 'state') {
-    update({ apps: msg.apps });
+    update({ apps: msg.apps.map((a) => (linkedApps().has(a.path) ? { ...a, path: linkedApps().get(a.path) } : a)) });
   } else if (msg.type === 'reply') {
     const resolve = pending.get(msg.seq);
     if (resolve) {
