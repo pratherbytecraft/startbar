@@ -1,0 +1,14 @@
+<!-- Startbar mark: PB badge family (ring + #0b0e1a ground). A green start button, a pill with a dot and two lines. Chosen 2026-10-20 (variant S2). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="ring" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="120" y2="120"><stop offset="0%" stop-color="#9fa8ff"/><stop offset="55%" stop-color="#5865F2"/><stop offset="100%" stop-color="#4c46d6"/></linearGradient>
+    <linearGradient id="go" gradientUnits="userSpaceOnUse" x1="0" y1="44" x2="0" y2="76"><stop offset="0%" stop-color="#b6f47a"/><stop offset="100%" stop-color="#2fae57"/></linearGradient>
+  </defs>
+  <g>
+    <circle cx="60" cy="60" r="54" fill="#0b0e1a" stroke="url(#ring)" stroke-width="4"/>
+    <rect x="22" y="44" width="76" height="32" rx="16" fill="url(#go)"/>
+    <rect x="22" y="44" width="76" height="32" rx="16" fill="none" stroke="#0b0e1a" stroke-opacity=".25" stroke-width="2"/>
+    <circle cx="40" cy="60" r="8" fill="#0b0e1a"/>
+    <path d="M52 55 H84 M52 65 H74" stroke="#0b0e1a" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>
