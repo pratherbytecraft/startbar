@@ -54,13 +54,29 @@ func pngData(for image: NSImage, size: CGFloat) -> Data? {
     return rep.representation(using: .png, properties: [:])
 }
 
-func cacheName(for path: String) -> String {
-    // Stable file name per app path. djb2 keeps it short and dependency free.
+// The cache file's name before its date: one per app path. djb2 keeps it
+// short and dependency free.
+func cachePrefix(for path: String) -> String {
     var hash: UInt64 = 5381
     for byte in path.utf8 { hash = (hash &* 33) &+ UInt64(byte) }
     let base = (path as NSString).lastPathComponent.replacingOccurrences(of: ".app", with: "")
     let safe = base.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map { String($0) }.joined()
-    return "\(safe)-\(String(hash, radix: 16)).png"
+    return "\(safe)-\(String(hash, radix: 16))"
+}
+
+// When the app last changed: the newest of the bundle, its Info.plist and
+// its Resources folder. An update or a new icon changes it, so the icon is
+// drawn again instead of the old picture staying in the cache.
+func changedStamp(for path: String) -> String {
+    let fm = FileManager.default
+    let dates = [path, path + "/Contents/Info.plist", path + "/Contents/Resources"].compactMap {
+        (try? fm.attributesOfItem(atPath: $0))?[.modificationDate] as? Date
+    }
+    return String(Int(dates.max()?.timeIntervalSince1970 ?? 0), radix: 36)
+}
+
+func cacheName(for path: String) -> String {
+    "\(cachePrefix(for: path))-\(changedStamp(for: path)).png"
 }
 
 func jsonText(_ object: Any) -> String? {
@@ -82,6 +98,12 @@ func runIcons(cacheDir: String) {
         if path.isEmpty { continue }
         let out = (cacheDir as NSString).appendingPathComponent(cacheName(for: path))
         if !FileManager.default.fileExists(atPath: out) {
+            // Pictures of an older version of the app go, and the one from
+            // before the date was in the name (Startbar 0.2.0 and earlier).
+            let prefix = cachePrefix(for: path)
+            for old in (try? FileManager.default.contentsOfDirectory(atPath: cacheDir)) ?? [] where old.hasPrefix(prefix + "-") || old == prefix + ".png" {
+                try? FileManager.default.removeItem(atPath: (cacheDir as NSString).appendingPathComponent(old))
+            }
             // An .icns file is drawn as the image it holds, not as a file.
             let icon = (path.hasSuffix(".icns") ? NSImage(contentsOfFile: path) : nil) ?? NSWorkspace.shared.icon(forFile: path)
             icon.size = NSSize(width: 64, height: 64)
