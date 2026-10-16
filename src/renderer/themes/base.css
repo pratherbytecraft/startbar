@@ -141,6 +141,8 @@ svg { display: block; }
    Reduce motion is on in System Settings. */
 @media (prefers-reduced-motion: no-preference) {
   .menu.opening { animation: sb-open .16s cubic-bezier(.2, .8, .2, 1) both; }
+  /* rising in, the list is briefly taller than its window: no scrollbar for that */
+  .scroll:has(> .menu.opening) { overflow: hidden; }
   .entering > .item, .entering > .list-head { animation: sb-row .2s ease-out both; animation-delay: calc(var(--i, 0) * 14ms); }
   .list.leaving > * { animation: sb-leave .11s ease-in both; }
   .item .arrow { display: inline-block; transition: transform .18s ease; }

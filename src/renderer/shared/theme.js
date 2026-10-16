@@ -65,6 +65,11 @@
     void el.offsetWidth;
     el.classList.add('opening');
   }
+  // Done opening. The rows' own animations bubble up here too, so only the
+  // element's own end counts.
+  document.addEventListener('animationend', (e) => {
+    if (e.target.classList && e.target.classList.contains('opening')) e.target.classList.remove('opening');
+  });
 
   // The same for a list's rows, one after another, when it fills.
   function playRows(el) {
