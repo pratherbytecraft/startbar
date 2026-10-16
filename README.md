@@ -23,11 +23,13 @@ Then move Startbar from the Applications folder in your home folder to the Trash
 
 ## What it does
 
-The bar follows your Mac's light or dark setting and your accent color. Classic 2009, Classic 2001 and Classic 1995 themes are in the settings if you want a retro look. Each theme keeps its own look and size settings.
+The bar follows your Mac's light or dark setting and your accent color, with a round Start button and window buttons that light up in each app's color. Classic 2009, Classic 2001 and Classic 1995 themes are in the settings if you want a retro look, each with its own color schemes, and Classic 1995 lets you pick your own colors. Each theme keeps its own look and size settings, and each can be reset on its own.
 
-The Start button opens a menu that lists your apps with a search box, your recent apps, your main folders and Sleep, Log Out and Shut Down. Control Space also opens it. Search can also find files in your home folder, and you can add your own folders to the menu.
+The Start button opens a menu that lists your apps with a search box, up to five recent apps, your main folders and Sleep, Log Out and Shut Down. Control Space also opens it, or throw the mouse into the bottom left corner and click. Start typing to search. Search can also find files in your home folder, and you can add your own folders to the menu. Right click a recent app to remove it from the list.
 
-Apps pinned next to the Start button open with one click. Drag them to reorder them. Right click an app in the Start menu or a window button and pick Pin to Bar to add one.
+Apps pinned next to the Start button open with one click. Drag them to reorder them. Right click an app in the Start menu or a window button and pick Pin to Bar to add one. Pins can also sit in the row with the window buttons, where a pinned app's button turns into its window buttons once it opens.
+
+Right click a window button to minimize, close or quit, pin the app, or open a new window. Turn on previews and hovering a window button shows a picture of each of its windows. A strip at the right end of the bar can hide every app to show the desktop, and a second click brings them back.
 
 The tray shows Bluetooth, the volume, Wi-Fi and the battery next to the clock. Click one for a small panel to change the volume, turn Wi-Fi or Bluetooth on or off, connect a Bluetooth device, or see how much charge is left. Click the clock for a small calendar.
 
@@ -55,6 +57,7 @@ The Permissions page in Startbar Settings shows each permission Startbar can use
 - Automation for System Events lets the Dock buttons hide the Dock or move it to the bottom.
 - Location shows the Wi-Fi network's name in the tray. macOS counts the network name as location. Startbar doesn't read where you are.
 - Bluetooth shows Bluetooth in the tray with your devices and their battery.
+- Screen Recording shows the window previews, when you turn them on. Startbar doesn't record or keep your screen.
 
 ## Help
 
@@ -62,4 +65,4 @@ Open an issue at https://github.com/pratherbytecraft/startbar/issues.
 
 ## License
 
-All rights reserved. Prather Bytecraft.
+Copyright 2026 Prather Bytecraft. All rights reserved. Startbar is free to install and use, and its source code can be read, but it can't be copied, changed or shared. See LICENSE.

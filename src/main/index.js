@@ -476,7 +476,7 @@ async function showAbout() {
     type: 'none',
     title: 'About Startbar',
     message: `Startbar ${VERSION}`,
-    detail: 'A taskbar for macOS. Free to use.\nPrather Bytecraft. All rights reserved.',
+    detail: 'A taskbar for macOS. Free to use.\nCopyright 2026 Prather Bytecraft. All rights reserved.',
     buttons: ['OK', 'Support on Ko-fi', 'Report an Issue', 'Quit Startbar'],
     defaultId: 0,
     cancelId: 0
