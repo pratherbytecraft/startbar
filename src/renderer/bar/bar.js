@@ -8,6 +8,7 @@
   const tasksEl = document.getElementById('tasks');
   const quickEl = document.getElementById('quick');
   const trayEl = document.getElementById('tray-icons');
+  const chevEl = document.getElementById('chev');
   let status = { volume: null, wifi: null, battery: null };
   let trayDrawn = '';
 
@@ -58,10 +59,27 @@
     return b;
   }
 
+  // The arrow hides the tray icons behind one click and remembers it.
+  chevEl.addEventListener('click', () => {
+    hideTip();
+    api.updateSettings({ tray: { collapsed: !state.settings.tray.collapsed } });
+  });
+  chevEl.addEventListener('mouseenter', () => {
+    clearTimeout(tipTimer);
+    const text = state.settings.tray.collapsed ? 'Show the tray icons' : 'Hide the tray icons';
+    tipTimer = setTimeout(() => api.showTip({ text, rect: rectOf(chevEl) }), 500);
+  });
+  chevEl.addEventListener('mouseleave', hideTip);
+
   // Redrawn only when an icon would look different.
   function renderTray() {
     if (!state) return;
-    const kinds = window.trayIcons.shown(state.settings, status);
+    const t = state.settings.tray;
+    const all = window.trayIcons.shown(state.settings, status);
+    const collapsed = t.collapseArrow && t.collapsed;
+    chevEl.classList.toggle('hidden', !t.collapseArrow || all.length === 0);
+    chevEl.textContent = collapsed ? '‹' : '›';
+    const kinds = collapsed ? [] : all;
     const key = JSON.stringify(kinds.map((k) => window.trayIcons[k](status[k])));
     if (key === trayDrawn) return;
     trayDrawn = key;

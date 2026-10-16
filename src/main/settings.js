@@ -28,7 +28,9 @@ const DEFAULTS = Object.freeze({
   tray: {
     volume: true,
     wifi: true, // shown when the Mac has Wi-Fi
-    battery: true // shown on laptops
+    battery: true, // shown on laptops
+    collapseArrow: true, // the arrow at the left of the tray that hides its icons
+    collapsed: false // the icons are hidden behind the arrow
   },
   clock: {
     hour12: true,

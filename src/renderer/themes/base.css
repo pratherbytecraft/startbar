@@ -33,6 +33,7 @@ svg { display: block; }
 [data-labels="icons-only"] .task .label, [data-labels="icons-only"] .task .caret,
 .tasks.compact .task .label, .tasks.compact .task .caret { display: none; }
 .tray { display: flex; align-items: center; gap: 10px; position: relative; }
+.tray .chev { width: 18px; height: 18px; display: grid; place-items: center; font-size: 14px; line-height: 1; flex: none; }
 .tray-icons { display: flex; align-items: center; gap: 2px; }
 .tray-icons:empty { display: none; }
 .tray-icon { width: 24px; height: 24px; display: grid; place-items: center; }

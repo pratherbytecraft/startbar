@@ -161,7 +161,9 @@
           rows: [
             { label: 'Volume', control: { type: 'toggle', key: 'tray.volume' } },
             { label: 'Wi-Fi', note: 'Shown when the Mac has Wi-Fi.', control: { type: 'toggle', key: 'tray.wifi' } },
-            { label: 'Battery', note: 'Shown on laptops only.', control: { type: 'toggle', key: 'tray.battery' } }
+            { label: 'Battery', note: 'Shown on laptops only.', control: { type: 'toggle', key: 'tray.battery' } },
+            { label: 'Show the collapse arrow', note: 'Hides the tray icons behind one click, like the original.',
+              control: { type: 'toggle', key: 'tray.collapseArrow' } }
           ]
         }
       ],

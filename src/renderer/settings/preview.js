@@ -5,6 +5,7 @@
   const tasksEl = document.getElementById('tasks');
   const quickEl = document.querySelector('.quick');
   const trayEl = document.getElementById('tray-icons');
+  const chevEl = document.getElementById('chev');
   let status = null;
   const clock = document.getElementById('clock');
   const timeEl = document.getElementById('time');
@@ -57,7 +58,12 @@
       return d;
     }));
     // The tray as the real bar has it, from the Mac's own reading.
-    trayEl.replaceChildren(...window.trayIcons.shown(state.settings, status).map((kind) => {
+    const t = state.settings.tray;
+    const all = window.trayIcons.shown(state.settings, status);
+    const collapsed = t.collapseArrow && t.collapsed;
+    chevEl.classList.toggle('hidden', !t.collapseArrow || all.length === 0);
+    chevEl.textContent = collapsed ? '‹' : '›';
+    trayEl.replaceChildren(...(collapsed ? [] : all).map((kind) => {
       const s = document.createElement('span');
       s.className = 'tray-icon';
       s.innerHTML = window.trayIcons[kind](status[kind]);

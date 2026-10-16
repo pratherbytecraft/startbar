@@ -83,6 +83,8 @@ body { color: var(--text); }
 .cal-foot { margin-top: 6px; padding: 6px; border-top: 1px solid var(--line); border-radius: 0 0 7px 7px; opacity: .85; }
 .tray .clock { border-radius: 6px; padding-top: 2px; padding-bottom: 2px; }
 .tray .clock:hover { background: var(--fill-hover); }
+.tray .chev { border-radius: 5px; opacity: .8; margin-right: -6px; }
+.tray .chev:hover { background: var(--fill-hover); opacity: 1; }
 .tray-icon { border-radius: 6px; }
 .tray-icon:hover { background: var(--fill-hover); }
 .popover { padding: 12px; }
