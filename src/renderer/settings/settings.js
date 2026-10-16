@@ -123,7 +123,9 @@
         {
           title: 'Left column',
           rows: [
-            { label: 'Recently used apps shown', control: { type: 'stepper', key: 'startMenu.recentCount', min: 0, max: 10 } },
+            { label: 'Show recently used apps', note: 'Listed under Recent, above All Applications.', control: { type: 'toggle', key: 'startMenu.showRecent' } },
+            { label: 'How many', onlyWith: { when: (s) => s.startMenu.showRecent, note: 'Used when recent apps are shown.' },
+              control: { type: 'stepper', key: 'startMenu.recentCount', min: 1, max: 10 } },
             { label: 'Put the cursor in the search box when the menu opens', control: { type: 'toggle', key: 'startMenu.focusSearch' } },
             { label: 'Search also finds', note: 'Apps are always included. Files come from Spotlight.',
               control: { type: 'select', key: 'startMenu.search', options: [['apps', 'Apps only'], ['files', 'Apps and files in your home folder']] } }

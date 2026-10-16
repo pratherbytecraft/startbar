@@ -1,7 +1,7 @@
 (function () {
   const api = window.startbar;
   const el = (id) => document.getElementById(id);
-  const recentEl = el('recent'), recentSep = el('recent-sep'), allToggle = el('all-toggle'), allArrow = el('all-arrow');
+  const recentEl = el('recent'), recentHead = el('recent-head'), recentSep = el('recent-sep'), allToggle = el('all-toggle'), allArrow = el('all-arrow');
   const listEl = el('list'), searchEl = el('search'), rightEl = el('right'), footEl = el('foot');
 
   let state = null;
@@ -154,6 +154,7 @@
   async function renderRecent() {
     const list = await api.recent();
     recentEl.replaceChildren(...list.map(appItem));
+    recentHead.classList.toggle('hidden', list.length === 0);
     recentSep.classList.toggle('hidden', list.length === 0);
   }
 
@@ -182,6 +183,7 @@
     }
     const expanded = searching || showAll;
     recentEl.classList.toggle('hidden', expanded);
+    recentHead.classList.toggle('hidden', expanded || recentEl.children.length === 0);
     recentSep.classList.toggle('hidden', expanded || recentEl.children.length === 0);
     allToggle.classList.toggle('hidden', searching);
     allArrow.textContent = showAll ? '▾' : '▸';

@@ -628,7 +628,7 @@ function wireIpc() {
   ipcMain.on('bar:menu', (e) => showBarMenu(e.sender));
   ipcMain.on('menu:hide', () => windows.hideMenu());
   ipcMain.handle('menu:apps', () => apps.load());
-  ipcMain.handle('menu:recent', () => apps.recent(settings.get().startMenu.recentCount));
+  ipcMain.handle('menu:recent', () => (settings.get().startMenu.showRecent ? apps.recent(settings.get().startMenu.recentCount) : []));
   ipcMain.on('menu:launch', (_e, appPath) => launchApp(appPath));
   ipcMain.on('menu:appMenu', (_e, appPath) => showAppMenu(appPath));
   ipcMain.on('menu:open', (_e, target) => {

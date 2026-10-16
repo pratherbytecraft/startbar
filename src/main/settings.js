@@ -43,6 +43,7 @@ const DEFAULTS = Object.freeze({
     click: 'calendar' // calendar (a small one above the clock) | app (the Calendar app) | nothing
   },
   startMenu: {
+    showRecent: true, // recently used apps above All Applications
     recentCount: 6,
     focusSearch: true,
     search: 'apps', // apps | files (apps and files in the home folder)
