@@ -9,6 +9,10 @@ const system = require('./system');
 const apps = require('./apps');
 const windows = require('./windows');
 
+// From the package, not app.getVersion(): Startbar.app carries no version so
+// it stays the same across updates (see scripts/build-app.js).
+const VERSION = require('../../package.json').version;
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
@@ -16,6 +20,11 @@ if (!app.requestSingleInstanceLock()) {
 app.on('second-instance', () => {
   // `startbar` run again while running: just bring the menu up as a sign of life.
   windows.showMenu();
+});
+
+app.on('activate', () => {
+  // Startbar.app opened again from Spotlight, the Start menu or `startbar`.
+  if (app.isReady()) windows.showMenu();
 });
 
 function userName() {
@@ -31,7 +40,7 @@ function state() {
     settings: settings.get(),
     system: system.snapshot(),
     user: userName(),
-    version: app.getVersion(),
+    version: VERSION,
     home: os.homedir()
   };
 }
@@ -74,7 +83,7 @@ async function showAbout() {
   const { response } = await dialog.showMessageBox({
     type: 'none',
     title: 'About Startbar',
-    message: `Startbar ${app.getVersion()}`,
+    message: `Startbar ${VERSION}`,
     detail: 'A taskbar for macOS. Free to use.\nPrather Bytecraft. All rights reserved.',
     buttons: ['OK', 'Support on Ko-fi', 'Report an Issue', 'Quit Startbar'],
     defaultId: 0,

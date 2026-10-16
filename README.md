@@ -11,6 +11,16 @@ startbar
 
 Startbar needs Node 18 or newer. The first start takes a moment while it reads your app icons.
 
+The install also adds Startbar to the Applications folder in your home folder, so you can open it again from Spotlight or the Start menu after you quit it.
+
+## Uninstall
+
+```
+npm uninstall -g startbar
+```
+
+Then move Startbar from the Applications folder in your home folder to the Trash.
+
 ## What it does
 
 The bar follows your Mac's light or dark setting and your accent color. A Classic 2001 theme is in the settings if you want the retro look.

@@ -5,3 +5,4 @@ node_modules/
 *.mov
 helper/startbar-helper
 npm-debug.log*
+bundle/

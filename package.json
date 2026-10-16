@@ -26,14 +26,16 @@
   "files": [
     "bin",
     "src",
-    "helper",
+    "helper/startbar-helper.swift",
     "scripts",
+    "assets",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "start": "electron . --foreground",
-    "postinstall": "node scripts/build-helper.js"
+    "start": "node bin/startbar.js --foreground",
+    "postinstall": "node scripts/build-helper.js && node scripts/build-app.js",
+    "build-app": "node scripts/build-app.js"
   },
   "dependencies": {
     "electron": "^33.2.1"
