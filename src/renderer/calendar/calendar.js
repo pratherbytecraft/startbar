@@ -54,7 +54,8 @@
     }));
 
     todayEl.textContent = today.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    requestAnimationFrame(() => api.calendarSize({ height: Math.ceil(box.getBoundingClientRect().height) }));
+    // Measured now, not on the next frame: a hidden window gets no frames.
+    api.calendarSize({ height: Math.ceil(box.getBoundingClientRect().height) });
   }
 
   function step(n) {

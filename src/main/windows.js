@@ -360,6 +360,8 @@ function hideTip() {
 
 function showGroup(payload, barWin) {
   if (!group || !liveBar(barWin)) return;
+  // A click on the bar doesn't always blur the list, so check for it open.
+  if (group.isVisible() && groupAnchor && groupAnchor.pid === payload.pid && groupAnchor.bar === barWin) return hideGroup();
   // Clicking the group button while its list is open blurs the list first,
   // which hides it. Treat that click as "close", like the Start button.
   if (lastGroupHide.pid === payload.pid && Date.now() - lastGroupHide.at < 250) return;

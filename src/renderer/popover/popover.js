@@ -102,7 +102,8 @@
     }
     const parts = kind === 'volume' ? volumePanel(s) : kind === 'wifi' ? wifiPanel(s) : batteryPanel(s);
     pop.replaceChildren(...parts);
-    requestAnimationFrame(() => api.popoverSize({ height: Math.ceil(pop.getBoundingClientRect().height) }));
+    // Measured now, not on the next frame: a hidden window gets no frames.
+    api.popoverSize({ height: Math.ceil(pop.getBoundingClientRect().height) });
   }
 
   api.onPopoverShow((k) => {

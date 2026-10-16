@@ -7,10 +7,9 @@
 
   api.onTipText((text) => {
     tip.textContent = text;
-    requestAnimationFrame(() => {
-      const r = tip.getBoundingClientRect();
-      api.tipSize({ width: Math.ceil(r.width), height: Math.ceil(r.height) });
-    });
+    // Measured now, not on the next frame: a hidden window gets no frames.
+    const r = tip.getBoundingClientRect();
+    api.tipSize({ width: Math.ceil(r.width), height: Math.ceil(r.height) });
   });
 
   api.getState().then(window.applyTheme);
