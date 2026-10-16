@@ -70,8 +70,45 @@ const DEFAULTS = Object.freeze({
   },
   accessibilityAsked: false, // the one time Accessibility dialog has been shown
   hideNoteShown: false, // the one time note on how to bring a hidden bar back
-  automationAnswer: '' // allowed | denied: the last answer for System Events, see main/index.js
+  automationAnswer: '', // allowed | denied: the last answer for System Events, see main/index.js
+  themes: {} // the THEME_KEYS of each theme that isn't the current one, by theme name
 });
+
+// The look and layout settings, kept per theme. The current theme's values
+// live at the top level like every other setting, so the rest of Startbar
+// reads them as usual; switching themes swaps them with the saved ones.
+const THEME_KEYS = [
+  'appearance', 'accent', 'translucent', 'barHeight', 'labels', 'maxButtonWidth',
+  'taskbar.showStartLabel', 'taskbar.showPins', 'taskbar.grouping',
+  'clock.showDate', 'clock.dateStyle', 'tray.collapseArrow'
+];
+
+// A theme's own defaults over the shared ones, used the first time it's picked
+// and by its reset.
+const THEME_DEFAULTS = {};
+
+// The THEME_KEYS of s, in the same nested shape.
+function pick(s) {
+  const out = {};
+  for (const key of THEME_KEYS) {
+    const parts = key.split('.');
+    const last = parts.pop();
+    let from = s;
+    let to = out;
+    for (const part of parts) {
+      from = from && from[part];
+      to = to[part] = to[part] || {};
+    }
+    if (from && from[last] !== undefined) to[last] = from[last];
+  }
+  return out;
+}
+
+const THEME_SHAPE = pick(DEFAULTS);
+
+function themeDefaults(theme) {
+  return merge(THEME_SHAPE, THEME_DEFAULTS[theme]);
+}
 
 let dir;
 let file;
@@ -112,11 +149,29 @@ function dataDir() {
   return dir;
 }
 
-function update(patch) {
-  current = merge(current, patch);
+function save() {
   fs.writeFileSync(file, JSON.stringify(current, null, 2) + '\n');
   for (const fn of listeners) fn(current);
   return current;
+}
+
+function update(patch) {
+  // A new theme puts the old one's look away and brings out its own, or its
+  // defaults the first time. The rest of the patch goes on top.
+  if (patch && typeof patch.theme === 'string' && patch.theme !== current.theme) {
+    const themes = { ...current.themes, [current.theme]: pick(current) };
+    const own = merge(themeDefaults(patch.theme), themes[patch.theme]);
+    delete themes[patch.theme];
+    current = merge({ ...current, themes }, own);
+  }
+  current = merge(current, patch);
+  return save();
+}
+
+// The current theme's look back to its defaults. Other themes keep theirs.
+function resetTheme() {
+  current = merge(current, themeDefaults(current.theme));
+  return save();
 }
 
 // Only the keys Startbar knows, each with the same kind of value as its
@@ -128,7 +183,15 @@ function clean(saved, base) {
     const b = base[key];
     const v = saved[key];
     if (v === undefined) continue;
-    if (Array.isArray(b)) {
+    if (base === DEFAULTS && key === 'themes') {
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        out.themes = {};
+        for (const name of Object.keys(v)) {
+          const t = v[name];
+          if (t && typeof t === 'object' && !Array.isArray(t)) out.themes[name] = clean(t, THEME_SHAPE);
+        }
+      }
+    } else if (Array.isArray(b)) {
       if (Array.isArray(v)) out[key] = v.filter((x) => typeof x === 'string');
     } else if (b && typeof b === 'object') {
       out[key] = clean(v, b);
@@ -144,9 +207,7 @@ function clean(saved, base) {
 function replace(saved) {
   const { accessibilityAsked, hideNoteShown, automationAnswer } = current;
   current = merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, hideNoteShown, automationAnswer });
-  fs.writeFileSync(file, JSON.stringify(current, null, 2) + '\n');
-  for (const fn of listeners) fn(current);
-  return current;
+  return save();
 }
 
 // Back to the defaults.
@@ -159,4 +220,4 @@ function onChange(fn) {
   return () => listeners.delete(fn);
 }
 
-module.exports = { DEFAULTS, init, get, update, replace, reset, onChange, dataDir };
+module.exports = { DEFAULTS, init, get, update, replace, reset, resetTheme, onChange, dataDir };

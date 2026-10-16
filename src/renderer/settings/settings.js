@@ -34,7 +34,7 @@
         {
           title: 'Look',
           rows: [
-            { label: 'Theme', note: "System uses your Mac's colors. Classic 2001 and Classic 1995 are retro looks.",
+            { label: 'Theme', note: "System uses your Mac's colors. Classic 2001 and Classic 1995 are retro looks. Each theme keeps its own look and size settings.",
               control: { type: 'select', key: 'theme', options: [['system', 'System'], ['classic-2001', 'Classic 2001'], ['classic-1995', 'Classic 1995']] } },
             { label: 'Appearance', systemOnly: true,
               control: { type: 'seg', key: 'appearance', options: [['auto', 'Follow Mac'], ['light', 'Light'], ['dark', 'Dark']] } },
@@ -51,6 +51,13 @@
             { label: 'Window buttons',
               control: { type: 'seg', key: 'labels', options: [['icon-and-title', 'Icon and title'], ['icons-only', 'Icons only']] } },
             { label: 'Widest a button can get', control: { type: 'range', key: 'maxButtonWidth', min: 100, max: 260, step: 10 } }
+          ]
+        },
+        {
+          title: 'Reset',
+          rows: [
+            { label: "Reset this theme's settings", note: 'Puts the look and size for the current theme back to its defaults. The other themes keep theirs.',
+              control: { type: 'button', text: 'Reset…', click: () => api.resetThemeSettings() } }
           ]
         }
       ]

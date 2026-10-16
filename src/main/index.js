@@ -314,6 +314,21 @@ async function resetSettings() {
   if (response === 0) settings.reset();
 }
 
+const THEME_NAMES = { system: 'System', 'classic-2001': 'Classic 2001', 'classic-1995': 'Classic 1995' };
+
+async function resetThemeSettings() {
+  const name = THEME_NAMES[settings.get().theme] || 'this theme';
+  const { response } = await dialog.showMessageBox(windows.settings, {
+    type: 'warning',
+    message: `Reset the ${name} settings to the defaults?`,
+    detail: 'The look and size of the bar go back to how they were the first time you picked this theme. The other themes keep their settings.',
+    buttons: ['Reset', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1
+  });
+  if (response === 0) settings.resetTheme();
+}
+
 async function runPower(action) {
   const names = { sleep: 'sleep', logout: 'log out', shutdown: 'shut down' };
   const verb = names[action];
@@ -586,6 +601,7 @@ function wireIpc() {
   });
   ipcMain.handle('settings:update', (_e, patch) => settings.update(patch));
   ipcMain.on('settings:reset', () => resetSettings());
+  ipcMain.on('settings:resetTheme', () => resetThemeSettings());
   ipcMain.on('settings:link', (_e, name) => {
     const links = {
       kofi: 'https://ko-fi.com/prathercc',
