@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'">
+<title>Start menu</title>
+<link rel="stylesheet" href="../themes/base.css">
+<link rel="stylesheet" href="../themes/system.css" id="theme-css">
+</head>
+<body>
+<div class="menu">
+  <div class="menu-head"><div class="avatar"></div><span id="user"></span></div>
+  <div class="menu-body">
+    <div class="col-left">
+      <div id="recent"></div>
+      <div class="sep hidden" id="recent-sep"></div>
+      <div class="item" id="all-toggle"><span class="ico"></span><span class="label" style="font-weight:600">All Applications</span><span class="arrow" id="all-arrow">&#9656;</span></div>
+      <div class="list" id="list"></div>
+      <div class="search">
+        <svg viewBox="0 0 16 16" width="13" height="13"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 10l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input id="search" type="text" placeholder="Search" spellcheck="false" autocomplete="off">
+      </div>
+    </div>
+    <div class="col-right" id="right"></div>
+  </div>
+  <div class="menu-foot" id="foot"></div>
+</div>
+<script src="../shared/theme.js"></script>
+<script src="menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+{
+  "name": "startbar",
+  "version": "0.1.0",
+  "description": "A taskbar for macOS. A bar along the bottom of the screen with a Start button, one button per open window, pinned apps and a clock.",
+  "author": "Prather Bytecraft",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": false,
+  "homepage": "https://github.com/pratherbytecraft/startbar",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pratherbytecraft/startbar.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pratherbytecraft/startbar/issues"
+  },
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "src/main/index.js",
+  "bin": {
+    "startbar": "bin/startbar.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "helper",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "electron . --foreground",
+    "postinstall": "node scripts/build-helper.js"
+  },
+  "dependencies": {
+    "electron": "^33.2.1"
+  }
+}

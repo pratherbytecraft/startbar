@@ -1,0 +1,50 @@
+/* Layout shared by every theme. Themes only set colors, shapes and fonts. */
+:root {
+  --bar-h: 36px;
+  --accent: #0a84ff;
+  --accent-text: #fff;
+  --max-button: 180px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+body { font-family: var(--font); font-size: 13px; user-select: none; cursor: default; -webkit-font-smoothing: antialiased; }
+svg { display: block; }
+
+/* bar */
+.bar { position: absolute; inset: 0; display: flex; align-items: stretch; }
+.start { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.start svg { width: 16px; height: 16px; }
+.quick { display: flex; align-items: center; gap: 2px; padding: 0 2px; }
+.quick:empty, .quick:empty + .grip { display: none; }
+.quick .icon { display: grid; place-items: center; }
+.quick .icon img { width: 18px; height: 18px; }
+.grip { align-self: center; }
+.tasks { flex: 1; display: flex; align-items: center; gap: 4px; padding: 0 4px; overflow: hidden; }
+.task { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; max-width: var(--max-button); flex: 1; min-width: 36px; }
+.task .label { overflow: hidden; text-overflow: ellipsis; }
+.task img { width: 18px; height: 18px; flex: none; }
+[data-labels="icons-only"] .task { flex: none; min-width: 0; }
+[data-labels="icons-only"] .task .label { display: none; }
+.tray { display: flex; align-items: center; gap: 10px; position: relative; }
+.tray .clock { font-variant-numeric: tabular-nums; text-align: center; line-height: 1.15; }
+.tray .clock .date { display: none; }
+.tray .clock.with-date .date { display: block; }
+
+/* menu */
+.menu { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
+.menu-head { display: flex; align-items: center; gap: 12px; flex: none; }
+.menu-body { flex: 1; display: flex; min-height: 0; }
+.col-left { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.col-right { flex: none; overflow: auto; }
+.item { display: flex; align-items: center; gap: 10px; white-space: nowrap; overflow: hidden; }
+.item .label { overflow: hidden; text-overflow: ellipsis; }
+.item img, .item .ico { width: 24px; height: 24px; flex: none; }
+.col-right .item img, .col-right .item .ico { width: 20px; height: 20px; }
+.item .arrow { margin-left: auto; opacity: .7; }
+.list { flex: 1; overflow: auto; min-height: 0; }
+.search { display: flex; align-items: center; gap: 8px; flex: none; }
+.search input { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; color: inherit; min-width: 0; }
+.menu-foot { display: flex; align-items: center; justify-content: flex-end; flex: none; }
+.menu-foot .pw { display: flex; align-items: center; gap: 6px; }
+.hidden { display: none !important; }

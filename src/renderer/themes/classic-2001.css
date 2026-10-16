@@ -1,0 +1,76 @@
+/* Classic 2001. Blue bar, green Start button, bevelled buttons. Our own
+   gradients and shapes. Ignores light, dark and the accent color on purpose. */
+:root { --font: Tahoma, "Trebuchet MS", Verdana, sans-serif; }
+body { font-size: 11px; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); }
+
+.bar {
+  background: linear-gradient(180deg, #4f85f0 0, #4f85f0 1px, #3168d5 2px, #2a5fd0 60%, #1941a5 100%);
+  border-top: 1px solid #0c2f8a;
+}
+
+.start {
+  align-self: stretch; margin: 0 6px 0 0; padding: 0 16px 0 10px; border-radius: 0 10px 10px 0;
+  background: linear-gradient(180deg, #4fb84f 0, #3a9e3a 45%, #237a23 100%);
+  font-size: 16px; font-style: italic; font-weight: bold; text-transform: lowercase; text-shadow: 1px 1px 1px rgba(0, 0, 0, .55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset -2px 0 2px rgba(0, 0, 0, .25), 1px 0 2px rgba(0, 0, 0, .35);
+}
+.start:hover { filter: brightness(1.08); }
+.start.open { background: linear-gradient(180deg, #237a23 0, #3a9e3a 60%, #4fb84f 100%); box-shadow: inset 0 2px 3px rgba(0, 0, 0, .35); filter: none; }
+.start svg { width: 18px; height: 18px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .4)); }
+.start .glyph-fill { fill: #fff; }
+.start .glyph-ink { fill: #2a62d8; }
+
+.quick .icon { width: 22px; height: 22px; border-radius: 2px; }
+.quick .icon img { width: 16px; height: 16px; }
+.quick .icon:hover { background: rgba(255, 255, 255, .18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35); }
+.grip {
+  width: 5px; height: 20px; margin: 0 3px;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .55) 0 1px, rgba(0, 0, 0, .25) 1px 2px, transparent 2px 3px);
+  border-left: 1px solid rgba(255, 255, 255, .35); border-right: 1px solid rgba(0, 0, 0, .3);
+}
+
+.tasks { gap: 3px; }
+.task {
+  height: 22px; padding: 0 6px; gap: 5px; border-radius: 3px; max-width: 160px;
+  background: linear-gradient(180deg, #3c81f3 0, #2a62d8 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 1px 0 0 rgba(255, 255, 255, .2), 0 1px 1px rgba(0, 0, 0, .35);
+}
+.task img { width: 16px; height: 16px; }
+.task:hover { background: linear-gradient(180deg, #5a98ff 0, #3b74e6 100%); }
+.task.active {
+  font-weight: bold;
+  background: linear-gradient(180deg, #1a46b0 0, #2b5ed1 100%);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .55), inset 1px 0 2px rgba(0, 0, 0, .3);
+}
+
+.tray {
+  gap: 6px; padding: 0 10px 0 8px;
+  background: linear-gradient(180deg, #139ff9 0, #0a7edc 100%); border-left: 1px solid #0a5fb4;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, .35), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+.tray .clock .date { font-size: 9px; }
+
+/* Start menu */
+.menu { border-radius: 8px 8px 0 0; background: #fff; border: 1px solid #0c2f8a; color: #000; text-shadow: none; }
+.menu-head {
+  height: 58px; padding: 0 12px; font-size: 14px; font-weight: bold; color: #fff; text-shadow: 1px 1px 1px rgba(0, 0, 0, .5);
+  background: linear-gradient(180deg, #2d6ad8 0, #1f52bf 50%, #2a63d2 100%); border-bottom: 2px solid #e8942a;
+}
+.avatar { width: 40px; height: 40px; border-radius: 4px; border: 2px solid #fff; box-shadow: 0 0 3px rgba(0, 0, 0, .4); background: linear-gradient(135deg, #f2a74b, #d8661b); }
+.col-left { padding: 6px 0; background: #fff; }
+.col-right { width: 170px; padding: 6px 0; background: #d3e5fa; border-left: 1px solid #95bdee; }
+.item { padding: 5px 10px; gap: 8px; }
+.item:hover, .item.selected { background: #316ac5; color: #fff; }
+.item .ico { border-radius: 5px; }
+.col-right .item { font-weight: bold; color: #1b3f8f; }
+.col-right .item:hover, .col-right .item.selected { color: #fff; }
+.sep { height: 1px; margin: 4px 10px; background: linear-gradient(90deg, transparent, #9ab 50%, transparent); }
+.col-right .sep { background: linear-gradient(90deg, transparent, #95bdee 50%, transparent); }
+.search { margin: 6px 10px 2px; border: 1px solid #7f9db9; background: #fff; padding: 3px 6px; color: #000; }
+.menu-foot {
+  height: 36px; gap: 14px; padding: 0 12px; color: #fff; text-shadow: 1px 1px 1px rgba(0, 0, 0, .4);
+  background: linear-gradient(180deg, #4178d6 0, #2d5fc4 100%); border-top: 1px solid #1d4aa8;
+}
+.menu-foot .pw:hover { text-decoration: underline; }
+.menu-foot .pw .ico { width: 18px; height: 18px; border-radius: 9px; }
+.empty { color: #777; padding: 10px; }

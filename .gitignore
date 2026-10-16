@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+*.png
+*.jpg
+*.mov
+helper/startbar-helper
+npm-debug.log*
