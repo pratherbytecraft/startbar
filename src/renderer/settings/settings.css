@@ -86,6 +86,8 @@ input[type=range] { accent-color: var(--accent); width: 170px; }
 .btn:active { filter: brightness(.9); }
 .btn.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
 .swatches { display: flex; gap: 7px; align-items: center; }
+.colors { display: flex; gap: 8px; }
+.colors input[type=color] { width: 36px; height: 22px; padding: 0; border: 1px solid var(--control-line); border-radius: 5px; background: none; }
 .swatches i { width: 18px; height: 18px; border-radius: 9px; display: block; position: relative; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
 .swatches i.on::after { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: #fff; }
 .swatches i.auto { background: conic-gradient(#ff453a, #ff9f0a, #ffd60a, #30d158, #0a84ff, #bf5af2, #ff375f, #ff453a); }

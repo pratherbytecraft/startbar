@@ -58,7 +58,7 @@ body { font-size: 11px; color: var(--text95); }
 .menu:not(.popover):not(.calendar):not(.group-list) { padding: 3px 3px 3px 27px; }
 .menu:not(.popover):not(.calendar):not(.group-list)::before {
   content: "Startbar"; position: absolute; left: 3px; top: 3px; bottom: 3px; width: 21px; padding-top: 6px;
-  background: var(--sh); color: var(--face); font: bold 17px/21px var(--font); letter-spacing: .5px;
+  background: linear-gradient(0deg, var(--title1), var(--title2)); color: var(--face); font: bold 17px/21px var(--font); letter-spacing: .5px;
   writing-mode: vertical-rl; transform: rotate(180deg);
 }
 .menu-head { display: none; }

@@ -103,6 +103,7 @@ const THEME_KEYS = [
 // and by its reset.
 const THEME_DEFAULTS = {
   'classic-2001': { colors: { scheme: 'blue' } },
+  'classic-1995': { colors: { scheme: 'standard' } },
   'classic-2009': { barHeight: 40, labels: 'icons-only', taskbar: { pinsPlace: 'row', showDesktop: true }, clock: { showDate: true } }
 };
 

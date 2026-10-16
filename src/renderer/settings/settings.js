@@ -48,6 +48,12 @@
             { label: 'Color scheme', note: 'The three color schemes this look came with, or System for your accent color and light or dark.',
               showWhen: (s) => s.theme === 'classic-2001',
               control: { type: 'select', key: 'colors.scheme', options: [['system', 'System'], ['blue', 'Blue'], ['olive', 'Olive Green'], ['silver', 'Silver']] } },
+            { label: 'Color scheme', note: 'Pick one, System for your accent color and light or dark, or change a color below for your own.',
+              showWhen: (s) => s.theme === 'classic-1995',
+              control: { type: 'select', key: 'colors.scheme', options: [['system', 'System'], ...Object.entries(window.schemes.W95).map(([id, s]) => [id, s[0]]), ['custom', 'Custom']] } },
+            { label: 'Bar and buttons', showWhen: (s) => s.theme === 'classic-1995', control: { type: 'colors95', keys: ['face'] } },
+            { label: 'Selected items', note: 'The highlight in the Start menu and lists.', showWhen: (s) => s.theme === 'classic-1995', control: { type: 'colors95', keys: ['selected'] } },
+            { label: 'Title bars', note: 'A fade from the first color to the second.', showWhen: (s) => s.theme === 'classic-1995', control: { type: 'colors95', keys: ['title1', 'title2'] } },
             { label: 'Accent color', note: 'Follows the accent set in System Settings, or pick one here.', unused: ACCENT,
               control: { type: 'swatches', key: 'accent' } },
             { label: 'Translucent bar', note: 'Blurs whatever is behind the bar, like the menu bar.', unused: GLASS,
@@ -324,6 +330,34 @@
     return s;
   }
 
+  // Color pickers for Classic 1995. They show the colors of the scheme in
+  // use, and changing one makes a Custom scheme from those colors.
+  const W95_KEYS = ['face', 'selected', 'title1', 'title2'];
+  const w95Now = () => {
+    const list = window.schemes.w95Colors(state.settings.colors, window.resolveTheme(state));
+    return Object.fromEntries(W95_KEYS.map((k, i) => [k, list[i]]));
+  };
+  let colorWrite = null; // the picker sends many changes a second, so writes wait a moment
+  function colors95(c) {
+    const box = node('div', 'colors');
+    const inputs = c.keys.map((k) => {
+      const input = node('input');
+      input.type = 'color';
+      input.addEventListener('input', () => {
+        const next = { ...w95Now(), [k]: input.value };
+        clearTimeout(colorWrite);
+        colorWrite = setTimeout(() => api.updateSettings({ colors: { scheme: 'custom', ...next } }), 60);
+      });
+      box.append(input);
+      return [k, input];
+    });
+    syncs.push(() => {
+      const now = w95Now();
+      inputs.forEach(([k, input]) => { if (document.activeElement !== input) input.value = now[k]; });
+    });
+    return box;
+  }
+
   function swatches(c) {
     const box = node('div', 'swatches');
     const names = { auto: 'Follow Mac', blue: 'Blue', purple: 'Purple', pink: 'Pink', red: 'Red', orange: 'Orange', yellow: 'Yellow', green: 'Green', graphite: 'Graphite' };
@@ -550,7 +584,7 @@
     return k;
   }
 
-  const CONTROLS = { toggle, seg, select, swatches, range, stepper, button, buttons, login, permission, dock, shortcut };
+  const CONTROLS = { toggle, seg, select, swatches, colors95, range, stepper, button, buttons, login, permission, dock, shortcut };
 
   // Lists of paths drawn inside a group, one row each, drag to reorder:
   // the pinned apps and the folders added to the Start menu.
