@@ -32,7 +32,8 @@ const DEFAULTS = Object.freeze({
     showPower: true,
     confirmPower: true,
     shortcut: 'Control+Space'
-  }
+  },
+  accessibilityAsked: false // the one time Accessibility dialog has been shown
 });
 
 let dir;

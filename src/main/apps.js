@@ -107,6 +107,12 @@ async function withIcons(list) {
   return out;
 }
 
+// Icons for the running apps on the bar, as { path: data URL }.
+async function icons(paths) {
+  const list = await withIcons(paths.filter(Boolean).map((p) => ({ path: p })));
+  return Object.fromEntries(list.map((a) => [a.path, a.icon]));
+}
+
 function load(force = false) {
   if (cache && !force) return Promise.resolve(cache);
   if (loading) return loading;
@@ -147,4 +153,4 @@ async function recent(count) {
     .slice(0, count);
 }
 
-module.exports = { load, recent, noteLaunch, iconFor };
+module.exports = { load, recent, noteLaunch, iconFor, icons };

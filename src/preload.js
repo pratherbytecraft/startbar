@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('startbar', {
   onMenuState: on('menu:state'),
   onMenuShown: on('menu:shown'),
   clickStart: () => ipcRenderer.send('bar:start'),
+  barMenu: () => ipcRenderer.send('bar:menu'),
   hideMenu: () => ipcRenderer.send('menu:hide'),
   apps: () => ipcRenderer.invoke('menu:apps'),
   recent: () => ipcRenderer.invoke('menu:recent'),
@@ -21,5 +22,6 @@ contextBridge.exposeInMainWorld('startbar', {
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
   getTasks: () => ipcRenderer.invoke('tasks:get'),
   onTasks: on('tasks'),
-  taskCommand: (command) => ipcRenderer.invoke('tasks:command', command)
+  taskCommand: (command) => ipcRenderer.invoke('tasks:command', command),
+  taskIcons: (paths) => ipcRenderer.invoke('tasks:icons', paths)
 });

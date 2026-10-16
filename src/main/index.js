@@ -1,6 +1,6 @@
 // Startbar main process. Owns the windows, the settings, the app list and
 // everything that touches the Mac. Renderers only draw.
-const { app, ipcMain, shell, dialog, globalShortcut, screen } = require('electron');
+const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu } = require('electron');
 const { execFile, execFileSync } = require('child_process');
 const os = require('os');
 const path = require('path');
@@ -9,6 +9,7 @@ const system = require('./system');
 const apps = require('./apps');
 const windows = require('./windows');
 const tasks = require('./tasks');
+const access = require('./access');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
@@ -95,9 +96,21 @@ async function showAbout() {
   if (response === 3) app.quit();
 }
 
+// Right click on the bar. Grows into the full bar menu later; for now it
+// only carries the way back to the Accessibility dialog.
+function showBarMenu() {
+  const items = [];
+  if (tasks.get().accessibility === false) {
+    items.push({ label: 'Allow Window Buttons…', click: () => access.ask() });
+  }
+  if (items.length === 0 || !windows.bar) return;
+  Menu.buildFromTemplate(items).popup({ window: windows.bar });
+}
+
 function wireIpc() {
   ipcMain.handle('state', () => state());
   ipcMain.on('bar:start', () => windows.toggleMenu());
+  ipcMain.on('bar:menu', () => showBarMenu());
   ipcMain.on('menu:hide', () => windows.hideMenu());
   ipcMain.handle('menu:apps', () => apps.load());
   ipcMain.handle('menu:recent', () => apps.recent(settings.get().startMenu.recentCount));
@@ -127,6 +140,7 @@ function wireIpc() {
   ipcMain.handle('settings:update', (_e, patch) => settings.update(patch));
   ipcMain.handle('tasks:get', () => tasks.get());
   ipcMain.handle('tasks:command', (_e, command) => tasks.send(command));
+  ipcMain.handle('tasks:icons', (_e, paths) => apps.icons(Array.isArray(paths) ? paths : []));
 }
 
 app.whenReady().then(() => {
@@ -137,7 +151,10 @@ app.whenReady().then(() => {
   windows.createMenu(settings.get());
   registerShortcut();
   apps.load(); // warm the icon cache before the first click
-  tasks.onChange((t) => windows.broadcast('tasks', t));
+  tasks.onChange((t) => {
+    windows.broadcast('tasks', t);
+    access.check(t);
+  });
   tasks.start();
 
   settings.onChange((s) => {

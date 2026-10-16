@@ -24,6 +24,7 @@ svg { display: block; }
 .task { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; max-width: var(--max-button); flex: 1; min-width: 36px; }
 .task .label { overflow: hidden; text-overflow: ellipsis; }
 .task img { width: 18px; height: 18px; flex: none; }
+.task.dim img, .task.dim .label { opacity: .5; }
 [data-labels="icons-only"] .task { flex: none; min-width: 0; }
 [data-labels="icons-only"] .task .label { display: none; }
 .tray { display: flex; align-items: center; gap: 10px; position: relative; }

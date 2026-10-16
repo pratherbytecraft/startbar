@@ -33,7 +33,7 @@ macOS does not let an app reserve space at the bottom of the screen, so other wi
 
 Other apps' menu bar icons can't be moved into the bar. They stay in the menu bar at the top.
 
-Window buttons need the Accessibility permission. Startbar asks once and explains why. Without it the bar shows app icons only.
+Window buttons need the Accessibility permission. Startbar asks once and explains why. Without it the bar shows one button per app. To turn it on later, right click the bar and choose Allow Window Buttons.
 
 ## Help
 
