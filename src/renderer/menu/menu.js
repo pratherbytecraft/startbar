@@ -101,18 +101,40 @@
     });
   }
 
+  // Every theme gets the three buttons. Themes that show Shut Down alone
+  // also show the arrow, which opens the other two above it.
   function renderFoot() {
     footEl.replaceChildren();
     footEl.classList.toggle('hidden', !state.settings.startMenu.showPower);
+    const pop = document.createElement('div');
+    pop.className = 'pw-pop';
     for (const [action, name, color] of POWER) {
       const s = document.createElement('span');
-      s.className = 'pw';
+      s.className = 'pw ' + action;
       const ico = document.createElement('span'); ico.className = 'ico'; ico.style.background = color;
       s.append(ico, document.createTextNode(name));
       s.addEventListener('click', () => api.power(action));
       footEl.append(s);
+      if (action === 'shutdown') continue;
+      const p = document.createElement('div');
+      p.textContent = name;
+      p.addEventListener('click', () => {
+        pop.classList.remove('open');
+        api.power(action);
+      });
+      pop.append(p);
     }
+    const more = document.createElement('span');
+    more.className = 'pw-more';
+    more.textContent = '\u25B8';
+    more.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pop.classList.toggle('open');
+    });
+    footEl.append(more, pop);
   }
+  document.addEventListener('click', () => document.querySelector('.pw-pop.open')?.classList.remove('open'));
+  window.addEventListener('blur', () => document.querySelector('.pw-pop.open')?.classList.remove('open'));
 
   async function renderRecent() {
     const list = await api.recent();

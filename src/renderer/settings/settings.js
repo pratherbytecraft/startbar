@@ -26,6 +26,7 @@
   };
 
   const SYSTEM_ONLY = { when: (s) => s.theme !== 'system', note: 'Not used by the classic themes.' };
+  const GLASS = { when: (s) => s.theme !== 'system' && s.theme !== 'classic-2009', note: 'Not used by Classic 2001 and Classic 1995.' };
 
   const PAGES = [
     {
@@ -34,13 +35,13 @@
         {
           title: 'Look',
           rows: [
-            { label: 'Theme', note: "System uses your Mac's colors. Classic 2001 and Classic 1995 are retro looks. Each theme keeps its own look and size settings.",
-              control: { type: 'select', key: 'theme', options: [['system', 'System'], ['classic-2001', 'Classic 2001'], ['classic-1995', 'Classic 1995']] } },
+            { label: 'Theme', note: "System uses your Mac's colors. Classic 2009, Classic 2001 and Classic 1995 are retro looks. Each theme keeps its own look and size settings.",
+              control: { type: 'select', key: 'theme', options: [['system', 'System'], ['classic-2009', 'Classic 2009'], ['classic-2001', 'Classic 2001'], ['classic-1995', 'Classic 1995']] } },
             { label: 'Appearance', systemOnly: true,
               control: { type: 'seg', key: 'appearance', options: [['auto', 'Follow Mac'], ['light', 'Light'], ['dark', 'Dark']] } },
-            { label: 'Accent color', note: 'Follows the accent set in System Settings, or pick one here.', systemOnly: true,
+            { label: 'Accent color', note: 'Follows the accent set in System Settings, or pick one here.', unused: GLASS,
               control: { type: 'swatches', key: 'accent' } },
-            { label: 'Translucent bar', note: 'Blurs whatever is behind the bar, like the menu bar.', systemOnly: true,
+            { label: 'Translucent bar', note: 'Blurs whatever is behind the bar, like the menu bar.', unused: GLASS,
               control: { type: 'toggle', key: 'translucent' } }
           ]
         },

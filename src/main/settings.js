@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULTS = Object.freeze({
-  theme: 'system', // system | classic-2001 | classic-1995
+  theme: 'system', // system | classic-2009 | classic-2001 | classic-1995
   appearance: 'auto', // auto | light | dark
   accent: 'auto', // auto | blue | purple | pink | red | orange | yellow | green | graphite
   translucent: true,
@@ -85,7 +85,9 @@ const THEME_KEYS = [
 
 // A theme's own defaults over the shared ones, used the first time it's picked
 // and by its reset.
-const THEME_DEFAULTS = {};
+const THEME_DEFAULTS = {
+  'classic-2009': { barHeight: 40, labels: 'icons-only', clock: { showDate: true } }
+};
 
 // The THEME_KEYS of s, in the same nested shape.
 function pick(s) {

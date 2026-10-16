@@ -314,7 +314,7 @@ async function resetSettings() {
   if (response === 0) settings.reset();
 }
 
-const THEME_NAMES = { system: 'System', 'classic-2001': 'Classic 2001', 'classic-1995': 'Classic 1995' };
+const THEME_NAMES = { system: 'System', 'classic-2009': 'Classic 2009', 'classic-2001': 'Classic 2001', 'classic-1995': 'Classic 1995' };
 
 async function resetThemeSettings() {
   const name = THEME_NAMES[settings.get().theme] || 'this theme';

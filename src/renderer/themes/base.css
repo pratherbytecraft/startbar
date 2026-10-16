@@ -62,6 +62,7 @@ svg { display: block; }
 .search input { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; color: inherit; min-width: 0; }
 .menu-foot { display: flex; align-items: center; justify-content: flex-end; flex: none; }
 .menu-foot .pw { display: flex; align-items: center; gap: 6px; }
+.pw-more, .pw-pop { display: none; }
 .hidden { display: none !important; }
 .scroll { overflow: auto; }
 

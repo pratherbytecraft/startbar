@@ -55,8 +55,12 @@ function onAllSpaces(win) {
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 }
 
-function vibrancyFor(settings) {
-  return settings.theme === 'system' && settings.translucent ? 'menu' : null;
+// Classic 2009 blurs behind the bar only. Its Start menu and popups have
+// rounded corners drawn in CSS, which the blur would fill in.
+function vibrancyFor(settings, bar = false) {
+  if (!settings.translucent) return null;
+  if (settings.theme === 'classic-2009') return bar ? 'hud' : null;
+  return settings.theme === 'system' ? 'menu' : null;
 }
 
 function barBounds(settings, display) {
@@ -100,7 +104,7 @@ function barUnderMouse() {
 }
 
 // The classic themes' Start menus sit right on the bar, each at its own size.
-const CLASSIC_MENUS = { 'classic-2001': { width: 400, height: 480 }, 'classic-1995': { width: 380, height: 460 } };
+const CLASSIC_MENUS = { 'classic-2009': { width: 410, height: 500 }, 'classic-2001': { width: 400, height: 480 }, 'classic-1995': { width: 380, height: 460 } };
 const gapFor = (name) => (CLASSIC_MENUS[name] ? 0 : MENU_GAP);
 const isClassic = (settings) => !!CLASSIC_MENUS[settings.theme];
 
@@ -142,7 +146,7 @@ function createBar(settings, display) {
     acceptFirstMouse: true, // a window that never takes focus still gets the first click
     skipTaskbar: true,
     show: false,
-    vibrancy: vibrancyFor(settings),
+    vibrancy: vibrancyFor(settings, true),
     visualEffectState: 'active',
     webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
@@ -602,7 +606,7 @@ function layout(settings) {
   setOverFullScreen(!settings.taskbar.hideInFullScreen);
   syncDisplays(settings);
   setAutoHide(settings.taskbar.autoHide);
-  for (const entry of bars.values()) entry.win.setVibrancy(vibrancyFor(settings));
+  for (const entry of bars.values()) entry.win.setVibrancy(vibrancyFor(settings, true));
   if (menu) {
     menu.setBounds(menuBounds(settings, menuBar || mainBar()));
     menu.setVibrancy(vibrancyFor(settings));

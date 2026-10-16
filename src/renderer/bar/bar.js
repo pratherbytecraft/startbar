@@ -24,6 +24,8 @@
   let pinsDrawn = '';
   let tipTimer = null;
   const icons = new Map(); // app path -> data URL
+  const glows = new Map(); // app path -> the icon's main color, for themes that light buttons with it
+  let glowRedraw = 0;
   const asked = new Set(); // app paths whose icon has been requested
 
   start.addEventListener('click', () => api.clickStart());
@@ -117,11 +119,43 @@
     if (missing.length === 0) return;
     missing.forEach((p) => asked.add(p));
     api.taskIcons(missing).then((found) => {
-      for (const [p, url] of Object.entries(found)) icons.set(p, url);
+      for (const [p, url] of Object.entries(found)) {
+        icons.set(p, url);
+        if (url) findGlow(p, url);
+      }
       drawn = '';
       renderTasks();
       renderPins();
     });
+  }
+
+  // The average of an icon's colored pixels, brightened. Grey pixels count
+  // for little, so a colorful badge on a grey icon still wins.
+  function findGlow(p, url) {
+    const img = new Image();
+    img.onload = () => {
+      const size = 16;
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, size, size);
+      const d = ctx.getImageData(0, 0, size, size).data;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 128) continue;
+        const w = (Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2])) / 255 + 0.05;
+        r += d[i] * w; g += d[i + 1] * w; b += d[i + 2] * w; n += w;
+      }
+      if (!n) return;
+      const k = 255 / Math.max(r / n, g / n, b / n, 1);
+      glows.set(p, `rgb(${Math.round((r / n) * k)}, ${Math.round((g / n) * k)}, ${Math.round((b / n) * k)})`);
+      cancelAnimationFrame(glowRedraw);
+      glowRedraw = requestAnimationFrame(() => {
+        drawn = '';
+        renderTasks();
+      });
+    };
+    img.src = url;
   }
 
   const appName = (p) => p.split('/').pop().replace(/\.app$/, '');
@@ -307,6 +341,7 @@
   function button(item) {
     const b = document.createElement('div');
     b.className = 'task' + (isActive(item) ? ' active' : '') + (isDim(item) ? ' dim' : '');
+    if (glows.has(item.app.path)) b.style.setProperty('--glow', glows.get(item.app.path));
     const img = document.createElement('img');
     img.alt = '';
     if (icons.get(item.app.path)) img.src = icons.get(item.app.path);
