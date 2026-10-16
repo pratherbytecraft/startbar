@@ -34,6 +34,7 @@ const DEFAULTS = Object.freeze({
   startMenu: {
     recentCount: 6,
     focusSearch: true,
+    search: 'apps', // apps | files (apps and files in the home folder)
     rightColumn: {
       applications: true,
       documents: true,
@@ -41,6 +42,7 @@ const DEFAULTS = Object.freeze({
       home: true,
       systemSettings: true
     },
+    folders: [], // folders added to the right column, as paths
     showPower: true,
     confirmPower: true,
     shortcut: 'Control+Space'

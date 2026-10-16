@@ -1,7 +1,7 @@
 // The bar window and the Start menu window. Both are frameless, both sit
 // above other windows, both get the same state push (settings plus what
 // the Mac looks like right now).
-const { BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, screen } = require('electron');
 const path = require('path');
 
 const MENU_WIDTH = 420;
@@ -385,10 +385,13 @@ function toggleMenu() {
 }
 
 // The settings window is made when it's opened and dropped when it's
-// closed. onClosed runs once it's gone.
+// closed. onClosed runs once it's gone. Startbar comes forward with it:
+// without that the window can open in front while another app stays
+// active, and sheets on it (the file pickers) wait until Startbar is.
 function showSettings(onClosed) {
   if (settingsWin) {
     settingsWin.show();
+    app.focus({ steal: true });
     settingsWin.focus();
     return settingsWin;
   }
@@ -409,6 +412,7 @@ function showSettings(onClosed) {
   settingsWin.loadFile(renderer('settings'));
   settingsWin.once('ready-to-show', () => {
     settingsWin.show();
+    app.focus({ steal: true });
     settingsWin.focus();
   });
   settingsWin.on('closed', () => {

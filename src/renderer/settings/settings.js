@@ -63,8 +63,9 @@
           ]
         },
         {
-          title: 'Pinned apps', pins: true,
+          title: 'Pinned apps',
           rows: [
+            { list: 'pins', label: 'Pinned apps' },
             { label: 'Pin an app', note: 'Drag the list to reorder. You can also right click an app in the Start menu or on the bar and pick Pin to Bar.',
               control: { type: 'button', text: 'Add…', click: () => api.addPins() } }
           ]
@@ -105,7 +106,9 @@
           title: 'Left column',
           rows: [
             { label: 'Recently used apps shown', control: { type: 'stepper', key: 'startMenu.recentCount', min: 0, max: 10 } },
-            { label: 'Put the cursor in the search box when the menu opens', control: { type: 'toggle', key: 'startMenu.focusSearch' } }
+            { label: 'Put the cursor in the search box when the menu opens', control: { type: 'toggle', key: 'startMenu.focusSearch' } },
+            { label: 'Search also finds', note: 'Apps are always included. Files come from Spotlight.',
+              control: { type: 'select', key: 'startMenu.search', options: [['apps', 'Apps only'], ['files', 'Apps and files in your home folder']] } }
           ]
         },
         {
@@ -115,7 +118,10 @@
             { label: 'Documents', control: { type: 'toggle', key: 'startMenu.rightColumn.documents' } },
             { label: 'Downloads', control: { type: 'toggle', key: 'startMenu.rightColumn.downloads' } },
             { label: 'Home folder', control: { type: 'toggle', key: 'startMenu.rightColumn.home' } },
-            { label: 'System Settings', control: { type: 'toggle', key: 'startMenu.rightColumn.systemSettings' } }
+            { label: 'System Settings', control: { type: 'toggle', key: 'startMenu.rightColumn.systemSettings' } },
+            { list: 'folders', label: 'Added folders' },
+            { label: 'Add a folder', note: 'Any folder can get its own entry, under Home. Drag the added ones to reorder.',
+              control: { type: 'button', text: 'Choose…', click: () => api.addFolders() } }
           ]
         },
         {
@@ -409,39 +415,62 @@
 
   const CONTROLS = { toggle, seg, select, swatches, range, stepper, button, accessibility, dock, shortcut };
 
-  // The pinned apps, one row each, drag to reorder.
-  const appName = (p) => p.split('/').pop().replace(/\.app$/, '');
-  const pinsKey = (list) => JSON.stringify(list.map((p) => [p, !!previewIcons[p]]));
+  // Lists of paths drawn inside a group, one row each, drag to reorder:
+  // the pinned apps and the folders added to the Start menu.
+  const home = () => state.home;
+  const LISTS = {
+    pins: {
+      get: () => state.pins,
+      name: (p) => p.split('/').pop().replace(/\.app$/, ''),
+      set: (list) => api.setPins(list),
+      remove: (p) => api.unpin(p),
+      empty: 'No pinned apps.'
+    },
+    folders: {
+      get: () => state.settings.startMenu.folders,
+      name: (p) => p.split('/').pop() || p,
+      where: (p) => (p.startsWith(home() + '/') ? '~' + p.slice(home().length) : p),
+      set: (list) => api.setFolders(list),
+      remove: (p) => api.setFolders(state.settings.startMenu.folders.filter((x) => x !== p)),
+      empty: 'No added folders.'
+    }
+  };
+  const listKey = (paths) => JSON.stringify(paths.map((p) => [p, !!previewIcons[p]]));
 
-  function pinRow(p) {
-    const r = node('div', 'row pin');
+  function listRow(spec, p) {
+    const r = node('div', 'row');
     r.dataset.key = p;
     const grip = node('span', 'handle');
     grip.innerHTML = '<svg viewBox="0 0 8 12"><circle cx="2" cy="2" r="1"/><circle cx="6" cy="2" r="1"/><circle cx="2" cy="6" r="1"/><circle cx="6" cy="6" r="1"/><circle cx="2" cy="10" r="1"/><circle cx="6" cy="10" r="1"/></svg>';
     const img = node('img');
     img.alt = '';
     if (previewIcons[p]) img.src = previewIcons[p];
-    const remove = button({ text: 'Remove', click: () => api.unpin(p) });
+    const lbl = node('div', 'lbl', spec.name(p));
+    if (spec.where) lbl.append(node('small', null, spec.where(p)));
+    const remove = button({ text: 'Remove', click: () => spec.remove(p) });
     remove.classList.add('no-drag');
-    r.append(grip, img, node('div', 'lbl', appName(p)), remove);
+    r.append(grip, img, lbl, remove);
     return r;
   }
 
-  function pinList() {
-    const list = node('div', 'pins');
+  function pathList(name) {
+    const spec = LISTS[name];
+    const list = node('div', 'paths');
     let drawn = '';
     window.reorderable(list, {
       axis: 'y',
       onDrop: (order) => {
-        drawn = pinsKey(order);
-        api.setPins(order);
+        drawn = listKey(order);
+        spec.set(order);
       }
     });
     syncs.push(() => {
-      const key = pinsKey(state.pins);
+      const paths = spec.get();
+      fetchIcons(paths);
+      const key = listKey(paths);
       if (key === drawn) return;
       drawn = key;
-      list.replaceChildren(...(state.pins.length ? state.pins.map(pinRow) : [node('div', 'row none', 'No pinned apps.')]));
+      list.replaceChildren(...(paths.length ? paths.map((p) => listRow(spec, p)) : [node('div', 'row none', spec.empty)]));
     });
     return list;
   }
@@ -474,8 +503,7 @@
       if (g.rows.length === 0) continue;
       out.push(node('h2', null, g.title));
       const box = node('div', 'group');
-      if (g.pins) box.append(pinList());
-      g.rows.forEach((r) => box.append(row(r)));
+      g.rows.forEach((r) => box.append(r.list ? pathList(r.list) : row(r)));
       out.push(box);
     }
     return out;
@@ -544,11 +572,10 @@
     if (words.length === 0) return show(page);
     navEl.querySelectorAll('a').forEach((a) => a.classList.remove('on'));
     previewEl.classList.remove('hidden');
-    const text = (r) => [r.label, r.note, ...(r.control.options || []).map((o) => o[1])].join(' ').toLowerCase();
+    const text = (r) => [r.label, r.note, ...((r.control && r.control.options) || []).map((o) => o[1])].join(' ').toLowerCase();
     const matches = (r) => words.every((w) => text(r).includes(w));
     const found = PAGES.filter((p) => !p.about).map((p) => ({
       title: p.title,
-      pins: p.groups.some((g) => g.pins && g.rows.some(matches)),
       rows: p.groups.flatMap((g) => g.rows.filter(matches))
     }));
     reset();

@@ -13,6 +13,7 @@ const access = require('./access');
 const tray = require('./tray');
 const pins = require('./pins');
 const dock = require('./dock');
+const files = require('./files');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
@@ -310,7 +311,34 @@ function showAppMenu(appPath) {
   ]).popup({ window: windows.menu });
 }
 
+// Folders added to the Start menu's right column.
+async function addFolders() {
+  app.focus({ steal: true }); // the picker is a sheet, which waits for Startbar to be in front
+  const { canceled, filePaths } = await dialog.showOpenDialog(windows.settings, {
+    title: 'Add Folders to the Start Menu',
+    buttonLabel: 'Add',
+    defaultPath: os.homedir(),
+    properties: ['openDirectory', 'multiSelections']
+  });
+  if (canceled) return;
+  setFolders([...settings.get().startMenu.folders, ...filePaths]);
+}
+
+function setFolders(list) {
+  const clean = (Array.isArray(list) ? list : []).filter((p) => typeof p === 'string' && path.isAbsolute(p));
+  settings.update({ startMenu: { folders: [...new Set(clean)] } });
+}
+
+// Files from the home folder for the Start menu search, with icons.
+async function searchFiles(q) {
+  if (settings.get().startMenu.search !== 'files') return [];
+  const found = await files.search(q);
+  const icons = await apps.icons(found.map((f) => f.path));
+  return found.map((f) => ({ ...f, icon: icons[f.path] || '' }));
+}
+
 async function addPins() {
+  app.focus({ steal: true }); // the picker is a sheet, which waits for Startbar to be in front
   const { canceled, filePaths } = await dialog.showOpenDialog(windows.settings, {
     title: 'Pin Apps to the Bar',
     buttonLabel: 'Pin',
@@ -373,6 +401,17 @@ function wireIpc() {
     if (target === 'settings') return openSettings();
     if (places[target]) shell.openPath(places[target]);
   });
+  ipcMain.handle('menu:files', (_e, q) => searchFiles(q));
+  ipcMain.on('menu:openFile', (_e, file) => {
+    if (typeof file !== 'string' || !file.startsWith(os.homedir() + path.sep)) return;
+    windows.hideMenu();
+    shell.openPath(file);
+  });
+  ipcMain.on('menu:openFolder', (_e, folder) => {
+    if (!settings.get().startMenu.folders.includes(folder)) return;
+    windows.hideMenu();
+    shell.openPath(folder);
+  });
   ipcMain.on('menu:power', (_e, action) => {
     windows.hideMenu();
     runPower(action);
@@ -395,6 +434,8 @@ function wireIpc() {
   ipcMain.on('pins:remove', (_e, appPath) => pins.remove(appPath));
   ipcMain.on('pins:add', () => addPins());
   ipcMain.on('dock:hidden', (_e, hide) => setDockHidden(!!hide));
+  ipcMain.on('folders:add', () => addFolders());
+  ipcMain.on('folders:set', (_e, list) => setFolders(list));
   // The shortcut field records keys, so the global shortcut steps aside.
   ipcMain.on('shortcut:pause', () => globalShortcut.unregisterAll());
   ipcMain.on('shortcut:resume', () => {

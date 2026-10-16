@@ -48,6 +48,10 @@ svg { display: block; }
 .item img, .item .ico { width: 24px; height: 24px; flex: none; }
 .col-right .item img, .col-right .item .ico { width: 20px; height: 20px; }
 .item .arrow { margin-left: auto; opacity: .7; }
+.item .where { margin-left: auto; padding-left: 8px; font-size: 11px; opacity: .6; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; max-width: 45%; }
+.item.file .label { flex: 0 1 auto; }
+.item.file img { width: 20px; height: 20px; }
+.list-head { font-size: 11px; font-weight: 600; opacity: .6; padding: 8px 8px 4px; }
 .list { flex: 1; overflow: auto; min-height: 0; }
 .search { display: flex; align-items: center; gap: 8px; flex: none; }
 .search input { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; color: inherit; min-width: 0; }
