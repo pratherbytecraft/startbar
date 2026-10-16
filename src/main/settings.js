@@ -74,6 +74,7 @@ const DEFAULTS = Object.freeze({
     auto: true // check npm for a newer version now and then, never installs
   },
   accessibilityAsked: false, // the one time Accessibility dialog has been shown
+  accessibilityStamp: '', // the app's build stamp while Accessibility last worked, see main/access.js
   screenAsked: false, // Screen Recording has been asked for, see checkScreen in main/index.js
   hideNoteShown: false, // the one time note on how to bring a hidden bar back
   automationAnswer: '', // allowed | denied: the last answer for System Events, see main/index.js
@@ -239,8 +240,8 @@ function clean(saved, base) {
 // Everything from saved, the rest from the defaults, for an import. The one
 // time dialogs stay answered.
 function replace(saved) {
-  const { accessibilityAsked, hideNoteShown, automationAnswer, screenAsked } = current;
-  current = withScheme(merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, hideNoteShown, automationAnswer, screenAsked }));
+  const { accessibilityAsked, accessibilityStamp, hideNoteShown, automationAnswer, screenAsked } = current;
+  current = withScheme(merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, accessibilityStamp, hideNoteShown, automationAnswer, screenAsked }));
   return save();
 }
 

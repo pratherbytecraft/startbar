@@ -385,7 +385,7 @@ async function exportSettings() {
     filters: [{ name: 'Startbar settings', extensions: ['json'] }]
   });
   if (canceled || !filePath) return;
-  const { accessibilityAsked, hideNoteShown, automationAnswer, screenAsked, ...saved } = settings.get();
+  const { accessibilityAsked, accessibilityStamp, hideNoteShown, automationAnswer, screenAsked, ...saved } = settings.get();
   fs.writeFileSync(filePath, JSON.stringify({ startbar: VERSION, settings: saved, pins: pins.get() }, null, 2) + '\n');
 }
 
@@ -938,7 +938,7 @@ app.whenReady().then(() => {
   tasks.onChange((t) => {
     windows.setFullScreenDisplays(fullScreenDisplays(t));
     windows.broadcast('tasks', t);
-    access.check(t);
+    access.check(t, { restartHelper: tasks.restart });
   });
   updateKeepOff();
   tasks.setSpaces(settings.get().spaces.show === 'all');
