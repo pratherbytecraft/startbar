@@ -64,10 +64,25 @@
     return d;
   }
 
+  // The system's icons for the right column, by key. A colored square until
+  // they arrive.
+  let placeIcons = {};
+
+  function placeIcon(key, color) {
+    if (placeIcons[key]) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = placeIcons[key];
+      return img;
+    }
+    const ico = document.createElement('span'); ico.className = 'ico'; ico.style.background = color;
+    return ico;
+  }
+
   function folderItem(folder) {
     const d = document.createElement('div');
     d.className = 'item';
-    const ico = document.createElement('span'); ico.className = 'ico'; ico.style.background = '#54a0ff';
+    const ico = placeIcon('folder', '#54a0ff');
     const label = document.createElement('span'); label.className = 'label'; label.textContent = folder.split('/').pop() || folder;
     d.append(ico, label);
     d.title = folder;
@@ -86,7 +101,7 @@
       if (key === 'update' && !(state.update && state.update.state === 'available')) continue;
       const d = document.createElement('div');
       d.className = 'item';
-      const ico = document.createElement('span'); ico.className = 'ico'; ico.style.background = color;
+      const ico = placeIcon(key, color);
       const label = document.createElement('span'); label.className = 'label'; label.textContent = name;
       d.append(ico, label);
       d.addEventListener('click', () => api.open(key));
@@ -233,6 +248,10 @@
   }
 
   api.getState().then(apply);
+  api.placeIcons().then((found) => {
+    placeIcons = found || {};
+    if (state) renderRight();
+  });
   api.onState(apply);
   api.onMenuShown(onShown);
 })();

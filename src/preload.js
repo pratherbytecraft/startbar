@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('startbar', {
   barMenu: () => ipcRenderer.send('bar:menu'),
   hideMenu: () => ipcRenderer.send('menu:hide'),
   apps: () => ipcRenderer.invoke('menu:apps'),
+  placeIcons: () => ipcRenderer.invoke('menu:placeIcons'),
   recent: () => ipcRenderer.invoke('menu:recent'),
   launch: (appPath) => ipcRenderer.send('menu:launch', appPath),
   appMenu: (appPath) => ipcRenderer.send('menu:appMenu', appPath),

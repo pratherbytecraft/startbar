@@ -113,6 +113,28 @@ function openSettings(page) {
 // The Permissions page. Each permission is allowed, notAsked, denied, off
 // (Location Services is off for the whole Mac) or null until the status
 // helper reports. Accessibility comes from the window list instead.
+// The icons in the Start menu's right column. The folder icons come from the
+// system's own icon files, not from the folders, so drawing them never needs
+// access to Documents or Downloads.
+const CORE_ICONS = '/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/';
+const STARTBAR_ICON = path.join(__dirname, '..', '..', 'assets', 'Startbar.icns');
+const PLACE_ICONS = {
+  applications: CORE_ICONS + 'ApplicationsFolderIcon.icns',
+  documents: CORE_ICONS + 'DocumentsFolderIcon.icns',
+  downloads: CORE_ICONS + 'DownloadsFolder.icns',
+  home: CORE_ICONS + 'HomeFolderIcon.icns',
+  folder: CORE_ICONS + 'GenericFolderIcon.icns', // added folders
+  systemSettings: '/System/Applications/System Settings.app',
+  settings: STARTBAR_ICON,
+  update: STARTBAR_ICON,
+  about: STARTBAR_ICON
+};
+
+async function placeIcons() {
+  const found = await apps.icons(Object.values(PLACE_ICONS));
+  return Object.fromEntries(Object.entries(PLACE_ICONS).map(([key, p]) => [key, found[p] || '']));
+}
+
 const PANES = {
   automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
@@ -585,6 +607,7 @@ function wireIpc() {
     if (places[target]) shell.openPath(places[target]);
   });
   ipcMain.handle('menu:files', (_e, q) => searchFiles(q));
+  ipcMain.handle('menu:placeIcons', () => placeIcons());
   ipcMain.on('menu:openFile', (_e, file) => {
     if (typeof file !== 'string' || !file.startsWith(os.homedir() + path.sep)) return;
     windows.hideMenu();

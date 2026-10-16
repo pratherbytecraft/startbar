@@ -77,7 +77,8 @@ func runIcons(cacheDir: String) {
         if path.isEmpty { continue }
         let out = (cacheDir as NSString).appendingPathComponent(cacheName(for: path))
         if !FileManager.default.fileExists(atPath: out) {
-            let icon = NSWorkspace.shared.icon(forFile: path)
+            // An .icns file is drawn as the image it holds, not as a file.
+            let icon = (path.hasSuffix(".icns") ? NSImage(contentsOfFile: path) : nil) ?? NSWorkspace.shared.icon(forFile: path)
             icon.size = NSSize(width: 64, height: 64)
             if let data = pngData(for: icon, size: 64) {
                 try? data.write(to: URL(fileURLWithPath: out))
