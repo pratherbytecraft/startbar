@@ -15,6 +15,27 @@
     const x = rgb(a), y = rgb(b);
     return hex(x.map((v, i) => v + (y[i] - v) * t));
   }
+  // [hue 0 to 360, saturation 0 to 100, brightness (lightness) 0 to 100]
+  function toHsl(c) {
+    const [r, g, b] = rgb(c).map((v) => v / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    let h = 0, s = 0;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h *= 60;
+    }
+    return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+  }
+  function fromHsl([h, s, l]) {
+    s /= 100; l /= 100;
+    const k = (n) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return hex([f(0) * 255, f(8) * 255, f(4) * 255]);
+  }
   function luminance(c) {
     const [r, g, b] = rgb(c);
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
@@ -138,5 +159,5 @@
   }
 
   window.schemeVars = schemeVars;
-  window.schemes = { XP: Object.keys(XP), W95, GLASS, w95Colors, glassColor, mix };
+  window.schemes = { XP: Object.keys(XP), W95, GLASS, w95Colors, glassColor, mix, toHsl, fromHsl };
 })();

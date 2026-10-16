@@ -30,7 +30,7 @@
   // The accent color shows in the System theme, and in a classic theme set
   // to its System color scheme.
   const ACCENT = {
-    when: (s) => s.theme !== 'system' && s.colors.scheme !== 'system' && !(s.theme === 'classic-2009' && s.colors.scheme === 'default'),
+    when: (s) => s.theme !== 'system' && s.colors.scheme !== 'system',
     note: "Used by this theme's System color scheme."
   };
 
@@ -51,6 +51,12 @@
             { label: 'Color scheme', note: 'Pick one, System for your accent color and light or dark, or change a color below for your own.',
               showWhen: (s) => s.theme === 'classic-1995',
               control: { type: 'select', key: 'colors.scheme', options: [['system', 'System'], ...Object.entries(window.schemes.W95).map(([id, s]) => [id, s[0]]), ['custom', 'Custom']] } },
+            { label: 'Glass color', note: 'System follows your accent color.', showWhen: (s) => s.theme === 'classic-2009', control: { type: 'glass' } },
+            { label: 'Color intensity', showWhen: (s) => s.theme === 'classic-2009', control: { type: 'range', key: 'colors.intensity', min: 10, max: 80, step: 1, unit: '%' } },
+            { label: 'Color mixer', showWhen: (s) => s.theme === 'classic-2009', control: { type: 'mixerLink' } },
+            { label: 'Hue', showWhen: (s) => s.theme === 'classic-2009' && mixerOpen, control: { type: 'mixer', part: 0, max: 360, unit: '°' } },
+            { label: 'Saturation', showWhen: (s) => s.theme === 'classic-2009' && mixerOpen, control: { type: 'mixer', part: 1, max: 100, unit: '%' } },
+            { label: 'Brightness', showWhen: (s) => s.theme === 'classic-2009' && mixerOpen, control: { type: 'mixer', part: 2, max: 100, unit: '%' } },
             { label: 'Bar and buttons', showWhen: (s) => s.theme === 'classic-1995', control: { type: 'colors95', keys: ['face'] } },
             { label: 'Selected items', note: 'The highlight in the Start menu and lists.', showWhen: (s) => s.theme === 'classic-1995', control: { type: 'colors95', keys: ['selected'] } },
             { label: 'Title bars', note: 'A fade from the first color to the second.', showWhen: (s) => s.theme === 'classic-1995', control: { type: 'colors95', keys: ['title1', 'title2'] } },
@@ -358,6 +364,64 @@
     return box;
   }
 
+  // Classic 2009's glass color: System first, then its colors. The mixer
+  // under it picks any color, which makes it Custom.
+  let mixerOpen = false;
+  const glassNow = () => window.schemes.glassColor(state.settings.colors, window.resolveTheme(state));
+  function glass() {
+    const wrap = node('div', 'glass');
+    const box = node('div', 'swatches square');
+    const name = node('small', 'glass-name');
+    const dots = Object.entries(window.schemes.GLASS).map(([id, [label, color]]) => {
+      const d = node('i', color ? null : 'auto');
+      if (color) d.style.background = color;
+      d.title = label;
+      d.addEventListener('click', () => setPath('colors.scheme', id));
+      box.append(d);
+      return [id, d];
+    });
+    wrap.append(box, name);
+    syncs.push(() => {
+      const scheme = state.settings.colors.scheme;
+      dots.forEach(([id, d]) => d.classList.toggle('on', id === scheme));
+      name.textContent = scheme === 'custom' ? 'Custom' : (window.schemes.GLASS[scheme] || ['Sky'])[0];
+    });
+    return wrap;
+  }
+  function mixerLink() {
+    const l = node('span', 'link', 'Show color mixer');
+    l.addEventListener('click', () => {
+      mixerOpen = !mixerOpen;
+      l.textContent = mixerOpen ? 'Hide color mixer' : 'Show color mixer';
+      syncs.forEach((fn) => fn());
+    });
+    return l;
+  }
+  function mixer(c) {
+    const box = node('div', 'ctl-inner');
+    box.style.display = 'contents';
+    const r = node('input');
+    r.type = 'range';
+    r.min = 0;
+    r.max = c.max;
+    const val = node('span', 'val');
+    let frame = 0;
+    r.addEventListener('input', () => {
+      val.textContent = r.value + c.unit;
+      const hsl = window.schemes.toHsl(glassNow());
+      hsl[c.part] = Number(r.value);
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => api.updateSettings({ colors: { scheme: 'custom', tint: window.schemes.fromHsl(hsl) } }));
+    });
+    syncs.push(() => {
+      const v = window.schemes.toHsl(glassNow())[c.part];
+      if (document.activeElement !== r) r.value = v;
+      val.textContent = Math.round(document.activeElement === r ? r.value : v) + c.unit;
+    });
+    box.append(r, val);
+    return box;
+  }
+
   function swatches(c) {
     const box = node('div', 'swatches');
     const names = { auto: 'Follow Mac', blue: 'Blue', purple: 'Purple', pink: 'Pink', red: 'Red', orange: 'Orange', yellow: 'Yellow', green: 'Green', graphite: 'Graphite' };
@@ -390,13 +454,13 @@
     const val = node('span', 'val');
     let frame = 0;
     r.addEventListener('input', () => {
-      val.textContent = r.value + ' px';
+      val.textContent = r.value + (c.unit || ' px');
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => setPath(c.key, Number(r.value)));
     });
     syncs.push(() => {
       if (document.activeElement !== r) r.value = getPath(c.key);
-      val.textContent = getPath(c.key) + ' px';
+      val.textContent = getPath(c.key) + (c.unit || ' px');
     });
     box.append(r, val);
     return box;
@@ -584,7 +648,7 @@
     return k;
   }
 
-  const CONTROLS = { toggle, seg, select, swatches, colors95, range, stepper, button, buttons, login, permission, dock, shortcut };
+  const CONTROLS = { toggle, seg, select, swatches, colors95, glass, mixerLink, mixer, range, stepper, button, buttons, login, permission, dock, shortcut };
 
   // Lists of paths drawn inside a group, one row each, drag to reorder:
   // the pinned apps and the folders added to the Start menu.

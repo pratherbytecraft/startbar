@@ -104,7 +104,7 @@ const THEME_KEYS = [
 const THEME_DEFAULTS = {
   'classic-2001': { colors: { scheme: 'blue' } },
   'classic-1995': { colors: { scheme: 'standard' } },
-  'classic-2009': { barHeight: 40, labels: 'icons-only', taskbar: { pinsPlace: 'row', showDesktop: true }, clock: { showDate: true } }
+  'classic-2009': { barHeight: 40, labels: 'icons-only', taskbar: { pinsPlace: 'row', showDesktop: true }, clock: { showDate: true }, colors: { scheme: 'sky' } }
 };
 
 // The THEME_KEYS of s, in the same nested shape.
