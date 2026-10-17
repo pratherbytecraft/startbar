@@ -201,7 +201,9 @@ func axFrame(_ element: AXUIElement) -> CGRect? {
 let axCallback: AXObserverCallback = { _, element, notification, refcon in
     guard let refcon else { return }
     let watcher = Unmanaged<WindowWatcher>.fromOpaque(refcon).takeUnretainedValue()
-    if notification as String == kAXUIElementDestroyedNotification { watcher.closed(element) }
+    if notification as String == kAXUIElementDestroyedNotification || notification as String == kAXWindowMiniaturizedNotification {
+        watcher.closed(element)
+    }
     watcher.changed()
 }
 
@@ -931,19 +933,22 @@ final class WindowWatcher {
         }
     }
 
-    // The front window of the front app closed. macOS then makes the app's
-    // next window key and orders it front, which pulls it over other apps'
-    // windows that sat above it. Closing should reveal what was under the
-    // window instead, so when that is another app's window it is raised
-    // alone, a moment after macOS has done its reorder. Dialogs are left
-    // alone, their app's own window should stay in front.
+    // The front window of the front app closed or was minimized. macOS then
+    // makes the app's next window key and orders it front, which pulls it
+    // over other apps' windows that sat above it. Closing or minimizing
+    // should reveal what was under the window instead, so when that is
+    // another app's window it is raised alone, a moment after macOS has done
+    // its reorder. Dialogs are left alone, their app's own window should
+    // stay in front.
     func closed(_ element: AXUIElement) {
         guard let (pid, item) = known.lazy.compactMap({ (pid, list) in list.first(where: { CFEqual($0.element, element) }).map { (pid, $0) } }).first,
               item.standard, item.id.hasPrefix("w"), let number = CGWindowID(item.id.dropFirst()),
-              NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
-              let at = frontOrder.firstIndex(where: { $0.id == number }), at == 0, frontOrder.count > 1 else { return }
+              frontOrder.first?.id == number, frontOrder.count > 1 else { return }
         let under = frontOrder[1]
-        guard under.pid != pid, let target = known[under.pid]?.first(where: { $0.id == "w\(under.id)" }) else { return }
+        guard under.pid != pid, let target = known[under.pid]?.first(where: { $0.id == "w\(under.id)" }) else {
+            note("window \(item.id) went away, under it is \(under.id) of \(under.pid), left alone")
+            return
+        }
         note("window \(item.id) closed, raising \(target.id) under it")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self else { return }
@@ -965,6 +970,14 @@ final class WindowWatcher {
     }
 
     func activate(_ window: AXUIElement, pid: pid_t) {
+        // The kept front to back order knows about the raise right away, so
+        // a close or minimize before the next scan still reveals what's
+        // under this window.
+        var raisedId: CGWindowID = 0
+        if _AXUIElementGetWindow(window, &raisedId) == .success, raisedId != 0 {
+            frontOrder.removeAll { $0.id == raisedId }
+            frontOrder.insert((pid, raisedId), at: 0)
+        }
         let app = NSRunningApplication(processIdentifier: pid)
         if app?.isHidden == true { app?.unhide() }
         if axBool(window, kAXMinimizedAttribute) {
