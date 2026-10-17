@@ -61,6 +61,24 @@ describe('the window list', async () => {
     assert.ok(win.w > 0 && win.h > 0);
   });
 
+  test('a peek brings the window forward and the put back takes it away again', { skip: why || false }, async () => {
+    // TextEdit was opened in the background, so another app is in front.
+    const shown = helper.waitForNext((m) => {
+      const a = textEdit(m);
+      return a && a.active && a.windows.some((w) => w.id === win.id && w.focused);
+    });
+    const reply = await helper.send({ cmd: 'peek', id: win.id });
+    assert.equal(reply.ok, true);
+    assert.equal(reply.peeked, true);
+    await shown;
+    const gone = helper.waitForNext((m) => {
+      const a = textEdit(m);
+      return a && !a.active;
+    });
+    assert.equal((await helper.send({ cmd: 'unpeek' })).ok, true);
+    await gone;
+  });
+
   test('minimizes and brings the window back', { skip: why || false }, async () => {
     const isMin = (want) => (m) => {
       const a = textEdit(m);

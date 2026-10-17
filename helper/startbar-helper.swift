@@ -222,6 +222,8 @@ let axCallback: AXObserverCallback = { _, element, notification, refcon in
 //   {"cmd":"activate","id":"w123"}    raise the window and bring its app forward
 //   {"cmd":"minimize","id":"w123"}    {"cmd":"unminimize","id":"w123"}
 //   {"cmd":"close","id":"w123"}       press the window's close button
+//   {"cmd":"peek","id":"w123"}        show the window alone until unpeek, reply has "peeked"
+//   {"cmd":"unpeek"}                  put the window that was in front back
 //   {"cmd":"askScreen"}               ask for the Screen Recording permission (macOS asks once)
 //   {"cmd":"thumb","id":"w123","width":380,"height":240}
 //                                     a picture of the window, answered later as "image", a JPEG data URL
@@ -249,6 +251,7 @@ final class WindowWatcher {
         var standard = true // a standard window, not a dialog
     }
     var frontOrder: [(pid: pid_t, id: CGWindowID)] = [] // on screen windows front to back, from the last scan
+    var peeked: (id: CGWindowID, back: (pid: pid_t, id: CGWindowID)?)? // the window shown by a peek, and the one to put back in front
 
     var trusted = AXIsProcessTrusted()
     var observers: [pid_t: AXObserver] = [:]
@@ -885,6 +888,14 @@ final class WindowWatcher {
             guard let pid = command["pid"] as? Int, let found = newWindowItem(pid_t(pid)) else { return "no new window item" }
             replyExtra["title"] = found.title
             return nil
+        case "peek":
+            guard trusted else { return "no accessibility permission" }
+            guard let id = command["id"] as? String, let (pid, window) = find(id) else { return "no such window" }
+            replyExtra["peeked"] = peek(window, pid: pid)
+            return nil
+        case "unpeek":
+            unpeek()
+            return nil
         case "activate", "minimize", "unminimize", "close":
             guard trusted else { return "no accessibility permission" }
             guard let id = command["id"] as? String, let (pid, window) = find(id) else { return "no such window" }
@@ -1104,7 +1115,40 @@ final class WindowWatcher {
         }
     }
 
+    // A peek, from resting on a window's picture: the window comes forward
+    // alone until unpeek puts the window that was in front back. Minimized,
+    // hidden, full screen and other Space windows are left alone, since
+    // showing them means an animation or a Space switch; so is the window
+    // already in front. A second peek while one is up keeps the first one's
+    // window to put back. False when nothing was shown.
+    func peek(_ window: AXUIElement, pid: pid_t) -> Bool {
+        var id: CGWindowID = 0
+        guard _AXUIElementGetWindow(window, &id) == .success, id != 0 else { return false }
+        if let peeked, peeked.id == id { return true }
+        let back = peeked?.back ?? frontOrder.first
+        if let back, back.id == id {
+            unpeek()
+            return true
+        }
+        guard NSRunningApplication(processIdentifier: pid)?.isHidden != true,
+              !axBool(window, kAXMinimizedAttribute), !axBool(window, "AXFullScreen"),
+              windowServerList().onScreen.contains(id) else { return false }
+        guard raiseOnly(window, pid: pid) else { return false }
+        note("peek at \(id), \(back.map { "\($0.id) of \($0.pid)" } ?? "nothing") goes back after")
+        peeked = (id, back)
+        return true
+    }
+
+    func unpeek() {
+        guard let p = peeked else { return }
+        peeked = nil
+        guard let back = p.back, let target = known[back.pid]?.first(where: { $0.id == "w\(back.id)" }),
+              !axBool(target.element, kAXMinimizedAttribute) else { return }
+        _ = raiseOnly(target.element, pid: back.pid)
+    }
+
     func activate(_ window: AXUIElement, pid: pid_t) {
+        peeked = nil // a click during a peek keeps the window where it is
         // The kept front to back order knows about the raise right away, so
         // a close or minimize before the next scan still reveals what's
         // under this window.
