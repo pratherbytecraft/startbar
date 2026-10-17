@@ -836,6 +836,36 @@ function ungroupWindow(id) {
 // The task state the bars draw from, with the ungrouped window ids.
 const taskState = () => ungrouped.withIds(tasks.get());
 
+// A window dragged out of the group list or the preview, see
+// renderer/shared/dragout.js. The bar under the pointer shows a slot for
+// it; dropping there pulls the window out of its group. The tip window is
+// the ghost under the cursor.
+let drag = null; // { id, pid, bar }
+function dragOut(d) {
+  if (!d || typeof d !== 'object') return;
+  const point = { x: Number(d.x) || 0, y: Number(d.y) || 0 };
+  if (d.phase === 'start') {
+    drag = { id: String(d.id), pid: d.pid, bar: null };
+    windows.holdPreview(true);
+    windows.showGhost({ text: String(d.title || ''), icon: typeof d.icon === 'string' ? d.icon : '' }, point);
+  }
+  if (!drag) return;
+  const over = windows.barAt(point);
+  if (over !== drag.bar) {
+    if (drag.bar && !drag.bar.isDestroyed()) drag.bar.webContents.send('tasks:dragOver', null);
+    drag.bar = over;
+    if (over) over.webContents.send('tasks:dragOver', { pid: drag.pid });
+  }
+  if (d.phase === 'move') return windows.moveGhost(point);
+  if (d.phase !== 'drop' && d.phase !== 'cancel') return;
+  const { id, bar } = drag;
+  drag = null;
+  if (bar && !bar.isDestroyed()) bar.webContents.send('tasks:dragOver', null);
+  windows.hideTip();
+  windows.holdPreview(false);
+  if (bar && d.phase === 'drop') ungroupWindow(id);
+}
+
 // Window pictures for the hover previews, from the window helper. A fresh
 // one is taken after a few seconds; until then the kept one is shown, so
 // moving back and forth between buttons is quick. A minimized window can't
@@ -960,6 +990,7 @@ function wireIpc() {
   ipcMain.handle('tasks:get', () => taskState());
   ipcMain.on('tasks:ungroup', (_e, id) => ungroupWindow(String(id)));
   ipcMain.on('tasks:regroup', (_e, id) => ungrouped.regroup(String(id)));
+  ipcMain.on('tasks:dragOut', (_e, d) => dragOut(d));
   ipcMain.handle('tasks:command', (_e, command) => (command && command.cmd === 'minimize' ? minimize(command) : tasks.send(command)));
   ipcMain.handle('tasks:icons', (_e, paths) => apps.icons(Array.isArray(paths) ? paths : []));
   ipcMain.on('tasks:menu', (e, target) => showTaskMenu(target || {}, e.sender));

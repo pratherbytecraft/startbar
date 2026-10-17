@@ -160,3 +160,12 @@ svg { display: block; }
 .item .arrow.open { transform: rotate(90deg); }
 
 .tip { position: absolute; left: 8px; top: 8px; width: max-content; max-width: 480px; overflow-wrap: anywhere; }
+.tip.ghost { display: flex; align-items: center; gap: 6px; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tip.ghost img { width: 16px; height: 16px; flex: none; }
+
+/* ungroup: a row or picture being dragged out, the slot on the bar where
+   its button lands */
+.group-list .item .handle { margin-left: auto; padding-left: 8px; font-size: 12px; letter-spacing: -1px; opacity: .35; }
+.group-list .item:hover .handle { opacity: .9; }
+.lifted { opacity: .35; }
+.tasks .task.slot { pointer-events: none; background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: none; outline: 2px dashed color-mix(in srgb, var(--accent) 80%, #fff); outline-offset: -2px; }

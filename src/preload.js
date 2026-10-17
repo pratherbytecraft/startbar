@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld('startbar', {
   taskMenu: (target) => ipcRenderer.send('tasks:menu', target),
   ungroup: (id) => ipcRenderer.send('tasks:ungroup', id),
   regroup: (id) => ipcRenderer.send('tasks:regroup', id),
+  dragOut: (d) => ipcRenderer.send('tasks:dragOut', d),
+  onDragOver: on('tasks:dragOver'),
   showTip: (tip) => ipcRenderer.send('tip:show', tip),
   hideTip: () => ipcRenderer.send('tip:hide'),
   onTipText: on('tip:text'),

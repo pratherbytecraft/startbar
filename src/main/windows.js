@@ -29,6 +29,7 @@ let menuBar = null; // the bar the Start menu opened on
 let lastMenuHide = 0;
 let tip = null;
 let tipAnchor = null; // { rect, bar } of the hovered button, rect in bar coordinates
+let tipFollow = null; // the screen point the tip follows as the ghost of a dragged window
 let group = null;
 let groupAnchor = null; // { pid, rect, bar } of the group button the list belongs to
 let lastGroupHide = { pid: null, at: 0 };
@@ -43,6 +44,7 @@ let preview = null; // the window pictures over a window button
 let previewAnchor = null; // { rect, bar } of the button
 let previewHover = false; // the mouse is over the pictures
 let previewHide = null;
+let previewHeld = false; // a window is being dragged out of the pictures, so they stay
 let settingsWin = null;
 let barHidden = false; // Hide the Bar, for this session only
 const visibility = new Set();
@@ -340,7 +342,15 @@ function sizePreview({ width, height }) {
 // move up onto them.
 function leavePreview() {
   clearTimeout(previewHide);
+  if (previewHeld) return;
   previewHide = setTimeout(() => { if (!previewHover) hidePreview(); }, 250);
+}
+
+// Keep the pictures up while a window is dragged out of them.
+function holdPreview(on) {
+  previewHeld = !!on;
+  if (previewHeld) clearTimeout(previewHide);
+  else if (!previewHover) leavePreview();
 }
 
 function hoverPreview(on) {
@@ -353,6 +363,7 @@ function hidePreview() {
   clearTimeout(previewHide);
   previewAnchor = null;
   previewHover = false;
+  previewHeld = false;
   if (preview && preview.isVisible()) preview.hide();
 }
 
@@ -433,16 +444,24 @@ function panelOpenAt(rect, barWin) {
 function showTip(text, rect, barWin) {
   if (!tip || !liveBar(barWin) || panelOpenAt(rect, barWin)) return;
   tipAnchor = { rect, bar: barWin };
+  tipFollow = null;
   tip.webContents.send('tip:text', text);
 }
 
-// The tooltip renderer measured its text. Center it over the button.
+// The tooltip renderer measured its text. Center it over the button, or
+// put it by the cursor when it's the ghost of a dragged window.
 function sizeTip({ width, height }) {
-  if (!tip || !tipAnchor || !liveBar(tipAnchor.bar)) return;
-  const b = tipAnchor.bar.getBounds();
-  const { rect } = tipAnchor;
+  if (!tip) return;
   const w = width + TIP_MARGIN * 2;
   const h = height + TIP_MARGIN * 2;
+  if (tipFollow) {
+    tip.setBounds({ ...ghostAt(tipFollow), width: w, height: h });
+    tip.showInactive();
+    return;
+  }
+  if (!tipAnchor || !liveBar(tipAnchor.bar)) return;
+  const b = tipAnchor.bar.getBounds();
+  const { rect } = tipAnchor;
   const x = clampX(b.x + rect.x + rect.width / 2 - w / 2, w, tipAnchor.bar);
   const y = b.y - 6 - height - TIP_MARGIN;
   tip.setBounds({ x, y, width: w, height: h });
@@ -451,7 +470,38 @@ function sizeTip({ width, height }) {
 
 function hideTip() {
   tipAnchor = null;
+  tipFollow = null;
   if (tip && tip.isVisible()) tip.hide();
+}
+
+// MARK: a window dragged out of its group
+
+const ghostAt = (p) => ({ x: Math.round(p.x + 12), y: Math.round(p.y + 12) });
+
+// The tip as the ghost under the cursor: the window's icon and title.
+function showGhost(payload, point) {
+  if (!tip) return;
+  tipAnchor = null;
+  tipFollow = point;
+  tip.webContents.send('tip:text', payload);
+}
+
+function moveGhost(point) {
+  tipFollow = point;
+  if (tip && tip.isVisible()) {
+    const { x, y } = ghostAt(point);
+    tip.setPosition(x, y);
+  }
+}
+
+// The bar under a screen point, if any.
+function barAt(point) {
+  for (const entry of bars.values()) {
+    if (entry.win.isDestroyed() || !entry.win.isVisible()) continue;
+    const b = entry.win.getBounds();
+    if (point.x >= b.x && point.x < b.x + b.width && point.y >= b.y && point.y < b.y + b.height) return entry.win;
+  }
+  return null;
 }
 
 function showGroup(payload, barWin) {
@@ -810,7 +860,7 @@ function broadcast(channel, payload) {
 
 module.exports = {
   createBars, createMenu, createTip, createGroup, createCalendar, createPopover, createPreview, layout, showMenu, hideMenu, toggleMenu,
-  showPreview, sendPreview, sizePreview, leavePreview, hoverPreview, hidePreview,
+  showPreview, sendPreview, sizePreview, leavePreview, hoverPreview, hidePreview, holdPreview, showGhost, moveGhost, barAt,
   showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, toggleCalendar, sizeCalendar, hideCalendar,
   togglePopover, sizePopover, hidePopover, broadcast,
   hideBar, showBar, onBarVisibility, holdBar, setFullScreenDisplays, barAreas, barOf, showSettings,

@@ -7,6 +7,7 @@
   const api = window.startbar;
   const pv = document.getElementById('pv');
   const MAX = 6; // more than this and the group list is the better fit
+  let current = null; // the preview shown
 
   function thumb(w, icon, p) {
     const d = document.createElement('div');
@@ -21,7 +22,7 @@
     label.className = 'label';
     label.textContent = w.title;
     const x = document.createElement('span');
-    x.className = 'x';
+    x.className = 'x no-drag';
     x.textContent = '×';
     x.title = 'Close';
     x.addEventListener('click', (e) => {
@@ -54,7 +55,11 @@
     return d;
   }
 
+  // Dragging a picture out onto the bar gives that window its own button.
+  window.dragOut(pv, { payload: (el) => ({ id: el.dataset.id, pid: current.pid, title: el.querySelector('.label').textContent, icon: current.icon }) });
+
   api.onPreviewShow((p) => {
+    current = p;
     pv.replaceChildren(...p.windows.slice(0, MAX).map((w) => thumb(w, p.icon, p)));
     window.playOpen(pv);
     // Measured now, not on the next frame: a hidden window gets no frames.

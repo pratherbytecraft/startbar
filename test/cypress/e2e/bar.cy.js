@@ -31,6 +31,14 @@ describe('bar', () => {
     cy.calls('taskMenu').its(0).its(0).should('deep.include', { kind: 'window', pid: 2, id: 'w3' });
   });
 
+  it('a drag over the bar opens a slot after the app\'s buttons', () => {
+    cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
+    cy.fake().then((api) => api.emit('dragOver', { pid: 2 }));
+    cy.get('#tasks .task.slot').should('have.length', 1).prev().should('contain.text', 'Safari');
+    cy.fake().then((api) => api.emit('dragOver', null));
+    cy.get('#tasks .task.slot').should('not.exist');
+  });
+
   it('never grouping gives each window its own button', () => {
     cy.page('bar/index.html', (state, extra) => {
       extra.tasks = TASKS;

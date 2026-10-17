@@ -19,6 +19,7 @@
 
   let tasks = { accessibility: null, apps: [] };
   let ungrouped = new Set(); // ids of windows pulled out of their group, see main/ungrouped.js
+  let dragSlot = null; // the pid of the app whose window is being dragged onto this bar, see main/index.js dragOut
   // Which display this bar is on: { id, main, bars, displays: [{ id, main, bounds }] }.
   let place = null;
   let drawn = '';
@@ -478,6 +479,11 @@
 
   function button(item) {
     if (item.kind === 'pin') return pinTask(item.path);
+    if (item.kind === 'slot') {
+      const s = document.createElement('div');
+      s.className = 'task slot';
+      return s;
+    }
     const b = document.createElement('div');
     b.className = 'task' + (isActive(item) ? ' active' : '') + (isDim(item) ? ' dim' : '');
     if (glows.has(item.app.path)) b.style.setProperty('--glow', glows.get(item.app.path));
@@ -547,7 +553,14 @@
     const arranged = arrange(items, t.grouping, width);
     const compact = arranged.compact;
     const list = pinList.length ? inRow(arranged.list, pinList) : arranged.list;
-    const key = JSON.stringify([compact, t, place, state.settings.displays, state.settings.spaces, pinList, list.map((item) => item.kind === 'pin' ? ['pin', item.path] : [
+    // While a window is dragged out of its group, the slot where its button
+    // lands: after the app's last button, or at the end.
+    if (dragSlot !== null) {
+      let at = list.length - 1;
+      list.forEach((item, i) => { if (item.kind !== 'pin' && item.app.pid === dragSlot) at = i; });
+      list.splice(at + 1, 0, { kind: 'slot' });
+    }
+    const key = JSON.stringify([compact, t, place, state.settings.displays, state.settings.spaces, pinList, list.map((item) => item.kind === 'pin' ? ['pin', item.path] : item.kind === 'slot' ? ['slot'] : [
       item.kind, item.app.pid, item.app.path, isActive(item), isDim(item),
       item.kind === 'window' ? [item.win.id, item.win.title] : item.kind === 'group' ? item.wins.map((w) => [w.id, w.title, w.minimized, w.focused]) : item.app.name
     ])]);
@@ -577,6 +590,12 @@
     renderPlace();
     renderTasks();
   }
+
+  api.onDragOver((d) => {
+    dragSlot = d ? d.pid : null;
+    drawn = '';
+    renderTasks();
+  });
 
   api.onBarPlace((next) => {
     place = next;
