@@ -26,8 +26,6 @@ body { font-size: 11px; color: var(--text95); }
 }
 [data-start-label="off"] .start { padding: 0 5px; }
 .start.open { box-shadow: var(--pressed); padding-top: 1px; padding-left: 6px; }
-.start .glyph-fill { fill: var(--navy); }
-.start .glyph-ink { fill: #fff; }
 
 .quick .icon { width: 22px; height: 22px; }
 .quick .icon img { width: 16px; height: 16px; }
