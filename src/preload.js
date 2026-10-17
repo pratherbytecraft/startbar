@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld('startbar', {
   leavePreview: () => ipcRenderer.send('preview:leave'),
   hidePreview: () => ipcRenderer.send('preview:hide'),
   previewHover: (on) => ipcRenderer.send('preview:hover', on),
+  previewPeek: (id) => ipcRenderer.send('preview:peek', id), // null puts things back
   previewSize: (size) => ipcRenderer.send('preview:size', size),
   onPreviewShow: on('preview:show'),
   onPreviewImage: on('preview:image'),

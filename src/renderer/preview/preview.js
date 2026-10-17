@@ -45,14 +45,35 @@
     }
     d.append(head, shot);
     d.addEventListener('click', () => {
+      clearTimeout(peekTimer);
+      api.taskCommand({ cmd: 'activate', id: w.id }); // before the hide, so a peek in progress just stays
       api.hidePreview();
-      api.taskCommand({ cmd: 'activate', id: w.id });
     });
+    if (!w.minimized) {
+      d.addEventListener('mouseenter', () => enterThumb(w.id));
+      d.addEventListener('mouseleave', leaveThumb);
+    }
     d.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       api.taskMenu({ kind: 'window', pid: p.pid, id: w.id, inGroup: !!p.group });
     });
     return d;
+  }
+
+  // Resting on a picture for a moment shows its window alone; moving off
+  // puts things back, unless the pointer lands on another picture right
+  // away, which keeps the same window to put back.
+  let peekTimer = null;
+  let unpeekTimer = null;
+  function enterThumb(id) {
+    clearTimeout(unpeekTimer);
+    clearTimeout(peekTimer);
+    peekTimer = setTimeout(() => api.previewPeek(id), 500);
+  }
+  function leaveThumb() {
+    clearTimeout(peekTimer);
+    clearTimeout(unpeekTimer);
+    unpeekTimer = setTimeout(() => api.previewPeek(null), 150);
   }
 
   // Dragging a picture out onto the bar gives that window its own button.

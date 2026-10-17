@@ -929,8 +929,22 @@ function takePictures(payload) {
   }
 }
 
+// Resting on a picture in a preview shows that window alone; moving off,
+// or the pictures going away, puts the window that was in front back.
+let peeking = false;
+function peek(id) {
+  if (id && settings.get().taskbar.peek) {
+    peeking = true;
+    tasks.send({ cmd: 'peek', id });
+  } else if (peeking) {
+    peeking = false;
+    tasks.send({ cmd: 'unpeek' });
+  }
+}
+
 function wireIpc() {
   ipcMain.on('preview:show', (e, payload) => showPreview(payload, e.sender));
+  ipcMain.on('preview:peek', (_e, id) => peek(id));
   ipcMain.on('preview:pin', (e, payload) => pinPreview(payload, e.sender));
   ipcMain.on('preview:size', (_e, size) => windows.sizePreview(size));
   ipcMain.on('preview:leave', () => windows.leavePreview());
@@ -1089,6 +1103,7 @@ app.whenReady().then(() => {
   });
   ungrouped.onChange(() => windows.broadcast('tasks', taskState()));
   windows.onPreviewUnpinned(() => tasks.setWatchClicks(false));
+  windows.onPreviewHidden(() => peek(null));
   tasks.onClick((point) => {
     if (windows.previewPinned() && !windows.previewHit(point)) windows.hidePreview();
   });

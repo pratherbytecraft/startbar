@@ -47,6 +47,7 @@ let previewHide = null;
 let previewHeld = false; // a window is being dragged out of the pictures, so they stay
 let previewPinned = false; // opened by a click, stays until a click elsewhere
 const unpinHooks = new Set();
+const hideHooks = new Set(); // run whenever the pictures go away
 let settingsWin = null;
 let barHidden = false; // Hide the Bar, for this session only
 const visibility = new Set();
@@ -371,6 +372,7 @@ function hidePreview() {
     for (const fn of unpinHooks) fn();
   }
   if (preview && preview.isVisible()) preview.hide();
+  for (const fn of hideHooks) fn();
 }
 
 // With previews on, a click on a group opens its pictures and keeps them
@@ -402,6 +404,10 @@ function previewHit(point) {
 
 function onPreviewUnpinned(fn) {
   unpinHooks.add(fn);
+}
+
+function onPreviewHidden(fn) {
+  hideHooks.add(fn);
 }
 
 // The tray's volume, Wi-Fi and battery panels share one window.
@@ -899,7 +905,7 @@ function broadcast(channel, payload) {
 module.exports = {
   createBars, createMenu, createTip, createGroup, createCalendar, createPopover, createPreview, layout, showMenu, hideMenu, toggleMenu,
   showPreview, sendPreview, sizePreview, leavePreview, hoverPreview, hidePreview, holdPreview, showGhost, moveGhost, barAt,
-  pinPreview, previewHit, previewPinned: () => previewPinned, onPreviewUnpinned,
+  pinPreview, previewHit, previewPinned: () => previewPinned, onPreviewUnpinned, onPreviewHidden,
   showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, toggleCalendar, sizeCalendar, hideCalendar,
   togglePopover, sizePopover, hidePopover, broadcast,
   hideBar, showBar, onBarVisibility, holdBar, setFullScreenDisplays, barAreas, barOf, showSettings,

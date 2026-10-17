@@ -23,6 +23,7 @@ const DEFAULTS = Object.freeze({
     clickThrough: true, // a click on a window that isn't in front brings it forward and lands as a click
     titleOnHover: true,
     previews: false, // pictures of the windows over a button on hover, needs Screen Recording
+    peek: true, // resting on a picture in a preview shows that window until the pointer moves off
     showWindowless: false, // apps that are running with no windows get a button
     order: 'opened', // opened | app
     hideInFullScreen: true,

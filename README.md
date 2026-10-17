@@ -54,7 +54,7 @@ The Start button opens a menu that lists your apps with a search box, up to five
 
 Apps pinned next to the Start button open with one click, and an app that already has a window open gets a new one. Drag them to reorder them. Right click an app in the Start menu or a window button and pick Pin to Bar to add one. Pins can also sit in the row with the window buttons, where a pinned app's button turns into its window buttons once it opens.
 
-Right click a window button to minimize, close or quit, pin the app, or open a new window. Turn on previews and hovering a window button shows a picture of each of its windows, and a click on a group keeps them open. A strip at the right end of the bar can hide every app to show the desktop, and a second click brings them back.
+Right click a window button to minimize, close or quit, pin the app, or open a new window. Turn on previews and hovering a window button shows a picture of each of its windows, and a click on a group keeps them open. Rest on a picture and that window comes forward until you move off it (minimized and hidden windows stay put); this can be turned off on the Taskbar page. A strip at the right end of the bar can hide every app to show the desktop, and a second click brings them back.
 
 A click on a window that isn't in front brings it forward and lands as a click, the way it does on Windows, instead of only bringing the window forward. It can be turned off on the Taskbar page. Closing or minimizing a window shows what was under it instead of the app's next window.
 
