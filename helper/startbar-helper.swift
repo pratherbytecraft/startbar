@@ -132,6 +132,17 @@ func _AXUIElementCreateWithRemoteToken(_ data: CFData) -> Unmanaged<AXUIElement>
 @_silgen_name("_AXUIElementGetWindow")
 func _AXUIElementGetWindow(_ element: AXUIElement, _ windowId: UnsafeMutablePointer<CGWindowID>) -> AXError
 
+// The Spaces a window is on, and each display's Spaces with the current
+// one. Private, also used by AltTab.
+@_silgen_name("CGSMainConnectionID")
+func CGSMainConnectionID() -> Int32
+
+@_silgen_name("CGSCopySpacesForWindows")
+func CGSCopySpacesForWindows(_ cid: Int32, _ mask: Int32, _ windowIds: CFArray) -> CFArray
+
+@_silgen_name("CGSCopyManagedDisplaySpaces")
+func CGSCopyManagedDisplaySpaces(_ cid: Int32) -> CFArray
+
 func axValue(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
@@ -186,6 +197,8 @@ let axCallback: AXObserverCallback = { _, _, _, refcon in
 //                                     a picture of the window, answered later as "image", a JPEG data URL
 //   {"cmd":"activateApp","pid":501}   {"cmd":"quitApp","pid":501}
 //   {"cmd":"newWindow","pid":501}     bring the app forward and press Command N
+//   {"cmd":"hasWindows","pid":501,"ids":["w123"]}
+//                                     whether the app has a window on any Space, answered as "windows"
 //   {"cmd":"refresh"}                 send the state now, even if unchanged
 //   {"cmd":"spaces","all":true}       also list windows on other Spaces
 //   {"cmd":"keepOff","areas":[{"top":25,"bottom":830,"screen":{"x":0,"y":0,"w":1512,"h":866}}]}
@@ -521,6 +534,31 @@ final class WindowWatcher {
         return found
     }
 
+    // Whether an app still has a window anywhere, asked before quitting one
+    // whose last window closed. The windows attribute only covers the current
+    // Space, so the given ids (gone from view after a Space switch) and the
+    // app's windows on other Spaces count too. Only on other Spaces: apps like
+    // TextEdit keep a closed window around, still on the current Space but
+    // off screen.
+    func hasWindows(_ pid: pid_t, ids: [String]) -> Bool {
+        let list = axValue(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement] ?? []
+        let isWindow = { (window: AXUIElement) -> Bool in
+            let subrole = axValue(window, kAXSubroleAttribute) as? String
+            return subrole == kAXStandardWindowSubrole || subrole == kAXDialogSubrole
+        }
+        if list.contains(where: isWindow) { return true }
+        let displays = CGSCopyManagedDisplaySpaces(CGSMainConnectionID()) as? [[String: Any]] ?? []
+        let current = Set(displays.compactMap { ($0["Current Space"] as? [String: Any])?["ManagedSpaceID"] as? Int })
+        let placed = { (id: CGWindowID) -> Bool in
+            let spaces = (CGSCopySpacesForWindows(CGSMainConnectionID(), 7, [id] as CFArray) as? [Int]) ?? []
+            return !spaces.isEmpty && current.isDisjoint(with: spaces)
+        }
+        let server = windowServerList()
+        let mine = server.all.filter { $0.pid == pid }.map(\.id)
+        if mine.contains(where: { ids.contains("w\($0)") && placed($0) }) { return true }
+        return otherSpaceWindows(pid, listed: list, server: server).contains { placed($0.key) || axBool($0.value, kAXMinimizedAttribute) }
+    }
+
     func watch(_ window: AXUIElement, pid: pid_t) {
         guard let observer = observers[pid] else { return }
         let refcon = Unmanaged.passUnretained(self).toOpaque()
@@ -629,6 +667,11 @@ final class WindowWatcher {
                     newWindow(pid_t(pid))
                 }
             }
+            return nil
+        case "hasWindows":
+            guard trusted else { return "no accessibility permission" }
+            guard let pid = command["pid"] as? Int else { return "no such app" }
+            replyExtra["windows"] = hasWindows(pid_t(pid), ids: command["ids"] as? [String] ?? [])
             return nil
         case "newWindowItem":
             guard trusted else { return "no accessibility permission" }

@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('startbar', {
   moveDockToBottom: () => ipcRenderer.send('dock:bottom'),
   addFolders: () => ipcRenderer.send('folders:add'),
   setFolders: (list) => ipcRenderer.send('folders:set', list),
+  addKeepRunning: () => ipcRenderer.send('keepRunning:add'),
+  setKeepRunning: (list) => ipcRenderer.send('keepRunning:set', list),
   setLoginItem: (on) => ipcRenderer.send('login:set', on),
   checkUpdates: () => ipcRenderer.send('updates:check'),
   exportSettings: () => ipcRenderer.send('settings:export'),

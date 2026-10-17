@@ -106,13 +106,17 @@ input[type=range] { accent-color: var(--accent); width: 170px; }
 .kbd { padding: 3px 8px; border-radius: 6px; background: var(--control); border: 1px solid var(--control-line); font-size: 12px; min-width: 110px; text-align: center; outline: 0; }
 .kbd.rec { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); color: var(--muted); }
 
-/* lists of paths: pinned apps, added folders */
+/* lists of paths: pinned apps, added folders, apps left running */
 .paths .row { gap: 10px; min-height: 38px; padding: 6px 12px; }
 .paths .row img { width: 22px; height: 22px; flex: none; }
 .paths .handle { color: var(--muted); flex: none; }
 .paths .handle svg { width: 8px; height: 12px; fill: currentColor; }
 .paths .row.dragging { background: color-mix(in srgb, var(--accent) 18%, var(--group)); }
 .paths .row.none { color: var(--muted); }
+.paths .row.fixed { opacity: .55; }
+.paths .row.fixed .handle { width: 8px; }
+.paths.unused > .row { opacity: .45; }
+.paths.unused > .row.fixed { opacity: .25; }
 .paths + .row, .row + .paths > .row:first-child { border-top: 1px solid var(--row-line); }
 
 /* about */

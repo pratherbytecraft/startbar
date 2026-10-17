@@ -17,11 +17,13 @@ const dock = require('./dock');
 const files = require('./files');
 const updates = require('./updates');
 const status = require('./status');
+const quitter = require('./quitter');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
 const VERSION = require('../../package.json').version;
 const { helperPath } = require('../../scripts/build-helper');
+const { appPath } = require('../../scripts/build-app');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -117,7 +119,10 @@ function state() {
     user: userName(),
     version: VERSION,
     home: os.homedir(),
-    filedrawer: !!filedrawerApp()
+    filedrawer: !!filedrawerApp(),
+    swiftQuit: quitter.swiftQuitRunning(),
+    // Shown greyed at the top of the Leave these apps running list.
+    alwaysRunning: ['/System/Library/CoreServices/Finder.app', filedrawerApp(), appPath()].filter(Boolean)
   };
 }
 
@@ -226,12 +231,14 @@ function openSettings(page) {
       refreshDock();
       status.send({ cmd: 'access' });
       checkScreen();
+      quitter.checkSwiftQuit(pushState);
     });
   }
   bringForward();
   refreshDock();
   status.send({ cmd: 'access' });
   checkScreen();
+  quitter.checkSwiftQuit(pushState);
 }
 
 // The Permissions page. Each permission is allowed, notAsked, denied, off
@@ -731,6 +738,36 @@ async function searchFiles(q) {
   return found.map((f) => ({ ...f, icon: icons[f.path] || '' }));
 }
 
+// The Add button under Leave these apps running: the running apps first,
+// then any app from Applications.
+function addKeepRunning(sender) {
+  const listed = new Set([...settings.get().quitApps.keepRunning, ...state().alwaysRunning]);
+  const running = tasks.get().apps.filter((a) => a.path && !listed.has(a.path) && !quitter.ALWAYS.has(a.bundleId));
+  const items = [...new Map(running.map((a) => [a.path, a])).values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((a) => ({ label: a.name, click: () => setKeepRunning([...settings.get().quitApps.keepRunning, a.path]) }));
+  if (items.length) items.push({ type: 'separator' });
+  items.push({ label: 'Choose from Applications…', click: () => chooseKeepRunning() });
+  Menu.buildFromTemplate(items).popup({ window: BrowserWindow.fromWebContents(sender) });
+}
+
+async function chooseKeepRunning() {
+  app.focus({ steal: true }); // the picker is a sheet, which waits for Startbar to be in front
+  const { canceled, filePaths } = await dialog.showOpenDialog(windows.settings, {
+    title: 'Leave Apps Running',
+    buttonLabel: 'Add',
+    defaultPath: '/Applications',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Apps', extensions: ['app'] }]
+  });
+  if (!canceled) setKeepRunning([...settings.get().quitApps.keepRunning, ...filePaths]);
+}
+
+function setKeepRunning(list) {
+  const clean = (Array.isArray(list) ? list : []).filter((p) => typeof p === 'string' && path.isAbsolute(p));
+  settings.update({ quitApps: { keepRunning: [...new Set(clean)] } });
+}
+
 async function addPins() {
   app.focus({ steal: true }); // the picker is a sheet, which waits for Startbar to be in front
   const { canceled, filePaths } = await dialog.showOpenDialog(windows.settings, {
@@ -888,6 +925,8 @@ function wireIpc() {
   ipcMain.on('settings:export', () => exportSettings());
   ipcMain.on('settings:import', () => importSettings());
   ipcMain.on('folders:set', (_e, list) => setFolders(list));
+  ipcMain.on('keepRunning:add', (e) => addKeepRunning(e.sender));
+  ipcMain.on('keepRunning:set', (_e, list) => setKeepRunning(list));
   // The shortcut field records keys, so the global shortcut steps aside.
   ipcMain.on('shortcut:pause', () => globalShortcut.unregisterAll());
   ipcMain.on('shortcut:resume', () => {
@@ -968,6 +1007,7 @@ app.whenReady().then(() => {
   updateKeepOff();
   tasks.setSpaces(settings.get().spaces.show === 'all');
   tasks.setHoldFinder(filedrawerTakesFinder);
+  quitter.start();
   tasks.start();
   status.onChange((s) => {
     windows.broadcast('status', s);

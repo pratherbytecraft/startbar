@@ -255,6 +255,18 @@
           ]
         },
         {
+          title: 'Apps',
+          rows: [
+            { label: 'Quit apps when their last window closes', note: "Like on Windows, closing an app's last window quits it. Apps with unsaved work still ask first.",
+              control: { type: 'toggle', key: 'quitApps.on' },
+              hint: { when: (st) => st.settings.quitApps.on && st.swiftQuit, text: 'Swift Quit is running and does the same thing. Quit it, or turn this off.', warn: true } },
+            { label: 'Leave these apps running', note: 'For apps that keep working with no window, like music or chat.',
+              onlyWith: { when: (s) => s.quitApps.on, note: 'Used when apps quit after their last window.' },
+              control: { type: 'button', text: 'Add…', click: () => api.addKeepRunning() } },
+            { list: 'keepRunning', label: 'Leave these apps running' }
+          ]
+        },
+        {
           title: 'Folders',
           // Only once Filedrawer, Prather Bytecraft's file manager, is installed.
           showIf: (st) => st.filedrawer,
@@ -667,7 +679,9 @@
   const CONTROLS = { toggle, seg, select, swatches, colors95, glass, mixerLink, mixer, range, stepper, button, buttons, login, permission, dock, shortcut };
 
   // Lists of paths drawn inside a group, one row each, drag to reorder:
-  // the pinned apps and the folders added to the Start menu.
+  // the pinned apps, the folders added to the Start menu and the apps left
+  // running. A list's fixed rows come first, greyed, and can't be moved or
+  // removed.
   const home = () => state.home;
   const LISTS = {
     pins: {
@@ -684,6 +698,16 @@
       set: (list) => api.setFolders(list),
       remove: (p) => api.setFolders(state.settings.startMenu.folders.filter((x) => x !== p)),
       empty: 'No added folders.'
+    },
+    keepRunning: {
+      get: () => state.settings.quitApps.keepRunning,
+      fixed: () => state.alwaysRunning,
+      fixedNote: 'Always left running',
+      name: (p) => p.split('/').pop().replace(/\.app$/, ''),
+      set: (list) => api.setKeepRunning(list),
+      remove: (p) => api.setKeepRunning(state.settings.quitApps.keepRunning.filter((x) => x !== p)),
+      unused: (s) => !s.quitApps.on,
+      empty: 'No apps added.'
     }
   };
   const listKey = (paths) => JSON.stringify(paths.map((p) => [p, !!previewIcons[p]]));
@@ -704,6 +728,17 @@
     return r;
   }
 
+  function fixedRow(spec, p) {
+    const r = node('div', 'row fixed');
+    const img = node('img');
+    img.alt = '';
+    if (previewIcons[p]) img.src = previewIcons[p];
+    const lbl = node('div', 'lbl', spec.name(p));
+    lbl.append(node('small', null, spec.fixedNote));
+    r.append(node('span', 'handle'), img, lbl);
+    return r;
+  }
+
   function pathList(name) {
     const spec = LISTS[name];
     const list = node('div', 'paths');
@@ -711,17 +746,20 @@
     window.reorderable(list, {
       axis: 'y',
       onDrop: (order) => {
-        drawn = listKey(order);
+        drawn = listKey([...(spec.fixed ? spec.fixed() : []), ...order]);
         spec.set(order);
       }
     });
     syncs.push(() => {
+      if (spec.unused) list.classList.toggle('unused', spec.unused(state.settings));
       const paths = spec.get();
-      fetchIcons(paths);
-      const key = listKey(paths);
+      const fixed = spec.fixed ? spec.fixed() : [];
+      fetchIcons([...fixed, ...paths]);
+      const key = listKey([...fixed, ...paths]);
       if (key === drawn) return;
       drawn = key;
-      list.replaceChildren(...(paths.length ? paths.map((p) => listRow(spec, p)) : [node('div', 'row none', spec.empty)]));
+      const rows = paths.length || fixed.length ? paths.map((p) => listRow(spec, p)) : [node('div', 'row none', spec.empty)];
+      list.replaceChildren(...fixed.map((p) => fixedRow(spec, p)), ...rows);
     });
     return list;
   }
@@ -737,7 +775,7 @@
     ctl.append(CONTROLS[r.control.type](r.control, rowEl));
     // A line that shows only in some states, sometimes ending in a link.
     if (r.hint) {
-      const hint = node('small', 'hint hidden', r.hint.text);
+      const hint = node('small', r.hint.warn ? 'hint warn hidden' : 'hint hidden', r.hint.text);
       if (r.hint.link) {
         const link = node('span', 'link', r.hint.link);
         link.addEventListener('click', r.hint.click);
