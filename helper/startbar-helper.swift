@@ -198,9 +198,11 @@ func axFrame(_ element: AXUIElement) -> CGRect? {
     return CGRect(origin: point, size: extent)
 }
 
-let axCallback: AXObserverCallback = { _, _, _, refcon in
+let axCallback: AXObserverCallback = { _, element, notification, refcon in
     guard let refcon else { return }
-    Unmanaged<WindowWatcher>.fromOpaque(refcon).takeUnretainedValue().changed()
+    let watcher = Unmanaged<WindowWatcher>.fromOpaque(refcon).takeUnretainedValue()
+    if notification as String == kAXUIElementDestroyedNotification { watcher.closed(element) }
+    watcher.changed()
 }
 
 // Out, one JSON object per line:
@@ -239,7 +241,9 @@ final class WindowWatcher {
         let element: AXUIElement
         let id: String
         let order: Int
+        var standard = true // a standard window, not a dialog
     }
+    var frontOrder: [(pid: pid_t, id: CGWindowID)] = [] // on screen windows front to back, from the last scan
 
     var trusted = AXIsProcessTrusted()
     var observers: [pid_t: AXObserver] = [:]
@@ -374,9 +378,15 @@ final class WindowWatcher {
     func windowServerList() -> (onScreen: Set<CGWindowID>, all: [(pid: pid_t, id: CGWindowID, bounds: CGRect)]) {
         var onScreen = Set<CGWindowID>()
         var all: [(pid_t, CGWindowID, CGRect)] = []
+        var order: [(pid: pid_t, id: CGWindowID)] = []
         if let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
-            for info in list { if let id = info[kCGWindowNumber as String] as? CGWindowID { onScreen.insert(id) } }
+            for info in list {
+                guard let id = info[kCGWindowNumber as String] as? CGWindowID else { continue }
+                onScreen.insert(id)
+                if (info[kCGWindowLayer as String] as? Int) == 0, let pid = info[kCGWindowOwnerPID as String] as? pid_t { order.append((pid, id)) }
+            }
         }
+        frontOrder = order
         if let list = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
             for info in list {
                 guard (info[kCGWindowLayer as String] as? Int) == 0,
@@ -455,6 +465,7 @@ final class WindowWatcher {
             }
             let subrole = subroleValue as? String
             guard subrole == kAXStandardWindowSubrole || subrole == kAXDialogSubrole else { continue }
+            let standard = subrole == kAXStandardWindowSubrole
             let frame = axFrame(window)
             var windowId: CGWindowID = 0
             if _AXUIElementGetWindow(window, &windowId) != .success || windowId == 0, let frame {
@@ -462,7 +473,7 @@ final class WindowWatcher {
             }
             // A window seen before keeps its place, even when it comes back as
             // a different element (listed now, found by token before).
-            let item: Known
+            var item: Known
             if let seen = before.first(where: { CFEqual($0.element, window) }) {
                 item = seen
             } else if windowId != 0, let seen = before.first(where: { $0.id == "w\(windowId)" }) {
@@ -473,6 +484,7 @@ final class WindowWatcher {
                 item = Known(element: window, id: windowId != 0 ? "w\(windowId)" : "p\(pid)-\(counter)", order: counter)
                 watch(window, pid: pid)
             }
+            item.standard = standard
             after.append(item)
             let onScreen = windowId != 0 && server.onScreen.contains(windowId)
             if onScreen, let frame { nudge(window, id: item.id, frame: frame) }
@@ -916,6 +928,27 @@ final class WindowWatcher {
             self.pendingNew[pid] = nil
             self.note("new window for \(pid) never came, activating the app")
             self.activateApp(app)
+        }
+    }
+
+    // The front window of the front app closed. macOS then makes the app's
+    // next window key and orders it front, which pulls it over other apps'
+    // windows that sat above it. Closing should reveal what was under the
+    // window instead, so when that is another app's window it is raised
+    // alone, a moment after macOS has done its reorder. Dialogs are left
+    // alone, their app's own window should stay in front.
+    func closed(_ element: AXUIElement) {
+        guard let (pid, item) = known.lazy.compactMap({ (pid, list) in list.first(where: { CFEqual($0.element, element) }).map { (pid, $0) } }).first,
+              item.standard, item.id.hasPrefix("w"), let number = CGWindowID(item.id.dropFirst()),
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+              let at = frontOrder.firstIndex(where: { $0.id == number }), at == 0, frontOrder.count > 1 else { return }
+        let under = frontOrder[1]
+        guard under.pid != pid, let target = known[under.pid]?.first(where: { $0.id == "w\(under.id)" }) else { return }
+        note("window \(item.id) closed, raising \(target.id) under it")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self else { return }
+            if axBool(target.element, kAXMinimizedAttribute) { return }
+            _ = self.raiseOnly(target.element, pid: under.pid)
         }
     }
 
