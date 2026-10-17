@@ -8,3 +8,5 @@ helper/startbar-helper
 helper/status.noindex/
 npm-debug.log*
 bundle/
+test/cypress/screenshots/
+test/cypress/downloads/
