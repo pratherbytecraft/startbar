@@ -3,7 +3,7 @@
 // windows, all get the same state push (settings plus what the Mac looks
 // like right now). Each popup remembers the bar it opened from and sits
 // above that one.
-const { app, BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, screen, systemPreferences } = require('electron');
 const path = require('path');
 
 const MENU_WIDTH = 420;
@@ -824,6 +824,29 @@ function onBarVisibility(fn) {
   return () => visibility.delete(fn);
 }
 
+// Fades a window in from clear, the whole window at once: the blur behind
+// it and its shadow come from macOS and can't be moved by the page, so a
+// page that slid in on its own would shift inside them. Starting clear also
+// hides the last frame from the time before, which a shown window draws
+// until the page has caught up. Not with Reduce motion on.
+const FADE = 140;
+const fades = new WeakMap();
+function fadeIn(win) {
+  clearInterval(fades.get(win));
+  if (systemPreferences.getAnimationSettings().prefersReducedMotion) {
+    win.setOpacity(1);
+    return;
+  }
+  win.setOpacity(0);
+  const start = Date.now();
+  fades.set(win, setInterval(() => {
+    if (win.isDestroyed()) return clearInterval(fades.get(win));
+    const t = Math.min(1, (Date.now() - start) / FADE);
+    win.setOpacity(1 - (1 - t) ** 3);
+    if (t === 1) clearInterval(fades.get(win));
+  }, 1000 / 60));
+}
+
 // Opens the Start menu above barWin's Start button, or above the bar on the
 // display the mouse is on.
 function showMenu(barWin) {
@@ -832,6 +855,7 @@ function showMenu(barWin) {
   menuBar = liveBar(barWin) || barUnderMouse();
   hidePreview();
   if (current) menu.setBounds(menuBounds(current, menuBar));
+  fadeIn(menu);
   menu.show();
   syncBars();
   menu.focus();

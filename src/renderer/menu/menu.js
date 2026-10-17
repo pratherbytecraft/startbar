@@ -266,8 +266,9 @@
     renderFoot();
   }
 
+  // The window fades in as a whole (fadeIn in main/windows.js), so the menu
+  // itself doesn't play the open animation the other panels do.
   async function onShown() {
-    window.playOpen(document.querySelector('.menu'));
     searchEl.value = '';
     showAll = false;
     queueFiles();
