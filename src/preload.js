@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('startbar', {
   setKeepRunning: (list) => ipcRenderer.send('keepRunning:set', list),
   setLoginItem: (on) => ipcRenderer.send('login:set', on),
   checkUpdates: () => ipcRenderer.send('updates:check'),
+  copyText: (text) => ipcRenderer.send('clipboard:text', text),
   exportSettings: () => ipcRenderer.send('settings:export'),
   importSettings: () => ipcRenderer.send('settings:import'),
   onSettingsPage: on('settings:page'),

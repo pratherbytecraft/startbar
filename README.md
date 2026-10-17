@@ -74,7 +74,7 @@ Right click an empty part of the bar to hide it. While the bar is hidden, a Star
 
 ## Updates
 
-Startbar checks for a newer version now and then and shows it on the About page and in the Start menu. It never installs anything by itself. To update, run `npm install -g startbar` again, then quit Startbar and open it.
+Startbar checks for a newer version now and then and shows it on the About page and in the Start menu. It never installs anything by itself. To update, run `npm install -g startbar` again, or `brew upgrade startbar` if you installed it with Homebrew, then quit Startbar and open it. The About page shows the line that fits your copy, with a Copy button.
 
 ## Limits
 

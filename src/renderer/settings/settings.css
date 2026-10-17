@@ -129,3 +129,4 @@ input[type=range] { accent-color: var(--accent); width: 170px; }
 .about p.update { min-height: 16px; }
 .about p.update.available { color: var(--text); font-weight: 600; }
 .about code { font-family: ui-monospace, Menlo, monospace; font-size: 11px; user-select: text; }
+.about p.install { display: flex; align-items: center; justify-content: center; gap: 8px; }

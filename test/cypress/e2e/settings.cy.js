@@ -107,6 +107,19 @@ describe('settings window', () => {
     });
   });
 
+  it('About shows the update line for how Startbar was installed, with a Copy button', () => {
+    cy.page('settings/index.html', (state) => {
+      state.updateCommand = 'brew upgrade startbar';
+      state.update = { state: 'available', latest: '9.9.10' };
+    });
+    open('About');
+    cy.contains('#pages .update', 'Version 9.9.10 is available. Run the line below in Terminal, then quit Startbar and open it again.');
+    cy.get('#pages .install code').should('have.text', 'brew upgrade startbar');
+    cy.get('#pages .install').contains('.btn', 'Copy').click();
+    cy.calls('copyText').should('deep.equal', [['brew upgrade startbar']]);
+    cy.get('#pages .install .btn').should('have.text', 'Copied');
+  });
+
   it('the Folders group shows only once Filedrawer is installed', () => {
     cy.page('settings/index.html');
     open('General');

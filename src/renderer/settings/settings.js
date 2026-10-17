@@ -828,13 +828,21 @@
       update.textContent = {
         checking: 'Checking…',
         current: 'Startbar is up to date.',
-        available: `Version ${u.latest} is available. Run the line below, then quit Startbar and open it again.`,
+        available: `Version ${u.latest} is available. Run the line below in Terminal, then quit Startbar and open it again.`,
         failed: "Couldn't reach npm to check. Try again later."
       }[u.state] || '';
       update.classList.toggle('available', u.state === 'available');
     });
-    const install = node('p', null, 'Install or update with ');
-    install.append(node('code', null, 'npm install -g startbar'));
+    // The line matches how this copy was installed, Homebrew or npm.
+    const install = node('p', 'install', 'Update with ');
+    const command = node('code');
+    const copy = button({ text: 'Copy', click: () => {
+      api.copyText(state.updateCommand);
+      copy.textContent = 'Copied';
+      setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
+    } });
+    syncs.push(() => { command.textContent = state.updateCommand; });
+    install.append(command, copy);
     box.append(icon, node('h1', null, 'Startbar'), version, node('p', null, 'A taskbar for macOS. Free to use. Prather Bytecraft.'), links, update, install);
     return box;
   }

@@ -1,6 +1,6 @@
 // Startbar main process. Owns the windows, the settings, the app list and
 // everything that touches the Mac. Renderers only draw.
-const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu, nativeTheme, BrowserWindow } = require('electron');
+const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu, nativeTheme, BrowserWindow, clipboard } = require('electron');
 const { execFile, execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -24,6 +24,10 @@ const quitter = require('./quitter');
 const VERSION = require('../../package.json').version;
 const { helperPath } = require('../../scripts/build-helper');
 const { appPath } = require('../../scripts/build-app');
+
+// The line that updates this copy, for the About page: Homebrew keeps what
+// it installs in its Cellar folder, npm in a node_modules folder.
+const UPDATE_COMMAND = /\/Cellar\/startbar\//.test(fs.realpathSync(__dirname)) ? 'brew upgrade startbar' : 'npm install -g startbar';
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -120,6 +124,7 @@ function state() {
     version: VERSION,
     home: os.homedir(),
     filedrawer: !!filedrawerApp(),
+    updateCommand: UPDATE_COMMAND,
     swiftQuit: quitter.swiftQuitRunning(),
     // Shown greyed at the top of the Leave these apps running list.
     alwaysRunning: ['/System/Library/CoreServices/Finder.app', filedrawerApp(), appPath()].filter(Boolean)
@@ -922,6 +927,7 @@ function wireIpc() {
   ipcMain.on('folders:add', () => addFolders());
   ipcMain.on('login:set', (_e, on) => setLoginItem(on));
   ipcMain.on('updates:check', () => updates.check(VERSION));
+  ipcMain.on('clipboard:text', (_e, text) => clipboard.writeText(String(text)));
   ipcMain.on('settings:export', () => exportSettings());
   ipcMain.on('settings:import', () => importSettings());
   ipcMain.on('folders:set', (_e, list) => setFolders(list));

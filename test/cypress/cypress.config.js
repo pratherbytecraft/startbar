@@ -42,7 +42,8 @@ function startbarState() {
     home: '/Users/test',
     filedrawer: false,
     swiftQuit: false,
-    alwaysRunning: ['/System/Library/CoreServices/Finder.app']
+    alwaysRunning: ['/System/Library/CoreServices/Finder.app'],
+    updateCommand: 'npm install -g startbar'
   };
 }
 
