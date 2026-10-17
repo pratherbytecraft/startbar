@@ -186,6 +186,7 @@ module.exports = {
   setKeepOff,
   setSpaces,
   setHoldFinder,
+  heldBack, // for the tests
   stop,
   restart,
   send,
