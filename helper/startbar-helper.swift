@@ -369,8 +369,10 @@ final class WindowWatcher {
     // before the copy is held and sent after it, so the press stays whole.
     // Clicks are left alone on Startbar's own windows, the menu bar, the
     // Dock, menus, sheets and anything else above layer 0, on the focused
-    // window of the front app, on Command click, and with no SkyLight raise.
+    // window of the front app, just outside a window's edge (where macOS
+    // lets it be resized), on Command click, and with no SkyLight raise.
     static let clickMark: Int64 = 0x5342_434b // "SBCK"
+    static let edgeGrab: CGFloat = 6 // points outside a window's frame that still resize it
     var throughTap: CFMachPort?
     var throughSource: CFRunLoopSource?
     var heldUp: CGEvent? // a mouse up that came before the posted mouse down
@@ -452,9 +454,16 @@ final class WindowWatcher {
         let frontmost = list.first(where: { ($0[kCGWindowLayer as String] as? Int) == 0 })?[kCGWindowNumber as String] as? CGWindowID
         for info in list {
             guard let dict = info[kCGWindowBounds as String] as? NSDictionary,
-                  let bounds = CGRect(dictionaryRepresentation: dict), bounds.contains(point),
+                  let bounds = CGRect(dictionaryRepresentation: dict),
                   (info[kCGWindowAlpha as String] as? Double ?? 1) > 0 else { continue }
             let layer = info[kCGWindowLayer as String] as? Int ?? 0
+            // macOS lets a window be resized from a few points outside its
+            // frame. A press there grabs that window's edge, so it isn't a
+            // click on the window behind.
+            if !bounds.contains(point) {
+                if layer == 0, bounds.insetBy(dx: -WindowWatcher.edgeGrab, dy: -WindowWatcher.edgeGrab).contains(point) { return nil }
+                continue
+            }
             // The pointer itself is a small window server window at the top
             // layer, and Notification Center keeps an invisible window over
             // the whole screen above every app. Neither is in the way.
