@@ -75,12 +75,25 @@ describe('the window list', async () => {
     await next;
   });
 
+  test('a click on the window while it is in the background brings it forward', { skip: why || false }, async () => {
+    assert.equal((await helper.send({ cmd: 'clickThrough', on: true })).ok, true);
+    const next = helper.waitForNext((m) => {
+      const a = textEdit(m);
+      return a && a.active && a.windows.some((w) => w.id === win.id && w.focused);
+    });
+    // The title bar, where a press and release does nothing on its own.
+    assert.equal((await helper.send({ cmd: 'postClick', x: win.x + win.w / 2, y: win.y + 10 })).ok, true);
+    await next;
+    assert.equal((await helper.send({ cmd: 'clickThrough', on: false })).ok, true);
+  });
+
   test('activates the window', { skip: why || false }, async () => {
     const next = helper.waitForNext((m) => {
       const a = textEdit(m);
       return a && a.active && a.windows.some((w) => w.id === win.id && w.focused && !w.minimized);
     });
     assert.equal((await helper.send({ cmd: 'activate', id: win.id })).ok, true);
+    await helper.send({ cmd: 'refresh' }); // the click test may have left it in front already
     await next;
   });
 

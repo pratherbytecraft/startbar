@@ -232,6 +232,9 @@ let axCallback: AXObserverCallback = { _, element, notification, refcon in
 //   {"cmd":"refresh"}                 send the state now, even if unchanged
 //   {"cmd":"spaces","all":true}       also list windows on other Spaces
 //   {"cmd":"watchClicks","on":true}   report every mouse down anywhere as {"type":"click","x":..,"y":..}
+//   {"cmd":"clickThrough","on":true}  a left click on a window that isn't in front raises just that
+//                                     window and lands as a click, see clickThrough below
+//   {"cmd":"postClick","x":..,"y":..} press and release the left button at a point (for the tests)
 //   {"cmd":"keepOff","areas":[{"top":25,"bottom":830,"screen":{"x":0,"y":0,"w":1512,"h":866}}]}
 //     one area per bar, or a single area's keys at the top level
 //     move windows on that screen up when they would cover the bar, which
@@ -351,6 +354,131 @@ final class WindowWatcher {
         clickSource = CFMachPortCreateRunLoopSource(nil, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), clickSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+    }
+
+    // Clicks in a background window count, the way they do on Windows. An
+    // active event tap takes every left mouse down. When the point is over a
+    // standard window of an app other than the front one, or a window of the
+    // front app that isn't its focused window, the mouse down is swallowed,
+    // that window alone is raised, and a copy of the mouse down is posted a
+    // moment later so the click lands. The copy carries a marker in its
+    // user data so the tap lets it through, and a mouse up that arrives
+    // before the copy is held and sent after it, so the press stays whole.
+    // Clicks are left alone on Startbar's own windows, the menu bar, the
+    // Dock, menus, sheets and anything else above layer 0, on the focused
+    // window of the front app, on Command click, and with no SkyLight raise.
+    static let clickMark: Int64 = 0x5342_434b // "SBCK"
+    var throughTap: CFMachPort?
+    var throughSource: CFRunLoopSource?
+    var heldUp: CGEvent? // a mouse up that came before the posted mouse down
+    var repostPending = false
+    func clickThrough(_ on: Bool) {
+        if !on {
+            if let tap = throughTap {
+                CGEvent.tapEnable(tap: tap, enable: false)
+                CFMachPortInvalidate(tap)
+            }
+            if let source = throughSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
+            throughTap = nil
+            throughSource = nil
+            heldUp = nil
+            repostPending = false
+            return
+        }
+        guard throughTap == nil else { return }
+        guard skylight != nil else { note("clickThrough: no SkyLight, staying off"); return }
+        let mask = (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
+        let me = Unmanaged.passUnretained(self).toOpaque()
+        guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
+                                          eventsOfInterest: CGEventMask(mask), callback: { _, type, event, refcon in
+            guard let refcon else { return Unmanaged.passUnretained(event) }
+            let watcher = Unmanaged<WindowWatcher>.fromOpaque(refcon).takeUnretainedValue()
+            return watcher.tapped(type, event)
+        }, userInfo: me) else { note("clickThrough: no tap"); return }
+        throughTap = tap
+        throughSource = CFMachPortCreateRunLoopSource(nil, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), throughSource, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+    }
+
+    func tapped(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let tap = throughTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            return Unmanaged.passUnretained(event)
+        }
+        if event.getIntegerValueField(.eventSourceUserData) == WindowWatcher.clickMark { return Unmanaged.passUnretained(event) }
+        if type == .leftMouseUp {
+            guard repostPending else { return Unmanaged.passUnretained(event) }
+            heldUp = event.copy()
+            return nil
+        }
+        guard type == .leftMouseDown, !repostPending, !event.flags.contains(.maskCommand),
+              let hit = windowUnder(event.location) else { return Unmanaged.passUnretained(event) }
+        note("click through to \(hit.item.id) of \(hit.pid)")
+        repostPending = true
+        heldUp = nil
+        let copy = event.copy()
+        copy?.setIntegerValueField(.eventSourceUserData, value: WindowWatcher.clickMark)
+        activate(hit.item.element, pid: hit.pid)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in
+            guard let self else { return }
+            copy?.post(tap: .cgSessionEventTap)
+            self.repostPending = false
+            if let up = self.heldUp {
+                self.heldUp = nil
+                up.setIntegerValueField(.eventSourceUserData, value: WindowWatcher.clickMark)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { up.post(tap: .cgSessionEventTap) }
+            }
+        }
+        return nil
+    }
+
+    // The window a click at this point should bring forward, or nil when the
+    // click should just go where it goes: the front window under the point
+    // (from the window server, front to back) is a standard window of a
+    // regular app, below layer 0 nothing is in the way, and it isn't the
+    // front app's focused window.
+    func windowUnder(_ point: CGPoint) -> (pid: pid_t, item: Known)? {
+        guard trusted, let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
+        var display: CGDirectDisplayID = 0
+        var count: UInt32 = 0
+        CGGetDisplaysWithPoint(point, 1, &display, &count)
+        let screen = count > 0 ? CGDisplayBounds(display) : .null
+        // With a menu open the click closes it and goes no further, as usual.
+        if list.contains(where: { ($0[kCGWindowLayer as String] as? Int) == Int(kCGPopUpMenuWindowLevel) }) { return nil }
+        let frontmost = list.first(where: { ($0[kCGWindowLayer as String] as? Int) == 0 })?[kCGWindowNumber as String] as? CGWindowID
+        for info in list {
+            guard let dict = info[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: dict), bounds.contains(point),
+                  (info[kCGWindowAlpha as String] as? Double ?? 1) > 0 else { continue }
+            let layer = info[kCGWindowLayer as String] as? Int ?? 0
+            // The pointer itself is a small window server window at the top
+            // layer, and Notification Center keeps an invisible window over
+            // the whole screen above every app. Neither is in the way.
+            if layer > 1000 { continue }
+            if layer != 0, bounds.contains(screen) { continue }
+            guard layer == 0, let id = info[kCGWindowNumber as String] as? CGWindowID,
+                  let pid = info[kCGWindowOwnerPID as String] as? pid_t,
+                  let item = known[pid]?.first(where: { $0.id == "w\(id)" }), item.standard else { return nil }
+            // The frontmost ordinary window on screen is the one in front
+            // already. The window server's order is current where
+            // NSWorkspace's idea of the front app lags behind a raise.
+            if frontmost == id { return nil }
+            return (pid, item)
+        }
+        return nil
+    }
+
+    // A real press and release at a point, for the helper tests. The pointer
+    // goes back where it was.
+    func postClick(_ point: CGPoint) {
+        let was = NSEvent.mouseLocation
+        let height = NSScreen.screens.first?.frame.height ?? 0
+        let back = CGPoint(x: was.x, y: height - was.y)
+        for kind in [CGEventType.leftMouseDown, .leftMouseUp] {
+            CGEvent(mouseEventSource: nil, mouseType: kind, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { CGWarpMouseCursorPosition(back) }
     }
 
     func emitState() {
@@ -725,6 +853,13 @@ final class WindowWatcher {
             return nil
         case "watchClicks":
             watchClicks(command["on"] as? Bool ?? false)
+            return nil
+        case "clickThrough":
+            clickThrough(command["on"] as? Bool ?? false)
+            return nil
+        case "postClick":
+            guard let x = command["x"] as? Double, let y = command["y"] as? Double else { return "no point" }
+            postClick(CGPoint(x: x, y: y))
             return nil
         case "askScreen":
             CGRequestScreenCaptureAccess()
