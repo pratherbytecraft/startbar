@@ -67,7 +67,8 @@ function withIds(state) {
     }
   }
   for (const id of [...live.keys()]) if (!seen.has(id)) live.delete(id);
-  return { ...state, ungrouped: ids() };
+  // remembered counts the saved entries, open or not, for the settings page.
+  return { ...state, ungrouped: ids(), remembered: get().length };
 }
 
 // Pull the window with this id out of its group, remembered as the app and

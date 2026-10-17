@@ -111,6 +111,8 @@
           rows: [
             { label: 'Group windows from the same app',
               control: { type: 'select', key: 'taskbar.grouping', options: [['always', 'Always'], ['full', 'When the bar is full'], ['never', 'Never']] } },
+            { label: 'Windows pulled out of their group', note: "Drag a window out of a group's preview or list onto the bar to give it its own button. Startbar remembers them by app and title.",
+              control: { type: 'putBack' } },
             { label: "Clicking the active window's button minimizes it", control: { type: 'toggle', key: 'taskbar.clickActiveMinimizes' } },
             { label: 'Show a preview when hovering a window button', note: 'A picture of each window, to click or close. Needs the Screen Recording permission, asked when you turn this on.',
               control: { type: 'toggle', key: 'taskbar.previews' },
@@ -676,7 +678,15 @@
     return k;
   }
 
-  const CONTROLS = { toggle, seg, select, swatches, colors95, glass, mixerLink, mixer, range, stepper, button, buttons, login, permission, dock, shortcut };
+  // Pulled out windows go back into their groups and are forgotten, see
+  // main/ungrouped.js. Greyed while nothing is remembered.
+  function putBack() {
+    const b = button({ text: 'Put All Windows Back', click: () => api.putAllBack() });
+    syncs.push(() => b.classList.toggle('disabled', !(tasks.remembered > 0)));
+    return b;
+  }
+
+  const CONTROLS = { toggle, seg, select, swatches, colors95, glass, mixerLink, mixer, range, stepper, button, buttons, login, permission, dock, shortcut, putBack };
 
   // Lists of paths drawn inside a group, one row each, drag to reorder:
   // the pinned apps, the folders added to the Start menu and the apps left
@@ -969,9 +979,10 @@
   api.onSettingsPage(openPage);
   api.getState().then(apply);
   api.onState(apply);
-  // The task list comes in a few times a second. Only the permission row uses it.
+  // The task list comes in a few times a second. Only the permission row
+  // and the Put All Windows Back button use it.
   const applyTasks = (t) => {
-    const changed = t.accessibility !== tasks.accessibility;
+    const changed = t.accessibility !== tasks.accessibility || t.remembered !== tasks.remembered;
     tasks = t;
     if (changed && state) syncs.forEach((fn) => fn());
   };

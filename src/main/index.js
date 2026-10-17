@@ -1006,6 +1006,7 @@ function wireIpc() {
   ipcMain.on('tasks:ungroup', (_e, id) => ungroupWindow(String(id)));
   ipcMain.on('tasks:regroup', (_e, id) => ungrouped.regroup(String(id)));
   ipcMain.on('tasks:dragOut', (_e, d) => dragOut(d));
+  ipcMain.on('tasks:putAllBack', () => ungrouped.putAllBack());
   ipcMain.handle('tasks:command', (_e, command) => (command && command.cmd === 'minimize' ? minimize(command) : tasks.send(command)));
   ipcMain.handle('tasks:icons', (_e, paths) => apps.icons(Array.isArray(paths) ? paths : []));
   ipcMain.on('tasks:menu', (e, target) => showTaskMenu(target || {}, e.sender));

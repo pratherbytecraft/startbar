@@ -61,6 +61,15 @@ describe('settings window', () => {
     row('How many').find('.box').should('have.text', '4');
   });
 
+  it('Put All Windows Back is greyed until a window is remembered, then puts them back', () => {
+    cy.page('settings/index.html', (_state, extra) => { extra.tasks = { accessibility: true, apps: [], ungrouped: [], remembered: 0 }; });
+    open('Taskbar');
+    row('pulled out').contains('.btn', 'Put All Windows Back').should('have.class', 'disabled');
+    cy.fake().then((api) => api.emit('tasks', { accessibility: true, apps: [], ungrouped: ['w3'], remembered: 1 }));
+    row('pulled out').contains('.btn', 'Put All Windows Back').should('not.have.class', 'disabled').click();
+    cy.calls('putAllBack').should('have.length', 1);
+  });
+
   it('pinned apps list with a Remove button each, and Add asks for more', () => {
     cy.page('settings/index.html', (state) => {
       state.pins = ['/Applications/Safari.app', '/System/Applications/Notes.app'];

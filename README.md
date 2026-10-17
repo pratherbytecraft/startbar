@@ -54,7 +54,9 @@ The Start button opens a menu that lists your apps with a search box, up to five
 
 Apps pinned next to the Start button open with one click, and an app that already has a window open gets a new one. Drag them to reorder them. Right click an app in the Start menu or a window button and pick Pin to Bar to add one. Pins can also sit in the row with the window buttons, where a pinned app's button turns into its window buttons once it opens.
 
-Right click a window button to minimize, close or quit, pin the app, or open a new window. Turn on previews and hovering a window button shows a picture of each of its windows. A strip at the right end of the bar can hide every app to show the desktop, and a second click brings them back.
+Right click a window button to minimize, close or quit, pin the app, or open a new window. Turn on previews and hovering a window button shows a picture of each of its windows, and a click on a group keeps them open. A strip at the right end of the bar can hide every app to show the desktop, and a second click brings them back.
+
+A window can be pulled out of its app's group onto its own button. Drag its picture out of the preview, or its row out of the group list, down onto the bar. Drag the button back onto the group to put it back, or pick Put back in the group on its right click menu. Startbar remembers pulled out windows by app and title, so the same window comes back on its own button the next time it opens.
 
 ![Window previews over a Finder group](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/preview-system.png)
 
