@@ -143,6 +143,32 @@ func CGSCopySpacesForWindows(_ cid: Int32, _ mask: Int32, _ windowIds: CFArray) 
 @_silgen_name("CGSCopyManagedDisplaySpaces")
 func CGSCopyManagedDisplaySpaces(_ cid: Int32) -> CFArray
 
+// Raising one window without the app's other windows: the private SkyLight
+// calls AltTab and yabai use. _SLPSSetFrontProcessWithOptions makes the app
+// front for just that window, then two synthesized focus events make it the
+// key window. Looked up by name so a macOS without them leaves the helper
+// on the ordinary activate, instead of refusing to load.
+typealias SetFrontProcess = @convention(c) (UnsafeMutablePointer<ProcessSerialNumber>, CGWindowID, UInt32) -> CGError
+typealias PostEventRecord = @convention(c) (UnsafeMutablePointer<ProcessSerialNumber>, UnsafeMutablePointer<UInt8>) -> CGError
+typealias ProcessForPID = @convention(c) (pid_t, UnsafeMutablePointer<ProcessSerialNumber>) -> OSStatus
+let skylight: (front: SetFrontProcess, post: PostEventRecord, psn: ProcessForPID)? = {
+    // Exported with and without the leading underscore depending on the
+    // macOS version, so both spellings are tried.
+    func sym(_ lib: String, _ names: [String]) -> UnsafeMutableRawPointer? {
+        guard let handle = dlopen(lib, RTLD_NOW) else { return nil }
+        for name in names { if let found = dlsym(handle, name) { return found } }
+        return nil
+    }
+    let sky = "/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight"
+    let hi = "/System/Library/Frameworks/ApplicationServices.framework/Frameworks/HIServices.framework/HIServices"
+    guard let front = sym(sky, ["_SLPSSetFrontProcessWithOptions", "SLPSSetFrontProcessWithOptions"]),
+          let post = sym(sky, ["_SLPSPostEventRecordTo", "SLPSPostEventRecordTo"]),
+          let psn = sym(hi, ["GetProcessForPID"]) else { return nil }
+    return (unsafeBitCast(front, to: SetFrontProcess.self), unsafeBitCast(post, to: PostEventRecord.self),
+            unsafeBitCast(psn, to: ProcessForPID.self))
+}()
+let kCPSUserGenerated: UInt32 = 0x200
+
 func axValue(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
@@ -881,12 +907,39 @@ final class WindowWatcher {
         if axBool(window, kAXMinimizedAttribute) {
             AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
         }
+        if raiseOnly(window, pid: pid) { return }
         let appElement = AXUIElementCreateApplication(pid)
         AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         AXUIElementSetAttributeValue(appElement, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
         // Bringing the app forward can raise its last used window over ours.
         AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+    }
+
+    // Brings one window to the front and leaves the app's other windows
+    // where they are. False when the SkyLight calls aren't there, the window
+    // has no number, or it sits on another Space (the ordinary raise moves
+    // to that Space, this one doesn't).
+    func raiseOnly(_ window: AXUIElement, pid: pid_t) -> Bool {
+        guard let skylight else { note("raiseOnly: no SkyLight"); return false }
+        var windowId: CGWindowID = 0
+        guard _AXUIElementGetWindow(window, &windowId) == .success, windowId != 0 else { note("raiseOnly: no window id"); return false }
+        if remote[pid]?[windowId] != nil { return false }
+        var psn = ProcessSerialNumber()
+        guard skylight.psn(pid, &psn) == noErr else { note("raiseOnly: no psn"); return false }
+        let set = skylight.front(&psn, windowId, kCPSUserGenerated)
+        guard set == .success else { note("raiseOnly: set front failed \(set.rawValue)"); return false }
+        for kind: UInt8 in [1, 2] { // 1 is window focus, 2 is key window, the way AltTab sends them
+            var bytes = [UInt8](repeating: 0, count: 0xf8)
+            bytes[0x04] = 0xf8
+            bytes[0x08] = kind
+            bytes[0x3a] = 0x10
+            withUnsafeBytes(of: windowId) { bytes.replaceSubrange(0x3c..<0x40, with: $0) }
+            for i in 0x20..<0x30 { bytes[i] = 0xff }
+            _ = bytes.withUnsafeMutableBufferPointer { skylight.post(&psn, $0.baseAddress!) }
+        }
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        return true
     }
 }
 

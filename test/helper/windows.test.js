@@ -75,6 +75,15 @@ describe('the window list', async () => {
     await next;
   });
 
+  test('activates the window', { skip: why || false }, async () => {
+    const next = helper.waitForNext((m) => {
+      const a = textEdit(m);
+      return a && a.active && a.windows.some((w) => w.id === win.id && w.focused && !w.minimized);
+    });
+    assert.equal((await helper.send({ cmd: 'activate', id: win.id })).ok, true);
+    await next;
+  });
+
   test('closes the window, after which the app has none', { skip: why || false }, async () => {
     const next = helper.waitForNext((m) => {
       const a = textEdit(m);
