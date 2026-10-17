@@ -18,6 +18,7 @@
   const GAP = 4;
 
   let tasks = { accessibility: null, apps: [] };
+  let ungrouped = new Set(); // ids of windows pulled out of their group, see main/ungrouped.js
   // Which display this bar is on: { id, main, bars, displays: [{ id, main, bounds }] }.
   let place = null;
   let drawn = '';
@@ -244,10 +245,13 @@
     for (const p of pinList) {
       const mine = list.filter((item) => item.app.path === p);
       if (mine.length === 0) out.push({ kind: 'pin', path: p });
-      mine.forEach((item, i) => {
+      // A window pulled out of its group carries the pin only when nothing
+      // else of the app's can, so dragging it isn't a pin reorder.
+      const carrier = mine.find((item) => !item.loose) || mine[0];
+      for (const item of mine) {
         used.add(item);
-        out.push(i === 0 ? { ...item, pin: p } : item);
-      });
+        out.push(item === carrier ? { ...item, pin: p } : item);
+      }
     }
     return out.concat(list.filter((item) => !used.has(item)));
   }
@@ -306,13 +310,19 @@
     return wins.concat(windowless);
   }
 
-  // Each grouped app's windows fold into one button where its first window was.
+  // Each grouped app's windows fold into one button where its first window
+  // was. A window pulled out of the group keeps its own button, right after
+  // the group.
   function collapse(items, grouped) {
-    const out = [];
+    let out = [];
     const groups = new Map();
     for (const item of items) {
       if (item.kind !== 'window' || !grouped.has(item.app.pid)) {
         out.push(item);
+        continue;
+      }
+      if (ungrouped.has(item.win.id)) {
+        out.push({ ...item, loose: true });
         continue;
       }
       let g = groups.get(item.app.pid);
@@ -322,6 +332,12 @@
         out.push(g);
       }
       g.wins.push(item.win);
+    }
+    for (const g of groups.values()) {
+      const loose = out.filter((item) => item.loose && item.app.pid === g.app.pid);
+      if (!loose.length) continue;
+      out = out.filter((item) => !loose.includes(item));
+      out.splice(out.indexOf(g) + 1, 0, ...loose);
     }
     return out.map((item) => (item.kind === 'group' && item.wins.length === 1 ? { kind: 'window', app: item.app, win: item.wins[0] } : item));
   }
@@ -388,6 +404,8 @@
     const show = () => {
       previewUp = true;
       api.showPreview({
+        pid: item.app.pid,
+        group: item.kind === 'group',
         rect: rectOf(el),
         icon: icons.get(item.app.path) || '',
         windows: wins.map((w) => ({ id: w.id, title: w.title || item.app.name, minimized: w.minimized, active: item.app.active && w.focused && !w.minimized }))
@@ -546,6 +564,7 @@
 
   function applyTasks(next) {
     tasks = next;
+    ungrouped = new Set(next.ungrouped || []);
     renderTasks();
   }
 

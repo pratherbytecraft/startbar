@@ -18,6 +18,7 @@ const files = require('./files');
 const updates = require('./updates');
 const status = require('./status');
 const quitter = require('./quitter');
+const ungrouped = require('./ungrouped');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
@@ -798,6 +799,13 @@ async function showTaskMenu(target, sender) {
   if (target.kind === 'window') {
     const win = app.windows.find((w) => w.id === target.id);
     if (win) {
+      // A window pulled out of its group can go back; a window in a group
+      // (a row of the group list or a preview picture) can be pulled out.
+      if (ungrouped.ids().includes(win.id)) {
+        items.unshift({ label: 'Put back in the group', click: () => ungrouped.regroup(win.id) }, { type: 'separator' });
+      } else if (target.inGroup) {
+        items.unshift({ label: 'Give its own button', click: () => ungroupWindow(win.id) }, { type: 'separator' });
+      }
       items.push(
         win.minimized
           ? { label: 'Restore', click: () => send('unminimize', { id: win.id }) }
@@ -817,6 +825,16 @@ async function showTaskMenu(target, sender) {
   items.push({ label: `Quit ${app.name}`, click: () => send('quitApp', { pid: app.pid }) });
   popupOnBar(Menu.buildFromTemplate(items), sender);
 }
+
+// The list or the preview the window came from closes with it.
+function ungroupWindow(id) {
+  windows.hideGroup();
+  windows.hidePreview();
+  ungrouped.ungroup(id, tasks.get());
+}
+
+// The task state the bars draw from, with the ungrouped window ids.
+const taskState = () => ungrouped.withIds(tasks.get());
 
 // Window pictures for the hover previews, from the window helper. A fresh
 // one is taken after a few seconds; until then the kept one is shown, so
@@ -939,7 +957,9 @@ function wireIpc() {
     registerShortcut();
     pushState();
   });
-  ipcMain.handle('tasks:get', () => tasks.get());
+  ipcMain.handle('tasks:get', () => taskState());
+  ipcMain.on('tasks:ungroup', (_e, id) => ungroupWindow(String(id)));
+  ipcMain.on('tasks:regroup', (_e, id) => ungrouped.regroup(String(id)));
   ipcMain.handle('tasks:command', (_e, command) => (command && command.cmd === 'minimize' ? minimize(command) : tasks.send(command)));
   ipcMain.handle('tasks:icons', (_e, paths) => apps.icons(Array.isArray(paths) ? paths : []));
   ipcMain.on('tasks:menu', (e, target) => showTaskMenu(target || {}, e.sender));
@@ -1007,9 +1027,10 @@ app.whenReady().then(() => {
   apps.load(); // warm the icon cache before the first click
   tasks.onChange((t) => {
     windows.setFullScreenDisplays(fullScreenDisplays(t));
-    windows.broadcast('tasks', t);
+    windows.broadcast('tasks', ungrouped.withIds(t));
     access.check(t, { restartHelper: tasks.restart });
   });
+  ungrouped.onChange(() => windows.broadcast('tasks', taskState()));
   updateKeepOff();
   tasks.setSpaces(settings.get().spaces.show === 'all');
   tasks.setHoldFinder(filedrawerTakesFinder);

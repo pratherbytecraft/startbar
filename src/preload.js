@@ -56,6 +56,8 @@ contextBridge.exposeInMainWorld('startbar', {
   taskCommand: (command) => ipcRenderer.invoke('tasks:command', command),
   taskIcons: (paths) => ipcRenderer.invoke('tasks:icons', paths),
   taskMenu: (target) => ipcRenderer.send('tasks:menu', target),
+  ungroup: (id) => ipcRenderer.send('tasks:ungroup', id),
+  regroup: (id) => ipcRenderer.send('tasks:regroup', id),
   showTip: (tip) => ipcRenderer.send('tip:show', tip),
   hideTip: () => ipcRenderer.send('tip:hide'),
   onTipText: on('tip:text'),

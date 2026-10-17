@@ -21,7 +21,7 @@
     });
     d.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      api.taskMenu({ kind: 'window', pid: w.pid, id: w.id });
+      api.taskMenu({ kind: 'window', pid: w.pid, id: w.id, inGroup: true });
     });
     return d;
   }

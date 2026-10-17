@@ -22,6 +22,15 @@ describe('bar', () => {
     button('Music').should('have.class', 'dim');
   });
 
+  it('a window pulled out of its group gets its own button after the group', () => {
+    const apps = [TASKS.apps[0], app(2, 'Safari', [win('w2', 'Apple'), win('w3', 'News'), win('w5', 'Weather')]), TASKS.apps[2]];
+    cy.page('bar/index.html', (_state, extra) => { extra.tasks = { ...TASKS, apps, ungrouped: ['w3'] }; });
+    cy.get('#tasks .task .label').then(($l) => expect([...$l].map((l) => l.textContent)).to.deep.equal(['Notes.txt', 'Safari', 'News', 'Music']));
+    button('Safari').find('.count').should('have.text', '2');
+    button('News').rightclick();
+    cy.calls('taskMenu').its(0).its(0).should('deep.include', { kind: 'window', pid: 2, id: 'w3' });
+  });
+
   it('never grouping gives each window its own button', () => {
     cy.page('bar/index.html', (state, extra) => {
       extra.tasks = TASKS;

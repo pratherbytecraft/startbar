@@ -8,7 +8,7 @@
   const pv = document.getElementById('pv');
   const MAX = 6; // more than this and the group list is the better fit
 
-  function thumb(w, icon) {
+  function thumb(w, icon, p) {
     const d = document.createElement('div');
     d.className = 'thumb' + (w.active ? ' current' : '');
     d.dataset.id = w.id;
@@ -47,11 +47,15 @@
       api.hidePreview();
       api.taskCommand({ cmd: 'activate', id: w.id });
     });
+    d.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      api.taskMenu({ kind: 'window', pid: p.pid, id: w.id, inGroup: !!p.group });
+    });
     return d;
   }
 
   api.onPreviewShow((p) => {
-    pv.replaceChildren(...p.windows.slice(0, MAX).map((w) => thumb(w, p.icon)));
+    pv.replaceChildren(...p.windows.slice(0, MAX).map((w) => thumb(w, p.icon, p)));
     window.playOpen(pv);
     // Measured now, not on the next frame: a hidden window gets no frames.
     const r = pv.getBoundingClientRect();
