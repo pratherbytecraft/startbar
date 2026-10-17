@@ -488,6 +488,13 @@
     b.className = 'task' + (isActive(item) ? ' active' : '') + (isDim(item) ? ' dim' : '');
     if (glows.has(item.app.path)) b.style.setProperty('--glow', glows.get(item.app.path));
     if (item.pin) b.dataset.key = item.pin;
+    // For putting a pulled out window back by dragging its button onto
+    // its app's group, see regroupByDrag.
+    if (item.loose) {
+      b.dataset.loose = item.win.id;
+      b.dataset.pid = item.app.pid;
+    }
+    if (item.kind === 'group') b.dataset.group = item.app.pid;
     const img = document.createElement('img');
     img.alt = '';
     if (icons.get(item.app.path)) img.src = icons.get(item.app.path);
@@ -525,7 +532,7 @@
       });
     });
     b.addEventListener('mouseenter', () => {
-      if (tasksEl.classList.contains('reordering')) return;
+      if (tasksEl.matches('.reordering, .regrouping')) return;
       // With previews on, the preview has the title, so no tooltip.
       if (previewsOn() && item.kind !== 'app') return schedulePreview(item, b);
       if (!state.settings.taskbar.titleOnHover) return;
@@ -539,10 +546,69 @@
     return b;
   }
 
+  // A pulled out window's button dragged onto its app's group goes back in.
+  // The group lights up as the target while the pointer is over it. A press
+  // that moves less than a few pixels stays a click. Such a button never
+  // carries a pin (see inRow), so this never fights the pin reorder.
+  function regroupByDrag() {
+    const THRESHOLD = 4;
+    let press = null;
+    let swallowClick = false;
+    tasksEl.addEventListener('pointerdown', (e) => {
+      swallowClick = false;
+      if (e.button !== 0) return;
+      const el = e.target.closest('.task[data-loose]');
+      if (!el || el.dataset.key) return;
+      press = { el, x: e.clientX, y: e.clientY, moved: false, target: null };
+    });
+    tasksEl.addEventListener('pointermove', (e) => {
+      if (!press) return;
+      if (!press.moved) {
+        if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < THRESHOLD) return;
+        press.moved = true;
+        try { tasksEl.setPointerCapture(e.pointerId); } catch {}
+        // A redraw since the press leaves the pressed element behind.
+        if (!press.el.isConnected) press.el = tasksEl.querySelector(`.task[data-loose="${press.el.dataset.loose}"]`) || press.el;
+        press.el.classList.add('lifted');
+        tasksEl.classList.add('regrouping');
+        hideTip();
+        hidePreview();
+      }
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const g = under && under.closest('.task[data-group]');
+      const target = g && g.dataset.group === press.el.dataset.pid ? g : null;
+      if (target === press.target) return;
+      if (press.target) press.target.classList.remove('target');
+      press.target = target;
+      if (target) target.classList.add('target');
+    });
+    const end = (e) => {
+      if (!press) return;
+      const p = press;
+      press = null;
+      if (!p.moved) return;
+      p.el.classList.remove('lifted');
+      tasksEl.classList.remove('regrouping');
+      if (p.target) p.target.classList.remove('target');
+      swallowClick = true; // the click that ends a drag isn't a click
+      if (p.target && e.type === 'pointerup') api.regroup(p.el.dataset.loose);
+      else renderTasks();
+    };
+    tasksEl.addEventListener('pointerup', end);
+    tasksEl.addEventListener('pointercancel', end);
+    tasksEl.addEventListener('click', (e) => {
+      if (!swallowClick) return;
+      swallowClick = false;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
+  }
+  regroupByDrag();
+
   // The helper sends the list a few times a second, so only redraw when
   // something on the bar would change.
   function renderTasks() {
-    if (!state || tasksEl.classList.contains('reordering')) return;
+    if (!state || tasksEl.matches('.reordering, .regrouping')) return;
     const t = state.settings.taskbar;
     const pinList = pinsInRow(t) ? state.pins : [];
     const items = buildItems(t);

@@ -31,6 +31,21 @@ describe('bar', () => {
     cy.calls('taskMenu').its(0).its(0).should('deep.include', { kind: 'window', pid: 2, id: 'w3' });
   });
 
+  it('dragging a pulled out button onto its group puts it back', () => {
+    const apps = [TASKS.apps[0], app(2, 'Safari', [win('w2', 'Apple'), win('w3', 'News'), win('w5', 'Weather')]), TASKS.apps[2]];
+    cy.page('bar/index.html', (_state, extra) => { extra.tasks = { ...TASKS, apps, ungrouped: ['w3'] }; });
+    const center = ($el) => { const r = $el[0].getBoundingClientRect(); return { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, pointerId: 1, button: 0 }; };
+    button('News').then(($b) => cy.wrap($b).trigger('pointerdown', center($b)));
+    button('Safari').then(($g) => {
+      const at = center($g);
+      cy.get('#tasks').trigger('pointermove', { ...at, clientX: at.clientX + 30 }).trigger('pointermove', at);
+      button('Safari').should('have.class', 'target');
+      cy.get('#tasks').trigger('pointerup', at);
+    });
+    cy.calls('regroup').should('deep.include', ['w3']);
+    cy.get('#tasks .task.target').should('not.exist');
+  });
+
   it('a drag over the bar opens a slot after the app\'s buttons', () => {
     cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
     cy.fake().then((api) => api.emit('dragOver', { pid: 2 }));

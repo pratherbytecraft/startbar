@@ -168,4 +168,5 @@ svg { display: block; }
 .group-list .item .handle { margin-left: auto; padding-left: 8px; font-size: 12px; letter-spacing: -1px; opacity: .35; }
 .group-list .item:hover .handle { opacity: .9; }
 .lifted { opacity: .35; }
+.tasks .task.target { box-shadow: inset 0 0 0 2px var(--accent), 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent); }
 .tasks .task.slot { pointer-events: none; background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: none; outline: 2px dashed color-mix(in srgb, var(--accent) 80%, #fff); outline-offset: -2px; }
