@@ -1,6 +1,6 @@
 // Startbar main process. Owns the windows, the settings, the app list and
 // everything that touches the Mac. Renderers only draw.
-const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu, nativeTheme, BrowserWindow, clipboard } = require('electron');
+const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu, nativeTheme, BrowserWindow, clipboard, powerMonitor } = require('electron');
 const { execFile, execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -1111,6 +1111,8 @@ app.whenReady().then(() => {
   tasks.setSpaces(settings.get().spaces.show === 'all');
   tasks.setHoldFinder(filedrawerTakesFinder);
   quitter.start();
+  powerMonitor.on('lock-screen', () => quitter.setLocked(true));
+  powerMonitor.on('unlock-screen', () => quitter.setLocked(false));
   tasks.start();
   status.onChange((s) => {
     windows.broadcast('status', s);

@@ -170,3 +170,43 @@ test('each app waits on its own', async (t) => {
   await clock.advance(600);
   assert.deepEqual(quit(), [1, 2]);
 });
+
+test('nothing quits when more than one app loses its last window at once', async (t) => {
+  const clock = start(t);
+  show([app(1, ['w1']), app(2, ['w2']), app(3, ['w3'])]);
+  show([app(1, []), app(2, []), app(3, ['w3'])]);
+  await clock.advance(2000);
+  assert.deepEqual(sent, []);
+  show([app(1, ['w4']), app(2, ['w5']), app(3, ['w3'])]);
+  await clock.advance(2000);
+  assert.deepEqual(sent, [], 'the windows came back');
+});
+
+test('nothing quits while the screen is locked or just after', async (t) => {
+  const clock = start(t);
+  const quitter = require('../../src/main/quitter');
+  show([app(1, ['w1'])]);
+  quitter.setLocked(true);
+  show([app(1, [])]);
+  await clock.advance(60000);
+  assert.deepEqual(sent, []);
+  quitter.setLocked(false);
+  show([app(1, ['w1'])]);
+  show([app(1, [])]);
+  await clock.advance(4000);
+  assert.deepEqual(sent, [], 'still just after the unlock');
+  await clock.advance(1000);
+  show([app(1, ['w1'])]);
+  show([app(1, [])]);
+  await clock.advance(1000);
+  assert.deepEqual(quit(), [1]);
+});
+
+test('locking the screen during the wait stops the quit', async (t) => {
+  const clock = start(t);
+  show([app(1, ['w1'])]);
+  show([app(1, [])]);
+  require('../../src/main/quitter').setLocked(true);
+  await clock.advance(2000);
+  assert.deepEqual(sent, []);
+});
