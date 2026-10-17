@@ -151,6 +151,7 @@ function withScheme(s) {
 let dir;
 let file;
 let current;
+let fresh = false; // no settings file before this launch, a new install
 const listeners = new Set();
 
 function merge(base, over) {
@@ -167,6 +168,7 @@ function init() {
   dir = path.join(app.getPath('appData'), 'Startbar');
   file = path.join(dir, 'settings.json');
   fs.mkdirSync(dir, { recursive: true });
+  fresh = !fs.existsSync(file);
   let saved = {};
   try {
     saved = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -183,6 +185,10 @@ function init() {
 
 function get() {
   return current;
+}
+
+function firstRun() {
+  return fresh;
 }
 
 function dataDir() {
@@ -273,4 +279,4 @@ function onChange(fn) {
   return () => listeners.delete(fn);
 }
 
-module.exports = { DEFAULTS, init, get, update, replace, reset, resetTheme, forExport, onChange, dataDir };
+module.exports = { DEFAULTS, init, get, firstRun, update, replace, reset, resetTheme, forExport, onChange, dataDir };

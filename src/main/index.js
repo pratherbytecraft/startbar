@@ -1118,6 +1118,12 @@ app.whenReady().then(() => {
   });
   status.start();
   checkScreen();
+  // A new install opens at login, the way a taskbar should. The switch on
+  // the General page turns it off. Saving makes it a one time thing.
+  if (settings.firstRun()) {
+    setLoginItem(true);
+    settings.update({});
+  }
 
   let previewsWere = settings.get().taskbar.previews;
   settings.onChange((s) => {

@@ -23,6 +23,13 @@ test('a first run gets the defaults', () => {
   assert.deepEqual(settings.get(), settings.DEFAULTS);
 });
 
+test('only a launch without a settings file is a first run', () => {
+  start();
+  assert.equal(settings.firstRun(), true);
+  start({ barHeight: 44 });
+  assert.equal(settings.firstRun(), false);
+});
+
 test('a broken settings file gets the defaults', () => {
   start('{ not json');
   assert.deepEqual(settings.get(), settings.DEFAULTS);

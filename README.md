@@ -68,7 +68,7 @@ The tray shows Bluetooth, the volume, Wi-Fi and the battery next to the clock. C
 
 With more than one display, each display gets its own bar with that display's windows. The bar can also show windows from every Space, and clicking one switches to its Space.
 
-Open Startbar Settings from the Start menu or by right clicking the bar. Everything above is set there, with a preview of the bar that changes as you go. Settings also has Open at login, export and import of your settings, and buttons that hide the Dock or move it to the bottom.
+Open Startbar Settings from the Start menu or by right clicking the bar. Everything above is set there, with a preview of the bar that changes as you go. Settings also has Open at login (on from the first launch), export and import of your settings, and buttons that hide the Dock or move it to the bottom.
 
 ![Startbar Settings](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/settings-appearance.png)
 
