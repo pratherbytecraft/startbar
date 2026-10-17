@@ -45,6 +45,8 @@ let previewAnchor = null; // { rect, bar } of the button
 let previewHover = false; // the mouse is over the pictures
 let previewHide = null;
 let previewHeld = false; // a window is being dragged out of the pictures, so they stay
+let previewPinned = false; // opened by a click, stays until a click elsewhere
+const unpinHooks = new Set();
 let settingsWin = null;
 let barHidden = false; // Hide the Bar, for this session only
 const visibility = new Set();
@@ -318,7 +320,7 @@ function createPreview(settings) {
 }
 
 function showPreview(payload, barWin) {
-  if (!preview || !liveBar(barWin)) return;
+  if (!preview || !liveBar(barWin) || previewPinned) return;
   clearTimeout(previewHide);
   previewAnchor = { rect: payload.rect, bar: barWin };
   preview.webContents.send('preview:show', payload);
@@ -342,7 +344,7 @@ function sizePreview({ width, height }) {
 // move up onto them.
 function leavePreview() {
   clearTimeout(previewHide);
-  if (previewHeld) return;
+  if (previewHeld || previewPinned) return;
   previewHide = setTimeout(() => { if (!previewHover) hidePreview(); }, 250);
 }
 
@@ -364,7 +366,42 @@ function hidePreview() {
   previewAnchor = null;
   previewHover = false;
   previewHeld = false;
+  if (previewPinned) {
+    previewPinned = false;
+    for (const fn of unpinHooks) fn();
+  }
   if (preview && preview.isVisible()) preview.hide();
+}
+
+// With previews on, a click on a group opens its pictures and keeps them
+// up until a click elsewhere; a second click on the button closes them.
+// True when the pictures were opened, false when the click closed them.
+function pinPreview(payload, barWin) {
+  if (!preview || !liveBar(barWin)) return false;
+  const sameButton = previewAnchor && previewAnchor.bar === barWin && previewAnchor.rect.x === payload.rect.x && previewAnchor.rect.width === payload.rect.width;
+  if (previewPinned && sameButton) {
+    hidePreview();
+    return false;
+  }
+  clearTimeout(previewHide);
+  previewPinned = true;
+  previewAnchor = { rect: payload.rect, bar: barWin };
+  preview.webContents.send('preview:show', payload);
+  return true;
+}
+
+// A screen point on the pinned pictures or on the button they belong to,
+// where a click is theirs to handle.
+function previewHit(point) {
+  if (!previewPinned || !preview || !previewAnchor || !liveBar(previewAnchor.bar)) return false;
+  const inside = (b) => point.x >= b.x && point.x < b.x + b.width && point.y >= b.y && point.y < b.y + b.height;
+  const bar = previewAnchor.bar.getBounds();
+  const { rect } = previewAnchor;
+  return inside(preview.getBounds()) || inside({ x: bar.x + rect.x, y: bar.y + rect.y, width: rect.width, height: rect.height });
+}
+
+function onPreviewUnpinned(fn) {
+  unpinHooks.add(fn);
 }
 
 // The tray's volume, Wi-Fi and battery panels share one window.
@@ -506,6 +543,7 @@ function barAt(point) {
 
 function showGroup(payload, barWin) {
   if (!group || !liveBar(barWin)) return;
+  hidePreview();
   // A click on the bar doesn't always blur the list, so check for it open.
   if (group.isVisible() && groupAnchor && groupAnchor.pid === payload.pid && groupAnchor.bar === barWin) return hideGroup();
   // Clicking the group button while its list is open blurs the list first,
@@ -861,6 +899,7 @@ function broadcast(channel, payload) {
 module.exports = {
   createBars, createMenu, createTip, createGroup, createCalendar, createPopover, createPreview, layout, showMenu, hideMenu, toggleMenu,
   showPreview, sendPreview, sizePreview, leavePreview, hoverPreview, hidePreview, holdPreview, showGhost, moveGhost, barAt,
+  pinPreview, previewHit, previewPinned: () => previewPinned, onPreviewUnpinned,
   showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, toggleCalendar, sizeCalendar, hideCalendar,
   togglePopover, sizePopover, hidePopover, broadcast,
   hideBar, showBar, onBarVisibility, holdBar, setFullScreenDisplays, barAreas, barOf, showSettings,

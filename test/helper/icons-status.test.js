@@ -34,3 +34,11 @@ test('status reports the tray items and the permissions it can see', async (t) =
   if (s.volume) assert.ok(s.volume.level >= 0 && s.volume.level <= 1);
   assert.ok(['allowed', 'denied', 'notAsked', 'off', 'unknown'].includes(s.access.location), s.access.location);
 });
+
+test('the window helper takes the click watch on and off', async (t) => {
+  const win = run('windows');
+  t.after(() => win.stop());
+  assert.equal((await win.send({ cmd: 'watchClicks', on: true })).ok, true);
+  assert.equal((await win.send({ cmd: 'watchClicks', on: true })).ok, true, 'asked twice is fine');
+  assert.equal((await win.send({ cmd: 'watchClicks', on: false })).ok, true);
+});

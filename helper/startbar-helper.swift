@@ -201,6 +201,7 @@ let axCallback: AXObserverCallback = { _, _, _, refcon in
 //                                     whether the app has a window on any Space, answered as "windows"
 //   {"cmd":"refresh"}                 send the state now, even if unchanged
 //   {"cmd":"spaces","all":true}       also list windows on other Spaces
+//   {"cmd":"watchClicks","on":true}   report every mouse down anywhere as {"type":"click","x":..,"y":..}
 //   {"cmd":"keepOff","areas":[{"top":25,"bottom":830,"screen":{"x":0,"y":0,"w":1512,"h":866}}]}
 //     one area per bar, or a single area's keys at the top level
 //     move windows on that screen up when they would cover the bar, which
@@ -285,6 +286,38 @@ final class WindowWatcher {
             self.emitPending = false
             self.emitState()
         }
+    }
+
+    // Mouse downs anywhere on screen, while the pinned preview is up, so
+    // Startbar can close it on a click elsewhere. A listen only event tap
+    // for mouse buttons needs no permission. The point is in screen
+    // coordinates with the origin at the top left, like Electron's.
+    var clickTap: CFMachPort?
+    var clickSource: CFRunLoopSource?
+    func watchClicks(_ on: Bool) {
+        if !on {
+            if let tap = clickTap {
+                CGEvent.tapEnable(tap: tap, enable: false)
+                CFMachPortInvalidate(tap)
+            }
+            if let source = clickSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
+            clickTap = nil
+            clickSource = nil
+            return
+        }
+        guard clickTap == nil else { return }
+        let mask = (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.rightMouseDown.rawValue) | (1 << CGEventType.otherMouseDown.rawValue)
+        guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
+                                          eventsOfInterest: CGEventMask(mask), callback: { _, type, event, _ in
+            if type == .leftMouseDown || type == .rightMouseDown || type == .otherMouseDown {
+                jsonLine(["type": "click", "x": event.location.x, "y": event.location.y])
+            }
+            return Unmanaged.passUnretained(event)
+        }, userInfo: nil) else { return }
+        clickTap = tap
+        clickSource = CFMachPortCreateRunLoopSource(nil, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), clickSource, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
     }
 
     func emitState() {
@@ -647,6 +680,9 @@ final class WindowWatcher {
             return nil
         case "showDesktop":
             showDesktop()
+            return nil
+        case "watchClicks":
+            watchClicks(command["on"] as? Bool ?? false)
             return nil
         case "askScreen":
             CGRequestScreenCaptureAccess()

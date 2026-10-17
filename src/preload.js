@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('startbar', {
   onTipText: on('tip:text'),
   tipSize: (size) => ipcRenderer.send('tip:size', size),
   showPreview: (payload) => ipcRenderer.send('preview:show', payload),
+  pinPreview: (payload) => ipcRenderer.send('preview:pin', payload),
   leavePreview: () => ipcRenderer.send('preview:leave'),
   hidePreview: () => ipcRenderer.send('preview:hide'),
   previewHover: (on) => ipcRenderer.send('preview:hover', on),

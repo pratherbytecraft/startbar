@@ -18,6 +18,7 @@ let seq = 0;
 let state = { accessibility: null, apps: [] };
 let keepOff = { cmd: 'keepOff', areas: [] }; // resent to every new helper
 let spaces = { cmd: 'spaces', all: false }; // this one too
+let watchClicks = { cmd: 'watchClicks', on: false }; // and this one
 let rawApps = []; // the helper's list, before held back Finder windows come out
 
 // Apps that /Applications only links to (Safari, which lives in a system
@@ -63,6 +64,8 @@ function onLine(line) {
   } else if (msg.type === 'state') {
     rawApps = msg.apps.map((a) => (linkedApps().has(a.path) ? { ...a, path: linkedApps().get(a.path) } : a));
     update({ apps: heldBack(rawApps) });
+  } else if (msg.type === 'click') {
+    events.emit('click', { x: Number(msg.x) || 0, y: Number(msg.y) || 0 });
   } else if (msg.type === 'reply') {
     const resolve = pending.get(msg.seq);
     if (resolve) {
@@ -84,6 +87,7 @@ function start() {
   readline.createInterface({ input: child.stdout }).on('line', onLine);
   child.stdin.write(JSON.stringify(keepOff) + '\n');
   child.stdin.write(JSON.stringify(spaces) + '\n');
+  if (watchClicks.on) child.stdin.write(JSON.stringify(watchClicks) + '\n');
   child.on('error', (err) => console.log(`Startbar: the window helper did not start: ${err.message}`));
   child.on('exit', (code, signal) => {
     child = null;
@@ -181,15 +185,25 @@ function setSpaces(all) {
   if (child) send(spaces);
 }
 
+// Whether the helper reports every mouse down anywhere, see onClick. Used
+// while a preview is pinned open, to close it on a click elsewhere.
+function setWatchClicks(on) {
+  if (watchClicks.on === !!on) return;
+  watchClicks = { cmd: 'watchClicks', on: !!on };
+  if (child) send(watchClicks);
+}
+
 module.exports = {
   start,
   setKeepOff,
   setSpaces,
+  setWatchClicks,
   setHoldFinder,
   heldBack, // for the tests
   stop,
   restart,
   send,
   get: () => state,
-  onChange: (fn) => events.on('change', fn)
+  onChange: (fn) => events.on('change', fn),
+  onClick: (fn) => events.on('click', fn)
 };

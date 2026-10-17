@@ -77,6 +77,20 @@ describe('bar', () => {
     });
   });
 
+  it('with previews on, a click on a group pins its preview instead of opening the list', () => {
+    cy.page('bar/index.html', (state, extra) => {
+      extra.tasks = TASKS;
+      state.settings.taskbar.previews = true;
+    });
+    button('Safari').click();
+    cy.calls('pinPreview').its(0).its(0).should((p) => {
+      expect(p.pid).to.equal(2);
+      expect(p.group).to.equal(true);
+      expect(p.windows.map((w) => w.title)).to.deep.equal(['Apple', 'News']);
+    });
+    cy.calls('showGroup').should('have.length', 0);
+  });
+
   it('right click asks for the button menu, middle click for a new window', () => {
     cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
     button('Notes.txt').rightclick();

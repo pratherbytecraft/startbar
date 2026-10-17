@@ -891,6 +891,20 @@ async function minimize(command) {
 function showPreview(payload, sender) {
   const bar = windows.barOf(sender);
   windows.showPreview(payload, bar);
+  takePictures(payload);
+}
+
+// A click on a group with previews on: the pictures open and stay until a
+// click elsewhere, which the helper reports while they're up. A click on
+// the pictures or on their button is theirs to handle.
+function pinPreview(payload, sender) {
+  const bar = windows.barOf(sender);
+  if (!windows.pinPreview(payload, bar)) return;
+  takePictures(payload);
+  tasks.setWatchClicks(true);
+}
+
+function takePictures(payload) {
   if (screenNow !== 'allowed') return;
   for (const w of payload.windows) {
     const kept = pictures.get(w.id);
@@ -902,6 +916,7 @@ function showPreview(payload, sender) {
 
 function wireIpc() {
   ipcMain.on('preview:show', (e, payload) => showPreview(payload, e.sender));
+  ipcMain.on('preview:pin', (e, payload) => pinPreview(payload, e.sender));
   ipcMain.on('preview:size', (_e, size) => windows.sizePreview(size));
   ipcMain.on('preview:leave', () => windows.leavePreview());
   ipcMain.on('preview:hover', (_e, on) => windows.hoverPreview(on));
@@ -1062,6 +1077,10 @@ app.whenReady().then(() => {
     access.check(t, { restartHelper: tasks.restart });
   });
   ungrouped.onChange(() => windows.broadcast('tasks', taskState()));
+  windows.onPreviewUnpinned(() => tasks.setWatchClicks(false));
+  tasks.onClick((point) => {
+    if (windows.previewPinned() && !windows.previewHit(point)) windows.hidePreview();
+  });
   updateKeepOff();
   tasks.setSpaces(settings.get().spaces.show === 'all');
   tasks.setHoldFinder(filedrawerTakesFinder);

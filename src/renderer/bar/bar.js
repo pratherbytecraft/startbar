@@ -399,18 +399,22 @@
   let previewLeft = 0;
   const previewsOn = () => state.settings.taskbar.previews;
 
+  function previewPayload(item, el) {
+    const wins = item.kind === 'group' ? item.wins : [item.win];
+    return {
+      pid: item.app.pid,
+      group: item.kind === 'group',
+      rect: rectOf(el),
+      icon: icons.get(item.app.path) || '',
+      windows: wins.map((w) => ({ id: w.id, title: w.title || item.app.name, minimized: w.minimized, active: item.app.active && w.focused && !w.minimized }))
+    };
+  }
+
   function schedulePreview(item, el) {
     clearTimeout(previewTimer);
-    const wins = item.kind === 'group' ? item.wins : [item.win];
     const show = () => {
       previewUp = true;
-      api.showPreview({
-        pid: item.app.pid,
-        group: item.kind === 'group',
-        rect: rectOf(el),
-        icon: icons.get(item.app.path) || '',
-        windows: wins.map((w) => ({ id: w.id, title: w.title || item.app.name, minimized: w.minimized, active: item.app.active && w.focused && !w.minimized }))
-      });
+      api.showPreview(previewPayload(item, el));
     };
     if (previewUp && Date.now() - previewLeft < 300) show();
     else previewTimer = setTimeout(show, 500);
@@ -431,9 +435,19 @@
 
   function onClick(item, el) {
     hideTip();
-    hidePreview();
     const t = state.settings.taskbar;
-    if (item.kind === 'app') return api.taskCommand({ cmd: 'activateApp', pid: item.app.pid });
+    if (item.kind === 'app') {
+      hidePreview();
+      return api.taskCommand({ cmd: 'activateApp', pid: item.app.pid });
+    }
+    // With previews on, a click on a group keeps its pictures open instead
+    // of showing the list.
+    if (item.kind === 'group' && previewsOn()) {
+      clearTimeout(previewTimer);
+      previewUp = false;
+      return api.pinPreview(previewPayload(item, el));
+    }
+    hidePreview();
     if (item.kind === 'group') {
       return api.showGroup({
         pid: item.app.pid,
