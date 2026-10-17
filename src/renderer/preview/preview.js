@@ -81,6 +81,7 @@
 
   api.onPreviewShow((p) => {
     current = p;
+    clearTimeout(peekTimer); // the picture it was for is going away
     pv.replaceChildren(...p.windows.slice(0, MAX).map((w) => thumb(w, p.icon, p)));
     window.playOpen(pv);
     // Measured now, not on the next frame: a hidden window gets no frames.

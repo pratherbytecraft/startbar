@@ -932,10 +932,12 @@ function takePictures(payload) {
 }
 
 // Resting on a picture in a preview shows that window alone; moving off,
-// or the pictures going away, puts the window that was in front back.
+// or the pictures going away, puts the window that was in front back. A
+// peek that arrives after the pictures went away is dropped, or nothing
+// would put it back.
 let peeking = false;
 function peek(id) {
-  if (id && settings.get().taskbar.peek) {
+  if (id && settings.get().taskbar.peek && windows.previewShown()) {
     peeking = true;
     tasks.send({ cmd: 'peek', id });
   } else if (peeking) {

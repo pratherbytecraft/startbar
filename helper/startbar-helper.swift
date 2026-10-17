@@ -1148,12 +1148,19 @@ final class WindowWatcher {
         return true
     }
 
+    // The window to put back may be one the bar doesn't list, like
+    // Startbar's own settings window, so it's looked up in its app too.
     func unpeek() {
         guard let p = peeked else { return }
         peeked = nil
-        guard let back = p.back, let target = known[back.pid]?.first(where: { $0.id == "w\(back.id)" }),
-              !axBool(target.element, kAXMinimizedAttribute) else { return }
-        _ = raiseOnly(target.element, pid: back.pid)
+        guard let back = p.back else { return }
+        let listed = known[back.pid]?.first(where: { $0.id == "w\(back.id)" })?.element
+        let windows = axValue(AXUIElementCreateApplication(back.pid), kAXWindowsAttribute) as? [AXUIElement] ?? []
+        guard let target = listed ?? windows.first(where: {
+            var id: CGWindowID = 0
+            return _AXUIElementGetWindow($0, &id) == .success && id == back.id
+        }), !axBool(target, kAXMinimizedAttribute) else { return }
+        _ = raiseOnly(target, pid: back.pid)
     }
 
     func activate(_ window: AXUIElement, pid: pid_t) {

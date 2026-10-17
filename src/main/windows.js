@@ -929,7 +929,7 @@ function broadcast(channel, payload) {
 module.exports = {
   createBars, createMenu, createTip, createGroup, createCalendar, createPopover, createPreview, layout, showMenu, hideMenu, toggleMenu,
   showPreview, sendPreview, sizePreview, leavePreview, hoverPreview, hidePreview, holdPreview, showGhost, moveGhost, barAt,
-  pinPreview, previewHit, previewPinned: () => previewPinned, onPreviewUnpinned, onPreviewHidden,
+  pinPreview, previewHit, previewPinned: () => previewPinned, previewShown: () => !!(preview && preview.isVisible()), onPreviewUnpinned, onPreviewHidden,
   showTip, sizeTip, hideTip, showGroup, sizeGroup, hideGroup, toggleCalendar, sizeCalendar, hideCalendar,
   togglePopover, sizePopover, hidePopover, broadcast,
   hideBar, showBar, onBarVisibility, holdBar, setFullScreenDisplays, barAreas, barOf, showSettings,
