@@ -742,11 +742,14 @@ final class WindowWatcher {
             switch name {
             case "activate":
                 activate(window, pid: pid)
+                changed()
                 return nil
             case "minimize":
+                defer { changed() }
                 return AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanTrue) == .success
                     ? nil : "the window did not minimize"
             case "unminimize":
+                defer { changed() }
                 return AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse) == .success
                     ? nil : "the window did not come back"
             default:

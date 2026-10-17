@@ -361,6 +361,22 @@
     return { list, compact: !fits(list.length) };
   }
 
+  // What the last click clicked of a window, until the helper's window list
+  // shows it. A click right after one that minimized or restored a window
+  // would otherwise go by the old list and do the same thing again, since
+  // the list takes a second or two to catch up during the animation.
+  let clicked = null; // { id, active, at }
+  function clickActive(item) {
+    if (item.kind === 'window' && clicked && clicked.id === item.win.id && Date.now() - clicked.at < 3000) return clicked.active;
+    return isActive(item);
+  }
+  function settleAsked() {
+    if (!clicked) return;
+    const app = tasks.apps.find((a) => a.windows.some((w) => w.id === clicked.id));
+    const win = app && app.windows.find((w) => w.id === clicked.id);
+    if (!win || isActive({ kind: 'window', app, win }) === clicked.active) clicked = null;
+  }
+
   function isActive(item) {
     if (!item.app.active) return false;
     if (item.kind === 'app') return true;
@@ -456,8 +472,9 @@
         windows: item.wins.map((w) => ({ id: w.id, title: w.title || item.app.name, minimized: w.minimized, active: item.app.active && w.focused && !w.minimized }))
       });
     }
-    if (isActive(item) && t.clickActiveMinimizes) return api.taskCommand({ cmd: 'minimize', id: item.win.id });
-    api.taskCommand({ cmd: 'activate', id: item.win.id });
+    const minimize = clickActive(item) && t.clickActiveMinimizes;
+    clicked = { id: item.win.id, active: !minimize, at: Date.now() };
+    api.taskCommand({ cmd: minimize ? 'minimize' : 'activate', id: item.win.id });
   }
 
   function pinTask(p) {
@@ -657,6 +674,7 @@
 
   function applyTasks(next) {
     tasks = next;
+    settleAsked();
     ungrouped = new Set(next.ungrouped || []);
     renderTasks();
   }
