@@ -95,6 +95,16 @@ describe('the window list', async () => {
     assert.equal((await helper.send({ cmd: 'hasWindows', pid: app.pid, ids: [win.id] })).windows, false);
   });
 
+  test('opens a new window and raises it', { skip: why || false }, async () => {
+    const next = helper.waitForNext((m) => {
+      const a = textEdit(m);
+      return a && a.active && a.windows.some((w) => w.focused && !w.minimized);
+    });
+    assert.equal((await helper.send({ cmd: 'newWindow', pid: app.pid })).ok, true);
+    const fresh = textEdit(await next).windows.find((w) => w.focused);
+    assert.equal((await helper.send({ cmd: 'close', id: fresh.id })).ok, true);
+  });
+
   test('quits the app', { skip: why || false }, async () => {
     const next = helper.waitForNext((m) => m.type === 'state' && !textEdit(m));
     assert.equal((await helper.send({ cmd: 'quitApp', pid: app.pid })).ok, true);

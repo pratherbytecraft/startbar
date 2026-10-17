@@ -222,7 +222,7 @@ let axCallback: AXObserverCallback = { _, _, _, refcon in
 //   {"cmd":"thumb","id":"w123","width":380,"height":240}
 //                                     a picture of the window, answered later as "image", a JPEG data URL
 //   {"cmd":"activateApp","pid":501}   {"cmd":"quitApp","pid":501}
-//   {"cmd":"newWindow","pid":501}     bring the app forward and press Command N
+//   {"cmd":"newWindow","pid":501}     open a new window of the app and raise only that one
 //   {"cmd":"hasWindows","pid":501,"ids":["w123"]}
 //                                     whether the app has a window on any Space, answered as "windows"
 //   {"cmd":"refresh"}                 send the state now, even if unchanged
@@ -259,6 +259,7 @@ final class WindowWatcher {
     var desktopFront: pid_t? = nil // the app that was in front then
     var desktopMinimized: [AXUIElement] = [] // Finder windows minimized by Show Desktop
     var remote: [pid_t: [CGWindowID: AXUIElement]] = [:] // other Spaces' windows found by token
+    var pendingNew: [pid_t: (ids: Set<String>, until: Date)] = [:] // apps asked for a new window, with the ids they had
     var searched: [pid_t: Set<CGWindowID>] = [:] // window ids already looked for that way
     let debug = ProcessInfo.processInfo.environment["STARTBAR_HELPER_DEBUG"] != nil
 
@@ -350,6 +351,7 @@ final class WindowWatcher {
         let started = Date()
         let apps = scan()
         note(String(format: "scan %.0f ms", Date().timeIntervalSince(started) * 1000))
+        if !pendingNew.isEmpty { newWindowArrived() }
         guard let line = jsonText(["type": "state", "apps": apps]), line != lastLine else { return }
         lastLine = line
         print(line)
@@ -718,16 +720,10 @@ final class WindowWatcher {
                 return "no such app"
             }
             if name == "quitApp" { return app.terminate() ? nil : "the app did not quit" }
-            activateApp(app)
+            if name == "activateApp" { activateApp(app) }
             if name == "newWindow" {
                 guard trusted else { return "no accessibility permission" }
-                if let found = newWindowItem(pid_t(pid)) {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        AXUIElementPerformAction(found.item, kAXPressAction as CFString)
-                    }
-                } else {
-                    newWindow(pid_t(pid))
-                }
+                openNewWindow(app)
             }
             return nil
         case "hasWindows":
@@ -888,16 +884,47 @@ final class WindowWatcher {
     }
 
     // Command N, for apps without a New Window menu item, sent straight to
-    // the app so it lands even if another app is still in front. Waits a
-    // moment for the app to come forward first.
+    // the app so it lands while another app is still in front.
     func newWindow(_ pid: pid_t) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            let source = CGEventSource(stateID: .hidSystemState)
-            for down in [true, false] {
-                let event = CGEvent(keyboardEventSource: source, virtualKey: 45, keyDown: down) // N
-                event?.flags = .maskCommand
-                event?.postToPid(pid)
-            }
+        let source = CGEventSource(stateID: .hidSystemState)
+        for down in [true, false] {
+            let event = CGEvent(keyboardEventSource: source, virtualKey: 45, keyDown: down) // N
+            event?.flags = .maskCommand
+            event?.postToPid(pid)
+        }
+    }
+
+    // Asks the app for a new window without bringing it forward first, so
+    // its other windows stay where they are, and raises only the window
+    // that shows up (see newWindowArrived). If none does within a few
+    // seconds the app is activated the ordinary way, for apps that only
+    // make a window while in front.
+    func openNewWindow(_ app: NSRunningApplication) {
+        let pid = app.processIdentifier
+        if app.isHidden { app.unhide() }
+        pendingNew[pid] = (Set((known[pid] ?? []).map { $0.id }), Date().addingTimeInterval(2.5))
+        if let found = newWindowItem(pid) {
+            AXUIElementPerformAction(found.item, kAXPressAction as CFString)
+        } else {
+            newWindow(pid)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) { [weak self] in
+            guard let self, self.pendingNew[pid] != nil else { return }
+            self.pendingNew[pid] = nil
+            self.note("new window for \(pid) never came, activating the app")
+            self.activateApp(app)
+        }
+    }
+
+    // After a scan: an app asked for a new window has one it didn't have
+    // before, so raise that one alone.
+    func newWindowArrived() {
+        for (pid, pending) in pendingNew {
+            guard let list = known[pid] else { continue }
+            if pending.until < Date() { pendingNew[pid] = nil; continue }
+            guard let fresh = list.last(where: { !pending.ids.contains($0.id) }) else { continue }
+            pendingNew[pid] = nil
+            activate(fresh.element, pid: pid)
         }
     }
 
