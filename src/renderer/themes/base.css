@@ -39,6 +39,10 @@ svg { display: block; }
 .task.pinned .label { display: none; }
 .tasks .task.pinned:not(:hover) { background: none; box-shadow: none; }
 .task.dragging { opacity: .55; }
+/* a button dragged along the bar, see moveByDrag in bar/bar.js */
+.task.held, .task.settling { z-index: 2; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .35)); }
+/* see-through buttons blur the one they pass over, so the labels don't mix */
+.task.held { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 [data-labels="icons-only"] .task .label, [data-labels="icons-only"] .task .caret,
 .tasks.compact .task .label, .tasks.compact .task .caret { display: none; }
 .tray { display: flex; align-items: center; gap: 10px; position: relative; }
@@ -152,6 +156,8 @@ svg { display: block; }
   .scroll:has(> .menu.opening) { overflow: hidden; }
   .entering > .item, .entering > .list-head { animation: sb-row .2s ease-out both; animation-delay: calc(var(--i, 0) * 14ms); }
   .list.leaving > * { animation: sb-leave .11s ease-in both; }
+  /* the other buttons slide aside for a dragged one, which glides into place */
+  .tasks.moving .task:not(.held) { transition: transform .16s ease; }
   .item .arrow { display: inline-block; transition: transform .18s ease; }
   .item, .task, .quick .icon, .tray-icon, .tray .chev, .start, .menu-foot .pw, .pw-more, .desk, .cal-nav, .cal-grid .day, .pop-dev, .pop-icon {
     transition: background-color .12s, box-shadow .12s, filter .12s, color .12s, opacity .12s;

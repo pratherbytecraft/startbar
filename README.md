@@ -60,6 +60,8 @@ A click on a window that isn't in front brings it forward and lands as a click, 
 
 A window can be pulled out of its app's group onto its own button. Drag its picture out of the preview, or its row out of the group list, down onto the bar. Drag the button back onto the group to put it back, or pick Put back in the group on its right click menu. Startbar remembers pulled out windows by app and title, so the same window comes back on its own button the next time it opens.
 
+Drag any button along the bar to move it, and the other buttons slide aside to make room. Startbar keeps the order, so an app's buttons come back in the same spot after a restart, and a new window goes next to its app's other buttons.
+
 ![Window previews over a Finder group](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/preview-system.png)
 
 The tray shows Bluetooth, the volume, Wi-Fi and the battery next to the clock. Click one for a small panel to change the volume, turn Wi-Fi or Bluetooth on or off, connect a Bluetooth device, or see how much charge is left. Click the clock for a small calendar.

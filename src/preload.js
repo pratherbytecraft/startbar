@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('startbar', {
   taskMenu: (target) => ipcRenderer.send('tasks:menu', target),
   ungroup: (id) => ipcRenderer.send('tasks:ungroup', id),
   regroup: (id) => ipcRenderer.send('tasks:regroup', id),
+  setOrder: (keys) => ipcRenderer.send('tasks:order', keys),
   putAllBack: () => ipcRenderer.send('tasks:putAllBack'),
   dragOut: (d) => ipcRenderer.send('tasks:dragOut', d),
   onDragOver: on('tasks:dragOver'),

@@ -23,6 +23,8 @@
   // Which display this bar is on: { id, main, bars, displays: [{ id, main, bounds }] }.
   let place = null;
   let drawn = '';
+  let shownList = []; // the items drawn on the bar, in their order
+  let moving = null; // the button being dragged along the bar, see moveByDrag
   let pinsDrawn = '';
   let tipTimer = null;
   const icons = new Map(); // app path -> data URL
@@ -520,12 +522,13 @@
     if (glows.has(item.app.path)) b.style.setProperty('--glow', glows.get(item.app.path));
     if (item.pin) b.dataset.key = item.pin;
     // For putting a pulled out window back by dragging its button onto
-    // its app's group, see regroupByDrag.
+    // its app's group, see moveByDrag.
     if (item.loose) {
       b.dataset.loose = item.win.id;
       b.dataset.pid = item.app.pid;
     }
     if (item.kind === 'group') b.dataset.group = item.app.pid;
+    b.dataset.order = window.orderKey(item); // found again after a redraw, see moveByDrag
     const img = document.createElement('img');
     img.alt = '';
     if (icons.get(item.app.path)) img.src = icons.get(item.app.path);
@@ -563,7 +566,7 @@
       });
     });
     b.addEventListener('mouseenter', () => {
-      if (tasksEl.matches('.reordering, .regrouping')) return;
+      if (moving || tasksEl.matches('.reordering, .regrouping')) return;
       // With previews on, the preview has the title, so no tooltip.
       if (previewsOn() && item.kind !== 'app') return schedulePreview(item, b);
       if (!state.settings.taskbar.titleOnHover) return;
@@ -577,20 +580,25 @@
     return b;
   }
 
-  // A pulled out window's button dragged onto its app's group goes back in.
-  // The group lights up as the target while the pointer is over it. A press
-  // that moves less than a few pixels stays a click. Such a button never
-  // carries a pin (see inRow), so this never fights the pin reorder.
-  function regroupByDrag() {
+  // Any button but a pin's can be dragged to a new spot on the bar: it
+  // follows the mouse, the others slide aside to make room, and on letting go
+  // it glides into its spot and the new order is saved (main/order.js). A
+  // window pulled out of its group, dropped on the middle of its app's group,
+  // goes back in instead; the group lights up as the target. A press that
+  // moves less than a few pixels stays a click. Pins in the row reorder
+  // through reorderable above.
+  function moveByDrag() {
     const THRESHOLD = 4;
+    const SETTLE = 160; // the glide into place, as long as the slide in base.css
     let press = null;
     let swallowClick = false;
+    const movable = (el) => el.classList.contains('task') && !el.dataset.key && !el.classList.contains('slot');
     tasksEl.addEventListener('pointerdown', (e) => {
       swallowClick = false;
-      if (e.button !== 0) return;
-      const el = e.target.closest('.task[data-loose]');
-      if (!el || el.dataset.key) return;
-      press = { el, x: e.clientX, y: e.clientY, moved: false, target: null };
+      if (e.button !== 0 || moving) return;
+      const el = e.target.closest('.task');
+      if (!el || el.parentElement !== tasksEl || !movable(el)) return;
+      press = { el, x: e.clientX, y: e.clientY, moved: false };
     });
     tasksEl.addEventListener('pointermove', (e) => {
       if (!press) return;
@@ -598,32 +606,78 @@
         if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < THRESHOLD) return;
         press.moved = true;
         try { tasksEl.setPointerCapture(e.pointerId); } catch {}
-        // A redraw since the press leaves the pressed element behind.
-        if (!press.el.isConnected) press.el = tasksEl.querySelector(`.task[data-loose="${press.el.dataset.loose}"]`) || press.el;
-        press.el.classList.add('lifted');
-        tasksEl.classList.add('regrouping');
+        // The window list comes in a few times a second and can redraw the
+        // bar between the press and the drag, so find the button again.
+        if (!press.el.isConnected) {
+          press.el = [...tasksEl.children].find((x) => x.dataset.order === press.el.dataset.order) || null;
+          if (!press.el) { press = null; return; }
+        }
+        const els = [...tasksEl.children].filter(movable);
+        const rects = els.map((x) => x.getBoundingClientRect());
+        const from = els.indexOf(press.el);
+        const style = getComputedStyle(press.el);
+        Object.assign(press, {
+          els, rects, from, to: from, target: null,
+          step: rects[from].width + parseFloat(style.marginRight) + GAP,
+          group: press.el.dataset.loose ? els.find((x) => x.dataset.group === press.el.dataset.pid) : null
+        });
+        moving = press;
+        press.el.classList.add('held');
+        tasksEl.classList.add('moving');
         hideTip();
         hidePreview();
       }
-      const under = document.elementFromPoint(e.clientX, e.clientY);
-      const g = under && under.closest('.task[data-group]');
-      const target = g && g.dataset.group === press.el.dataset.pid ? g : null;
-      if (target === press.target) return;
-      if (press.target) press.target.classList.remove('target');
-      press.target = target;
-      if (target) target.classList.add('target');
+      const p = press;
+      const first = p.rects[0].left;
+      const last = p.rects[p.rects.length - 1].right;
+      const dx = Math.min(Math.max(e.clientX - p.x, first - p.rects[p.from].left), last - p.rects[p.from].right);
+      p.el.style.transform = `translateX(${dx}px)`;
+      // Over the middle half of its own group, a pulled out window goes back in.
+      const g = p.group ? p.rects[p.els.indexOf(p.group)] : null;
+      p.target = g && e.clientX > g.left + g.width / 4 && e.clientX < g.right - g.width / 4 ? p.group : null;
+      if (p.group) p.group.classList.toggle('target', !!p.target);
+      // Its new spot: after every other button whose middle it has passed.
+      const mid = p.rects[p.from].left + p.rects[p.from].width / 2 + dx;
+      p.to = p.target ? p.from : p.rects.filter((r, i) => i !== p.from && r.left + r.width / 2 < mid).length;
+      p.els.forEach((x, i) => {
+        if (i === p.from) return;
+        const shift = i > p.from && i <= p.to ? -p.step : i < p.from && i >= p.to ? p.step : 0;
+        x.style.transform = shift ? `translateX(${shift}px)` : '';
+      });
     });
     const end = (e) => {
       if (!press) return;
       const p = press;
       press = null;
       if (!p.moved) return;
-      p.el.classList.remove('lifted');
-      tasksEl.classList.remove('regrouping');
-      if (p.target) p.target.classList.remove('target');
       swallowClick = true; // the click that ends a drag isn't a click
-      if (p.target && e.type === 'pointerup') api.regroup(p.el.dataset.loose);
-      else renderTasks();
+      if (p.group) p.group.classList.remove('target');
+      const done = () => {
+        moving = null;
+        tasksEl.classList.remove('moving');
+        drawn = '';
+        renderTasks();
+      };
+      if (p.target && e.type === 'pointerup') {
+        api.regroup(p.el.dataset.loose);
+        done();
+        return;
+      }
+      // Glide into the spot it was dropped on (or back), then draw the bar in
+      // the new order, which by then looks the same.
+      const to = e.type === 'pointerup' ? p.to : p.from;
+      p.el.classList.remove('held');
+      p.el.classList.add('settling');
+      p.el.style.transform = `translateX(${p.rects[to].left - p.rects[p.from].left}px)`;
+      if (to !== p.from) {
+        const items = shownList.filter((item) => item.kind !== 'pin' && item.kind !== 'slot' && !item.pin);
+        const [item] = items.splice(p.from, 1);
+        items.splice(to, 0, item);
+        const keys = window.orderKeys(items);
+        tasks = { ...tasks, order: keys.concat((tasks.order || []).filter((k) => !keys.includes(k))) };
+        api.setOrder(keys);
+      }
+      setTimeout(done, SETTLE);
     };
     tasksEl.addEventListener('pointerup', end);
     tasksEl.addEventListener('pointercancel', end);
@@ -634,12 +688,12 @@
       e.preventDefault();
     }, true);
   }
-  regroupByDrag();
+  moveByDrag();
 
   // The helper sends the list a few times a second, so only redraw when
   // something on the bar would change.
   function renderTasks() {
-    if (!state || tasksEl.matches('.reordering, .regrouping')) return;
+    if (!state || moving || tasksEl.matches('.reordering, .regrouping')) return;
     const t = state.settings.taskbar;
     const pinList = pinsInRow(t) ? state.pins : [];
     const items = buildItems(t);
@@ -649,7 +703,9 @@
     const width = tasksEl.clientWidth - 8 - closed * (state.settings.barHeight * 1.5 + GAP); // .tasks has 4px padding each side
     const arranged = arrange(items, t.grouping, width);
     const compact = arranged.compact;
-    const list = pinList.length ? inRow(arranged.list, pinList) : arranged.list;
+    // Buttons dragged to a spot of their own keep it (shared/order.js).
+    const ordered = window.byOrder(arranged.list, tasks.order);
+    const list = pinList.length ? inRow(ordered, pinList) : ordered;
     // While a window is dragged out of its group, the slot where its button
     // lands: after the app's last button, or at the end.
     if (dragSlot !== null) {
@@ -668,6 +724,7 @@
     // take the tooltip away from a pin, the clock or the tray.
     if (tasksEl.matches(':hover')) hideTip();
     tasksEl.classList.toggle('compact', compact);
+    shownList = list;
     tasksEl.replaceChildren(...list.map(button));
     fetchIcons(tasks.apps.map((a) => a.path).concat(pinList));
   }

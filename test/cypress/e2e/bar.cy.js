@@ -46,6 +46,25 @@ describe('bar', () => {
     cy.get('#tasks .task.target').should('not.exist');
   });
 
+  it('dragging a button past another moves it there and saves the order', () => {
+    cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
+    const center = ($el) => { const r = $el[0].getBoundingClientRect(); return { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, pointerId: 1, button: 0 }; };
+    button('Notes.txt').then(($b) => cy.wrap($b).trigger('pointerdown', center($b)));
+    button('Safari').then(($g) => {
+      const at = center($g);
+      cy.get('#tasks').trigger('pointermove', { ...at, clientX: at.clientX - 20 }).trigger('pointermove', { ...at, clientX: at.clientX + 10 });
+      button('Safari').should('have.attr', 'style').and('include', 'translateX(-');
+      cy.get('#tasks').trigger('pointerup', at);
+    });
+    cy.calls('setOrder').should('deep.include', [['app:com.example.2', 'app:com.example.1', 'win:w1', 'app:com.example.3', 'win:w4']]);
+    cy.get('#tasks .task .label').should(($l) => expect([...$l].map((l) => l.textContent)).to.deep.equal(['Safari', 'Notes.txt', 'Music']));
+  });
+
+  it('a saved order puts the buttons in it, and buttons it doesn\'t know go at the end', () => {
+    cy.page('bar/index.html', (_state, extra) => { extra.tasks = { ...TASKS, order: ['app:com.example.3', 'win:w4', 'app:com.example.1'] }; });
+    cy.get('#tasks .task .label').should(($l) => expect([...$l].map((l) => l.textContent)).to.deep.equal(['Music', 'Notes.txt', 'Safari']));
+  });
+
   it('a drag over the bar opens a slot after the app\'s buttons', () => {
     cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
     cy.fake().then((api) => api.emit('dragOver', { pid: 2 }));

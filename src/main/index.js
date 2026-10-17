@@ -19,6 +19,7 @@ const updates = require('./updates');
 const status = require('./status');
 const quitter = require('./quitter');
 const ungrouped = require('./ungrouped');
+const order = require('./order');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
@@ -848,8 +849,9 @@ function ungroupWindow(id) {
   ungrouped.ungroup(id, tasks.get());
 }
 
-// The task state the bars draw from, with the ungrouped window ids.
-const taskState = () => ungrouped.withIds(tasks.get());
+// The task state the bars draw from, with the ungrouped window ids and the
+// order the buttons were dragged into.
+const taskState = () => order.withOrder(ungrouped.withIds(tasks.get()));
 
 // A window dragged out of the group list or the preview, see
 // renderer/shared/dragout.js. The bar under the pointer shows a slot for
@@ -1028,6 +1030,10 @@ function wireIpc() {
   ipcMain.handle('tasks:get', () => taskState());
   ipcMain.on('tasks:ungroup', (_e, id) => ungroupWindow(String(id)));
   ipcMain.on('tasks:regroup', (_e, id) => ungrouped.regroup(String(id)));
+  ipcMain.on('tasks:order', (_e, keys) => {
+    if (!Array.isArray(keys)) return;
+    order.set(keys, (tasks.get().apps || []).flatMap((a) => (a.windows || []).map((w) => w.id)));
+  });
   ipcMain.on('tasks:dragOut', (_e, d) => dragOut(d));
   ipcMain.on('tasks:putAllBack', () => ungrouped.putAllBack());
   ipcMain.handle('tasks:command', (_e, command) => (command && command.cmd === 'minimize' ? minimize(command) : tasks.send(command)));
@@ -1097,11 +1103,12 @@ app.whenReady().then(() => {
   apps.load(); // warm the icon cache before the first click
   tasks.onChange((t) => {
     windows.setFullScreenDisplays(fullScreenDisplays(t));
-    windows.broadcast('tasks', ungrouped.withIds(t));
+    windows.broadcast('tasks', order.withOrder(ungrouped.withIds(t)));
     access.check(t, { restartHelper: tasks.restart });
     updateClickThrough();
   });
   ungrouped.onChange(() => windows.broadcast('tasks', taskState()));
+  order.onChange(() => windows.broadcast('tasks', taskState()));
   windows.onPreviewUnpinned(() => tasks.setWatchClicks(false));
   windows.onPreviewHidden(() => peek(null));
   tasks.onClick((point) => {
