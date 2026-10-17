@@ -417,7 +417,7 @@ async function exportSettings() {
     filters: [{ name: 'Startbar settings', extensions: ['json'] }]
   });
   if (canceled || !filePath) return;
-  const { accessibilityAsked, accessibilityStamp, hideNoteShown, automationAnswer, screenAsked, screenStamp, ...saved } = settings.get();
+  const saved = settings.forExport();
   fs.writeFileSync(filePath, JSON.stringify({ startbar: VERSION, settings: saved, pins: pins.get() }, null, 2) + '\n');
 }
 

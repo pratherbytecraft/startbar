@@ -242,12 +242,23 @@ function clean(saved, base) {
   return out;
 }
 
+// The one time answers. They stay through an import and a reset, and an
+// export leaves them out.
+const ONE_TIME = ['accessibilityAsked', 'accessibilityStamp', 'hideNoteShown', 'automationAnswer', 'screenAsked', 'screenStamp'];
+
 // Everything from saved, the rest from the defaults, for an import. The one
 // time dialogs stay answered.
 function replace(saved) {
-  const { accessibilityAsked, accessibilityStamp, hideNoteShown, automationAnswer, screenAsked, screenStamp } = current;
-  current = withScheme(merge(merge(DEFAULTS, clean(saved, DEFAULTS)), { accessibilityAsked, accessibilityStamp, hideNoteShown, automationAnswer, screenAsked, screenStamp }));
+  const kept = Object.fromEntries(ONE_TIME.map((key) => [key, current[key]]));
+  current = withScheme(merge(merge(DEFAULTS, clean(saved, DEFAULTS)), kept));
   return save();
+}
+
+// The settings for an export file.
+function forExport() {
+  const out = { ...current };
+  for (const key of ONE_TIME) delete out[key];
+  return out;
 }
 
 // Back to the defaults.
@@ -260,4 +271,4 @@ function onChange(fn) {
   return () => listeners.delete(fn);
 }
 
-module.exports = { DEFAULTS, init, get, update, replace, reset, resetTheme, onChange, dataDir };
+module.exports = { DEFAULTS, init, get, update, replace, reset, resetTheme, forExport, onChange, dataDir };
