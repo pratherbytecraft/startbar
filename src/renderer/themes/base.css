@@ -24,7 +24,10 @@ svg { display: block; }
 [data-start-label="off"] .start span { display: none; }
 .grip { align-self: center; }
 .tasks { flex: 1; display: flex; align-items: center; gap: 4px; padding: 0 4px; overflow: hidden; }
-.task { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; max-width: var(--max-button); flex: 1; min-width: 36px; }
+.task { position: relative; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow-x: clip; overflow-y: visible; max-width: var(--max-button); flex: 1; min-width: 36px; }
+/* the strip below a button, down to the screen's edge, is part of the button,
+   so throwing the mouse down onto the bar still hits it */
+.task::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: var(--bar-h); }
 .task .label { overflow: hidden; text-overflow: ellipsis; }
 .task img { width: 18px; height: 18px; flex: none; }
 .task.dim img, .task.dim .label { opacity: .5; }
