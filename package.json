@@ -1,6 +1,6 @@
 {
   "name": "startbar",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "A taskbar for macOS. A bar along the bottom of the screen with a Start button, one button per open window, pinned apps and a clock.",
   "author": "Prather Bytecraft",
   "license": "SEE LICENSE IN LICENSE",
