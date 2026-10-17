@@ -126,6 +126,15 @@
           ]
         },
         {
+          title: 'Windows',
+          rows: [
+            { label: 'Clicks in a background window count', note: "Like on Windows: a click on a window that isn't in front brings it forward and lands as a click, instead of only bringing it forward. Turn this off if an app misbehaves with it.",
+              control: { type: 'toggle', key: 'taskbar.clickThrough' },
+              hint: { when: (st) => st.settings.taskbar.clickThrough && tasks.accessibility === false,
+                text: 'Needs the Accessibility permission. Allow it on the ', link: 'Permissions page', after: '.', click: () => openPage('permissions') } }
+          ]
+        },
+        {
           title: 'Bar behavior',
           rows: [
             { label: 'Show Desktop strip at the right end', note: 'Click it to hide every app, and again to bring them back.',

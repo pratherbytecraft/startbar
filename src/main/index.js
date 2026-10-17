@@ -281,6 +281,12 @@ const PANES = {
 let askingFor = null; // { name, at }: the permission whose macOS prompt is up
 let shownPermissions = '';
 
+// Clicks in a background window count: on with the setting, once the
+// helper has Accessibility for its event tap.
+function updateClickThrough() {
+  tasks.setClickThrough(settings.get().taskbar.clickThrough && tasks.get().accessibility === true);
+}
+
 function permissions() {
   const a = status.get().access || {};
   // macOS only answers for System Events while it's running. Otherwise go
@@ -1079,6 +1085,7 @@ app.whenReady().then(() => {
     windows.setFullScreenDisplays(fullScreenDisplays(t));
     windows.broadcast('tasks', ungrouped.withIds(t));
     access.check(t, { restartHelper: tasks.restart });
+    updateClickThrough();
   });
   ungrouped.onChange(() => windows.broadcast('tasks', taskState()));
   windows.onPreviewUnpinned(() => tasks.setWatchClicks(false));
@@ -1103,6 +1110,7 @@ app.whenReady().then(() => {
     if (s.taskbar.previews && !previewsWere && screenNow === 'notAsked') askPermission('screen');
     previewsWere = s.taskbar.previews;
     tasks.setSpaces(s.spaces.show === 'all');
+    updateClickThrough();
     applyAppearance();
     windows.layout(s);
     registerShortcut();

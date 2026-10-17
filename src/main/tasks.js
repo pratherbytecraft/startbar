@@ -19,6 +19,7 @@ let state = { accessibility: null, apps: [] };
 let keepOff = { cmd: 'keepOff', areas: [] }; // resent to every new helper
 let spaces = { cmd: 'spaces', all: false }; // this one too
 let watchClicks = { cmd: 'watchClicks', on: false }; // and this one
+let clickThrough = { cmd: 'clickThrough', on: false }; // and this one
 let rawApps = []; // the helper's list, before held back Finder windows come out
 
 // Apps that /Applications only links to (Safari, which lives in a system
@@ -88,6 +89,7 @@ function start() {
   child.stdin.write(JSON.stringify(keepOff) + '\n');
   child.stdin.write(JSON.stringify(spaces) + '\n');
   if (watchClicks.on) child.stdin.write(JSON.stringify(watchClicks) + '\n');
+  if (clickThrough.on) child.stdin.write(JSON.stringify(clickThrough) + '\n');
   child.on('error', (err) => console.log(`Startbar: the window helper did not start: ${err.message}`));
   child.on('exit', (code, signal) => {
     child = null;
@@ -193,11 +195,21 @@ function setWatchClicks(on) {
   if (child) send(watchClicks);
 }
 
+// Whether a click on a window that isn't in front brings it forward and
+// lands as a click. The helper's tap needs Accessibility, so main turns
+// this on only while the permission is there.
+function setClickThrough(on) {
+  if (clickThrough.on === !!on) return;
+  clickThrough = { cmd: 'clickThrough', on: !!on };
+  if (child) send(clickThrough);
+}
+
 module.exports = {
   start,
   setKeepOff,
   setSpaces,
   setWatchClicks,
+  setClickThrough,
   setHoldFinder,
   heldBack, // for the tests
   stop,

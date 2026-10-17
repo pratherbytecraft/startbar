@@ -56,6 +56,8 @@ Apps pinned next to the Start button open with one click, and an app that alread
 
 Right click a window button to minimize, close or quit, pin the app, or open a new window. Turn on previews and hovering a window button shows a picture of each of its windows, and a click on a group keeps them open. A strip at the right end of the bar can hide every app to show the desktop, and a second click brings them back.
 
+A click on a window that isn't in front brings it forward and lands as a click, the way it does on Windows, instead of only bringing the window forward. It can be turned off on the Taskbar page. Closing or minimizing a window shows what was under it instead of the app's next window.
+
 A window can be pulled out of its app's group onto its own button. Drag its picture out of the preview, or its row out of the group list, down onto the bar. Drag the button back onto the group to put it back, or pick Put back in the group on its right click menu. Startbar remembers pulled out windows by app and title, so the same window comes back on its own button the next time it opens.
 
 ![Window previews over a Finder group](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/preview-system.png)

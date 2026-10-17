@@ -20,6 +20,7 @@ const DEFAULTS = Object.freeze({
     pinsPlace: 'own', // own (their own spot next to Start) | row (in the row, each turning into its window buttons once open)
     grouping: 'always', // always | full | never
     clickActiveMinimizes: true,
+    clickThrough: true, // a click on a window that isn't in front brings it forward and lands as a click
     titleOnHover: true,
     previews: false, // pictures of the windows over a button on hover, needs Screen Recording
     showWindowless: false, // apps that are running with no windows get a button
