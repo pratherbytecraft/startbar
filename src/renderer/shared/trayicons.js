@@ -1,6 +1,7 @@
 // The tray's volume, Wi-Fi, battery and Bluetooth icons and their tooltips,
-// drawn from a reading of `startbar-helper status`. Shared by the bar, the
-// settings preview and the Bluetooth panel's device list.
+// drawn from a reading of `startbar-helper status`, and the Shotdrawer
+// button when Shotdrawer is installed. Shared by the bar, the settings
+// preview and the Bluetooth panel's device list.
 (function () {
   const svg = (body) => `<svg viewBox="0 0 16 16" aria-hidden="true">${body}</svg>`;
 
@@ -52,11 +53,17 @@
     return svg(`<g fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${DEVICES[kind] || DEVICES.other}</g>`);
   }
 
+  // Shotdrawer's viewfinder, the same glyph as its menu bar icon.
+  function shotdrawer() {
+    return svg('<g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 5V2.5a.7.7 0 0 1 .7-.7H5M11 1.8h2.5a.7.7 0 0 1 .7.7V5M14.2 11v2.5a.7.7 0 0 1-.7.7H11M5 14.2H2.5a.7.7 0 0 1-.7-.7V11"/><path d="M4.5 11l2.5-3 1.8 2 1.2-1.2 1.5 2.2"/></g>');
+  }
+
   function hours(minutes) {
     return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
   }
 
   function tip(kind, s) {
+    if (kind === 'shotdrawer') return 'Recent screenshots';
     if (kind === 'volume') return s.muted ? 'Volume: muted' : `Volume: ${Math.round(s.level * 100)}%`;
     if (kind === 'bluetooth') {
       if (!s.on) return 'Bluetooth: off';
@@ -76,10 +83,12 @@
     return text;
   }
 
-  // The kinds to draw, in order, for these settings and this reading.
-  function shown(settings, status) {
-    return ['bluetooth', 'volume', 'wifi', 'battery'].filter((k) => settings.tray[k] && status && status[k]);
+  // The kinds to draw, in order, for these settings and this reading. The
+  // Shotdrawer button comes first, while Shotdrawer is installed.
+  function shown(settings, status, shotdrawerInstalled) {
+    const first = shotdrawerInstalled && settings.tray.shotdrawer ? ['shotdrawer'] : [];
+    return first.concat(['bluetooth', 'volume', 'wifi', 'battery'].filter((k) => settings.tray[k] && status && status[k]));
   }
 
-  window.trayIcons = { volume, wifi, battery, bluetooth, device, tip, shown, hours };
+  window.trayIcons = { volume, wifi, battery, bluetooth, shotdrawer, device, tip, shown, hours };
 })();

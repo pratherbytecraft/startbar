@@ -76,6 +76,8 @@ Open Startbar Settings from the Start menu or by right clicking the bar. Everyth
 
 With [Filedrawer](https://github.com/pratherbytecraft/filedrawer) installed, the General page can open the Start menu's folders in Filedrawer instead of Finder.
 
+With [Shotdrawer](https://github.com/pratherbytecraft/shotdrawer) installed, the tray gets a button for its list of recent screenshots, which opens just above the bar. Switch it off on the Clock and Tray page.
+
 Right click an empty part of the bar to hide it. While the bar is hidden, a Startbar icon sits in the menu bar. Click it, press Control Space or open Startbar again to bring the bar back.
 
 ## Updates

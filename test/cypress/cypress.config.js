@@ -41,6 +41,7 @@ function startbarState() {
     version: '9.9.9',
     home: '/Users/test',
     filedrawer: false,
+    shotdrawer: false,
     swiftQuit: false,
     alwaysRunning: ['/System/Library/CoreServices/Finder.app'],
     updateCommand: 'npm install -g startbar'

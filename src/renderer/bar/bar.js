@@ -82,7 +82,9 @@
     });
     b.addEventListener('mouseenter', () => {
       clearTimeout(tipTimer);
-      tipTimer = setTimeout(() => status[kind] && api.showTip({ text: window.trayIcons.tip(kind, status[kind]), rect: rectOf(b) }), 500);
+      // The Shotdrawer button has no reading behind it, only its tooltip.
+      const has = kind === 'shotdrawer' || status[kind];
+      tipTimer = setTimeout(() => has && api.showTip({ text: window.trayIcons.tip(kind, status[kind]), rect: rectOf(b) }), 500);
     });
     b.addEventListener('mouseleave', hideTip);
     return b;
@@ -104,7 +106,7 @@
   function renderTray() {
     if (!state) return;
     const t = state.settings.tray;
-    const all = window.trayIcons.shown(state.settings, status);
+    const all = window.trayIcons.shown(state.settings, status, state.shotdrawer);
     const collapsed = t.collapseArrow && t.collapsed;
     chevEl.classList.toggle('hidden', !t.collapseArrow || all.length === 0);
     chevEl.textContent = collapsed ? '‹' : '›';

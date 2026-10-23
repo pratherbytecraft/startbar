@@ -140,6 +140,16 @@ describe('bar', () => {
     cy.calls('clickStart').should('have.length', 1);
   });
 
+  it('the Shotdrawer button shows first in the tray while Shotdrawer is installed, and a click asks for its list', () => {
+    cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
+    cy.get('#tray-icons .tray-icon[data-kind="shotdrawer"]').should('not.exist');
+    cy.fake().then((api) => api.emit('state', { ...api.state, shotdrawer: true }));
+    cy.get('#tray-icons .tray-icon').first().should('have.attr', 'data-kind', 'shotdrawer').click();
+    cy.calls('trayClick').its(0).its(0).should('equal', 'shotdrawer');
+    cy.fake().then((api) => api.emit('state', { ...api.state, shotdrawer: true, settings: { ...api.state.settings, tray: { ...api.state.settings.tray, shotdrawer: false } } }));
+    cy.get('#tray-icons .tray-icon[data-kind="shotdrawer"]').should('not.exist');
+  });
+
   it('the clock shows the time', () => {
     cy.clock(new Date(2026, 9, 18, 14, 5).getTime());
     cy.page('bar/index.html');

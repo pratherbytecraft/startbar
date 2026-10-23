@@ -71,7 +71,7 @@
     }));
     // The tray as the real bar has it, from the Mac's own reading.
     const t = state.settings.tray;
-    const all = window.trayIcons.shown(state.settings, status);
+    const all = window.trayIcons.shown(state.settings, status, state.shotdrawer);
     const collapsed = t.collapseArrow && t.collapsed;
     chevEl.classList.toggle('hidden', !t.collapseArrow || all.length === 0);
     chevEl.textContent = collapsed ? '‹' : '›';

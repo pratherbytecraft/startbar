@@ -218,6 +218,8 @@
         {
           title: 'Tray',
           rows: [
+            { label: 'Shotdrawer', note: "A button for Shotdrawer's list of recent screenshots. Shown while Shotdrawer is installed.",
+              control: { type: 'toggle', key: 'tray.shotdrawer' }, showIf: (st) => st.shotdrawer },
             { label: 'Volume', control: { type: 'toggle', key: 'tray.volume' } },
             { label: 'Wi-Fi', note: 'Shown when the Mac has Wi-Fi.', control: { type: 'toggle', key: 'tray.wifi' },
               hint: { when: (s) => s.permissions.location !== 'allowed', text: 'To see the network name, allow Location on the ', link: 'Permissions page', after: '.',
@@ -807,6 +809,7 @@
       syncs.push(() => hint.classList.toggle('hidden', !r.hint.when(state)));
     }
     if (r.showWhen) syncs.push(() => rowEl.classList.toggle('hidden', !r.showWhen(state.settings)));
+    if (r.showIf) syncs.push(() => rowEl.classList.toggle('hidden', !r.showIf(state)));
     const unusedIf = r.systemOnly ? SYSTEM_ONLY
       : r.onlyWith ? { when: (s) => !r.onlyWith.when(s), note: r.onlyWith.note } : r.unused;
     if (unusedIf) {

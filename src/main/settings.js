@@ -31,6 +31,7 @@ const DEFAULTS = Object.freeze({
     moveWindowsUp: true // macOS can't reserve the bar's space, so windows are nudged up off it
   },
   tray: {
+    shotdrawer: true, // the button for Shotdrawer's list, shown while Shotdrawer is installed
     volume: true,
     wifi: true, // shown when the Mac has Wi-Fi
     battery: true, // shown on laptops

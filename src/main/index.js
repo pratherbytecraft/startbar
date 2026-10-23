@@ -126,6 +126,7 @@ function state() {
     version: VERSION,
     home: os.homedir(),
     filedrawer: !!filedrawerApp(),
+    shotdrawer: !!siblingApp('shotdrawer'),
     updateCommand: UPDATE_COMMAND,
     swiftQuit: quitter.swiftQuitRunning(),
     // Shown greyed at the top of the Leave these apps running list.
@@ -133,19 +134,26 @@ function state() {
   };
 }
 
-// Filedrawer, Prather Bytecraft's file manager, when it's installed. Looked
-// up now and then, not on every redraw.
+// Prather Bytecraft's other apps, Filedrawer (the file manager) and
+// Shotdrawer (recent screenshots), when they're installed. Each is found by
+// its bundle id, looked up now and then, not on every redraw.
 const FILEDRAWER_ID = 'com.pratherbytecraft.filedrawer';
-let filedrawerSeen = { at: 0, path: null };
+const SIBLINGS = {
+  filedrawer: { id: FILEDRAWER_ID, name: 'Filedrawer.app' },
+  shotdrawer: { id: 'com.pratherbytecraft.shotdrawer', name: 'Shotdrawer.app' }
+};
+const siblingSeen = {};
 
-function filedrawerApp() {
-  if (Date.now() - filedrawerSeen.at < 30 * 1000) return filedrawerSeen.path;
-  const places = [path.join(os.homedir(), 'Applications', 'Filedrawer.app'), '/Applications/Filedrawer.app'];
+function siblingApp(key) {
+  const app = SIBLINGS[key];
+  const seen = siblingSeen[key];
+  if (seen && Date.now() - seen.at < 30 * 1000) return seen.path;
+  const places = [path.join(os.homedir(), 'Applications', app.name), path.join('/Applications', app.name)];
   let found = null;
   for (const p of places) {
     try {
       const id = execFileSync('plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', path.join(p, 'Contents', 'Info.plist')], { encoding: 'utf8' }).trim();
-      if (id === FILEDRAWER_ID) {
+      if (id === app.id) {
         found = p;
         break;
       }
@@ -153,9 +161,11 @@ function filedrawerApp() {
       // not there
     }
   }
-  filedrawerSeen = { at: Date.now(), path: found };
+  siblingSeen[key] = { at: Date.now(), path: found };
   return found;
 }
+
+const filedrawerApp = () => siblingApp('filedrawer');
 
 // Whether Filedrawer is running and opening Finder's folder windows as its
 // own (its takeOverFinder setting, on unless turned off). Its settings file
@@ -192,6 +202,18 @@ function openFolder(p) {
   const helper = isFolder && filedrawerApp() ? helperPath() : null;
   if (helper) execFile(helper, ['pass-finder'], () => shell.openPath(p));
   else shell.openPath(p);
+}
+
+// The Shotdrawer button opens Shotdrawer's list just above it, through
+// Shotdrawer's link with the button's top center on screen. A second click
+// closes the list, Shotdrawer takes care of that.
+function openShotdrawer(rect, barWin) {
+  if (!barWin || barWin.isDestroyed() || !rect) return;
+  windows.hidePopover();
+  const b = barWin.getBounds();
+  const x = Math.round(b.x + rect.x + rect.width / 2);
+  const y = Math.round(b.y + rect.y);
+  shell.openExternal(`shotdrawer://show?x=${x}&y=${y}&edge=bottom`).catch((err) => console.log(`Startbar: Shotdrawer didn't open: ${err.message}`));
 }
 
 function pushState() {
@@ -1056,6 +1078,7 @@ function wireIpc() {
   ipcMain.handle('status:get', () => status.get());
   ipcMain.on('tray:click', (e, { kind, rect }) => {
     if (['volume', 'wifi', 'battery', 'bluetooth'].includes(kind)) windows.togglePopover(kind, rect, windows.barOf(e.sender));
+    if (kind === 'shotdrawer') openShotdrawer(rect, windows.barOf(e.sender));
   });
   ipcMain.on('tray:command', (_e, command) => {
     if (!command) return;

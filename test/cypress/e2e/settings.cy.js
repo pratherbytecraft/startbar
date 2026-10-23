@@ -129,6 +129,14 @@ describe('settings window', () => {
     cy.get('#pages .install .btn').should('have.text', 'Copied');
   });
 
+  it('the tray\'s Shotdrawer switch shows only once Shotdrawer is installed', () => {
+    cy.page('settings/index.html');
+    open('Clock and Tray');
+    cy.contains('#pages .row', 'Shotdrawer').should('not.be.visible');
+    cy.fake().then((api) => api.emit('state', { ...api.state, shotdrawer: true }));
+    cy.contains('#pages .row', 'Shotdrawer').should('be.visible');
+  });
+
   it('the Folders group shows only once Filedrawer is installed', () => {
     cy.page('settings/index.html');
     open('General');
