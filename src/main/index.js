@@ -29,7 +29,8 @@ const { appPath } = require('../../scripts/build-app');
 
 // The line that updates this copy, for the About page: Homebrew keeps what
 // it installs in its Cellar folder, npm in a node_modules folder.
-const UPDATE_COMMAND = /\/Cellar\/startbar\//.test(fs.realpathSync(__dirname)) ? 'brew upgrade startbar' : 'npm install -g startbar';
+const BREW = /\/Cellar\/startbar\//.test(fs.realpathSync(__dirname));
+const UPDATE_COMMAND = BREW ? 'brew upgrade startbar' : 'npm install -g startbar';
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -127,6 +128,7 @@ function state() {
     home: os.homedir(),
     filedrawer: !!filedrawerApp(),
     shotdrawer: !!siblingApp('shotdrawer'),
+    siblings: siblingsAbout(),
     updateCommand: UPDATE_COMMAND,
     swiftQuit: quitter.swiftQuitRunning(),
     // Shown greyed at the top of the Leave these apps running list.
@@ -166,6 +168,21 @@ function siblingApp(key) {
 }
 
 const filedrawerApp = () => siblingApp('filedrawer');
+
+// The About page's Also from Prather Bytecraft group: each app, whether it's
+// installed, and the line that installs it the same way this copy was.
+const ABOUT = [
+  { key: 'filedrawer', name: 'Filedrawer', desc: 'A file manager laid out like the classic file windows, with tabs and two panes.' },
+  { key: 'shotdrawer', name: 'Shotdrawer', desc: 'Your recent screenshots in the menu bar. Click one to copy its path.' }
+];
+
+function siblingsAbout() {
+  return ABOUT.map((a) => ({
+    ...a,
+    installed: !!siblingApp(a.key),
+    line: BREW ? `brew install pratherbytecraft/tap/${a.key}` : `npm install -g ${a.key}`
+  }));
+}
 
 // Whether Filedrawer is running and opening Finder's folder windows as its
 // own (its takeOverFinder setting, on unless turned off). Its settings file
@@ -1025,6 +1042,11 @@ function wireIpc() {
       issues: 'https://github.com/pratherbytecraft/startbar/issues'
     };
     if (links[name]) shell.openExternal(links[name]);
+  });
+  // Starts one of the other apps, or brings it forward when it's running.
+  ipcMain.on('sibling:open', (_e, key) => {
+    const at = SIBLINGS[key] && siblingApp(key);
+    if (at) execFile('open', ['-a', at], (err) => err && console.log(`Startbar: ${key} didn't open: ${err.message}`));
   });
   ipcMain.on('access:ask', (_e, name) => askPermission(name));
   ipcMain.on('pins:launch', (_e, appPath) => {

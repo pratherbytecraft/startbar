@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('startbar', {
   resetSettings: () => ipcRenderer.send('settings:reset'),
   resetThemeSettings: () => ipcRenderer.send('settings:resetTheme'),
   openLink: (name) => ipcRenderer.send('settings:link', name),
+  openSibling: (key) => ipcRenderer.send('sibling:open', key),
   askPermission: (name) => ipcRenderer.send('access:ask', name),
   launchPin: (appPath) => ipcRenderer.send('pins:launch', appPath),
   pinMenu: (appPath) => ipcRenderer.send('pins:menu', appPath),

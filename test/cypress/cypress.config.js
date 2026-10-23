@@ -42,6 +42,10 @@ function startbarState() {
     home: '/Users/test',
     filedrawer: false,
     shotdrawer: false,
+    siblings: [
+      { key: 'filedrawer', name: 'Filedrawer', desc: 'A file manager.', installed: true, line: 'npm install -g filedrawer' },
+      { key: 'shotdrawer', name: 'Shotdrawer', desc: 'Recent screenshots.', installed: false, line: 'npm install -g shotdrawer' }
+    ],
     swiftQuit: false,
     alwaysRunning: ['/System/Library/CoreServices/Finder.app'],
     updateCommand: 'npm install -g startbar'

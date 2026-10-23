@@ -137,6 +137,18 @@ describe('settings window', () => {
     cy.contains('#pages .row', 'Shotdrawer').should('be.visible');
   });
 
+  it('About lists the other apps, Open for one that\'s installed and its install line for one that isn\'t', () => {
+    cy.page('settings/index.html');
+    open('About');
+    cy.contains('#pages h2', 'Also from Prather Bytecraft').should('be.visible');
+    cy.contains('.sib', 'Filedrawer').should('contain', 'Installed').find('code').should('not.exist');
+    cy.contains('.sib', 'Filedrawer').contains('.btn', 'Open').click();
+    cy.calls('openSibling').should('deep.equal', [['filedrawer']]);
+    cy.contains('.sib', 'Shotdrawer').find('code').should('have.text', 'npm install -g shotdrawer');
+    cy.contains('.sib', 'Shotdrawer').contains('.btn', 'Copy').click().should('have.text', 'Copied');
+    cy.calls('copyText').should('deep.equal', [['npm install -g shotdrawer']]);
+  });
+
   it('the Folders group shows only once Filedrawer is installed', () => {
     cy.page('settings/index.html');
     open('General');

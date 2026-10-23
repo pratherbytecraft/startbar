@@ -872,6 +872,47 @@
     return box;
   }
 
+  // The other two apps' icons, from their design/app-icon.svg.
+  const SIBLING_ICONS = {
+    filedrawer: '<svg viewBox="0 0 120 120"><defs><linearGradient id="sr2" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9fa8ff"/><stop offset=".55" stop-color="#5865F2"/><stop offset="1" stop-color="#4c46d6"/></linearGradient><linearGradient id="sm2" x1="0" y1="34" x2="0" y2="90" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffe9a6"/><stop offset="1" stop-color="#f0a43a"/></linearGradient></defs><circle cx="60" cy="60" r="54" fill="#0b0e1a" stroke="url(#sr2)" stroke-width="5"/><path d="M24 40 V86 A4 4 0 0 0 28 90 H92 A4 4 0 0 0 96 86 V46 A4 4 0 0 0 92 42 H62 L55 34 H28 A4 4 0 0 0 24 38 Z" fill="url(#sm2)"/><path d="M60 52 V84" stroke="#5865F2" stroke-width="5" stroke-linecap="round"/><path d="M32 62 H52 M32 72 H48 M68 62 H88 M68 72 H84" stroke="#0b0e1a" stroke-opacity=".45" stroke-width="4" stroke-linecap="round"/></svg>',
+    shotdrawer: '<svg viewBox="0 0 120 120"><defs><linearGradient id="sr3" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9fa8ff"/><stop offset=".55" stop-color="#5865F2"/><stop offset="1" stop-color="#4c46d6"/></linearGradient><linearGradient id="ss3" x1="0" y1="42" x2="0" y2="78" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#a8e6ff"/><stop offset="1" stop-color="#2f8cf0"/></linearGradient></defs><circle cx="60" cy="60" r="54" fill="#0b0e1a" stroke="url(#sr3)" stroke-width="5"/><rect x="36" y="42" width="48" height="36" rx="3" fill="url(#ss3)"/><circle cx="70.6" cy="53.5" r="4.7" fill="#fff" fill-opacity=".9"/><path d="M36 78 L52.3 60 L62.9 70.1 L69.6 64.3 L84 78 Z" fill="#0b0e1a" fill-opacity=".55"/><path d="M26 44V30h14M80 30h14v14M94 76v14H80M40 90H26V76" fill="none" stroke="#f5f7ff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  };
+
+  // Also from Prather Bytecraft under About: the other two apps, Open when
+  // installed, else the line that installs them with a Copy button.
+  function siblingsGroup() {
+    const box = node('div', 'group siblings');
+    let drawn = '';
+    syncs.push(() => {
+      const list = state.siblings || [];
+      const key = JSON.stringify(list);
+      if (key === drawn) return;
+      drawn = key;
+      box.replaceChildren(...list.map((s) => {
+        const rowEl = node('div', 'row sib');
+        const icon = node('span', 'sib-icon');
+        icon.innerHTML = SIBLING_ICONS[s.key] || '';
+        const lbl = node('div', 'lbl', s.name);
+        lbl.append(node('small', null, s.desc));
+        const ctl = node('div', 'ctl');
+        if (s.installed) {
+          ctl.append(node('span', 'sib-state', 'Installed'), button({ text: 'Open', click: () => api.openSibling(s.key) }));
+        } else {
+          lbl.append(node('code', null, s.line));
+          const copy = button({ text: 'Copy', click: () => {
+            api.copyText(s.line);
+            copy.textContent = 'Copied';
+            setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
+          } });
+          ctl.append(copy);
+        }
+        rowEl.append(icon, lbl, ctl);
+        return rowEl;
+      }));
+    });
+    return [node('h2', null, 'Also from Prather Bytecraft'), box];
+  }
+
   function drawNav() {
     navEl.replaceChildren(...PAGES.map((p) => {
       const a = node('a');
@@ -907,7 +948,7 @@
     navEl.querySelectorAll('a').forEach((a) => a.classList.toggle('on', a.dataset.page === id));
     previewEl.classList.toggle('hidden', !!p.about || p.preview === false);
     reset();
-    const children = p.about ? [aboutPage()] : groups(p.groups);
+    const children = p.about ? [aboutPage(), ...siblingsGroup()] : groups(p.groups);
     if (p.note) children.push(node('div', 'foot-note', p.note));
     draw(children, p.title);
     contentEl.scrollTop = 0;
