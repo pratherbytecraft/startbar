@@ -377,6 +377,10 @@ final class WindowWatcher {
     // user data so the tap lets it through. Drags and a mouse up that
     // arrive before the copy are held and sent after it (the newest drag
     // only), so the press stays whole and no drag reaches the old window.
+    // Drags have a tap of their own that is on only while a press is held
+    // back. A tap runs on this thread behind the window scan, so a tap that
+    // took every drag made each one wait for the scan (a game's camera
+    // stuttered about once a second).
     // Clicks are left alone on Startbar's own windows, the menu bar, the
     // Dock, menus, sheets and anything else above layer 0, on the focused
     // window of the front app, just outside a window's edge (where macOS
@@ -385,6 +389,8 @@ final class WindowWatcher {
     static let edgeGrab: CGFloat = 6 // points outside a window's frame that still resize it
     var throughTap: CFMachPort?
     var throughSource: CFRunLoopSource?
+    var dragTap: CFMachPort?
+    var dragSource: CFRunLoopSource?
     var heldUp: CGEvent? // a mouse up that came before the posted mouse down
     var heldDrag: CGEvent? // the newest drag that came before it
     var repostPending = false
@@ -395,8 +401,15 @@ final class WindowWatcher {
                 CFMachPortInvalidate(tap)
             }
             if let source = throughSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
+            if let tap = dragTap {
+                CGEvent.tapEnable(tap: tap, enable: false)
+                CFMachPortInvalidate(tap)
+            }
+            if let source = dragSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
             throughTap = nil
             throughSource = nil
+            dragTap = nil
+            dragSource = nil
             heldUp = nil
             heldDrag = nil
             repostPending = false
@@ -405,7 +418,6 @@ final class WindowWatcher {
         guard throughTap == nil else { return }
         guard skylight != nil else { note("clickThrough: no SkyLight, staying off"); return }
         let mask = (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
-            | (1 << CGEventType.leftMouseDragged.rawValue)
         let me = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
                                           eventsOfInterest: CGEventMask(mask), callback: { _, type, event, refcon in
@@ -417,11 +429,23 @@ final class WindowWatcher {
         throughSource = CFMachPortCreateRunLoopSource(nil, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), throughSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+        let dragMask = 1 << CGEventType.leftMouseDragged.rawValue
+        guard let drags = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
+                                            eventsOfInterest: CGEventMask(dragMask), callback: { _, type, event, refcon in
+            guard let refcon else { return Unmanaged.passUnretained(event) }
+            let watcher = Unmanaged<WindowWatcher>.fromOpaque(refcon).takeUnretainedValue()
+            return watcher.tapped(type, event)
+        }, userInfo: me) else { note("clickThrough: no drag tap"); return }
+        dragTap = drags
+        dragSource = CFMachPortCreateRunLoopSource(nil, drags, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), dragSource, .commonModes)
+        CGEvent.tapEnable(tap: drags, enable: false)
     }
 
     func tapped(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = throughTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            if let tap = dragTap { CGEvent.tapEnable(tap: tap, enable: repostPending) }
             return Unmanaged.passUnretained(event)
         }
         if event.getIntegerValueField(.eventSourceUserData) == WindowWatcher.clickMark { return Unmanaged.passUnretained(event) }
@@ -444,6 +468,7 @@ final class WindowWatcher {
         repostPending = true
         heldUp = nil
         heldDrag = nil
+        if let tap = dragTap { CGEvent.tapEnable(tap: tap, enable: true) }
         let copy = event.copy()
         copy?.setIntegerValueField(.eventSourceUserData, value: WindowWatcher.clickMark)
         activate(hit.item.element, pid: hit.pid)
@@ -456,6 +481,7 @@ final class WindowWatcher {
                 drag.post(tap: .cgSessionEventTap)
             }
             self.repostPending = false
+            if let tap = self.dragTap { CGEvent.tapEnable(tap: tap, enable: false) }
             if let up = self.heldUp {
                 self.heldUp = nil
                 up.setIntegerValueField(.eventSourceUserData, value: WindowWatcher.clickMark)
