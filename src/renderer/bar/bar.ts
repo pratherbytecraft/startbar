@@ -462,8 +462,12 @@
   function schedulePreview(item: WindowItem | GroupItem, el: HTMLElement) {
     clearTimeout(previewTimer);
     const show = () => {
+      // The bar may have been drawn again since, which leaves el off the
+      // page, where it measures as the corner and never hears the mouse leave.
+      const now = el.isConnected ? el : ([...tasksEl.children] as HTMLElement[]).find((x) => x.dataset.order === el.dataset.order);
+      if (!now || !now.matches(':hover')) return;
       previewUp = true;
-      api.showPreview(previewPayload(item, el));
+      api.showPreview(previewPayload(item, now));
     };
     if (previewUp && Date.now() - previewLeft < 300) show();
     else previewTimer = setTimeout(show, 500);
