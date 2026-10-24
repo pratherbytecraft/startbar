@@ -21,6 +21,7 @@ import * as quitter from './quitter';
 import * as ungrouped from './ungrouped';
 import * as order from './order';
 import * as ipc from './ipc';
+import * as windowdrag from './windowdrag';
 import type { HelperCommand } from './tasks';
 import type { DockResult } from './dock';
 import type {
@@ -1168,6 +1169,7 @@ app.whenReady().then(() => {
   applyAppearance();
   setAppMenu();
   wireIpc();
+  windowdrag.init();
   windows.createBars(settings.get());
   windows.createMenu(settings.get());
   windows.createTip();

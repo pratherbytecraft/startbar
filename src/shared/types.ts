@@ -422,6 +422,8 @@ export interface Invokes {
   'tasks:command': { args: [command: TaskCommand]; result: HelperReply };
   'tasks:icons': { args: [paths: string[]]; result: Record<string, string> };
   'status:get': { args: []; result: Status };
+  // Whether this Mac's drags on drag areas are done by the app (see src/main/windowdrag.ts).
+  'window:codeDrag': { args: []; result: boolean };
 }
 
 // Pages to main, one way: the arguments.
@@ -486,6 +488,11 @@ export interface Sends {
   'tray:settings': [name: PopoverKind];
   'popover:size': [size: { height: number }];
   'popover:hide': [];
+  // A press on a drag area: where in the window it was, in points.
+  'window:dragStart': [x: number, y: number];
+  'window:dragEnd': [];
+  // A double click on a drag area, which does what the Mac's Desktop and Dock setting says.
+  'window:titleDouble': [];
 }
 
 // Main to pages: the payload.

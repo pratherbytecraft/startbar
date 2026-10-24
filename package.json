@@ -33,7 +33,7 @@
   "scripts": {
     "start": "npm run build && node dist/bin/startbar.js --foreground",
     "build": "tsx scripts/build.ts",
-    "typecheck": "tsc -p . && tsc -p src/renderer/bar && tsc -p src/renderer/calendar && tsc -p src/renderer/group && tsc -p src/renderer/menu && tsc -p src/renderer/popover && tsc -p src/renderer/preview && tsc -p src/renderer/settings && tsc -p src/renderer/settings/tsconfig.preview.json && tsc -p src/renderer/tip && tsc -p test/cypress",
+    "typecheck": "tsc -p . && tsc -p tsconfig.preload.json && tsc -p src/renderer/bar && tsc -p src/renderer/calendar && tsc -p src/renderer/group && tsc -p src/renderer/menu && tsc -p src/renderer/popover && tsc -p src/renderer/preview && tsc -p src/renderer/settings && tsc -p src/renderer/settings/tsconfig.preview.json && tsc -p src/renderer/tip && tsc -p test/cypress",
     "prepack": "npm run typecheck && npm run build",
     "postinstall": "node dist/scripts/fix-electron.js && node dist/scripts/build-helper.js && node dist/scripts/build-app.js",
     "build-app": "node dist/scripts/build-app.js",
