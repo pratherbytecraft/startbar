@@ -87,15 +87,47 @@ describe('bar', () => {
 
   it('a click brings a window forward, minimizes the active one, and opens a group list', () => {
     cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
-    button('Music').click();
-    cy.calls('taskCommand').should('deep.include', [{ cmd: 'activate', id: 'w4' }]);
     button('Notes.txt').click();
     cy.calls('taskCommand').should('deep.include', [{ cmd: 'minimize', id: 'w1' }]);
+    button('Music').click();
+    cy.calls('taskCommand').should('deep.include', [{ cmd: 'activate', id: 'w4' }]);
     button('Safari').click();
     cy.calls<[GroupPayload]>('showGroup').its(0).its(0).should((g) => {
       expect(g.pid).to.equal(2);
       expect(g.windows.map((w) => w.title)).to.deep.equal(['Apple', 'News']);
     });
+  });
+
+  it('a clicked button shows what it asked for right away, and the next click goes by that', () => {
+    cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
+    button('Notes.txt').click();
+    button('Notes.txt').should('have.class', 'dim').and('not.have.class', 'active');
+    button('Notes.txt').click();
+    button('Notes.txt').should('have.class', 'active');
+    cy.calls('taskCommand').should('deep.equal', [[{ cmd: 'minimize', id: 'w1' }], [{ cmd: 'activate', id: 'w1' }]]);
+  });
+
+  it('a click goes by the newest window list, even when the button was drawn from an older one', () => {
+    cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
+    button('Music').click();
+    // The list catches up with the click, which draws nothing new.
+    const caughtUp = [{ ...TASKS.apps[0], active: false }, TASKS.apps[1], app(3, 'Music', [win('w4', 'Music', { focused: true })], { active: true })];
+    cy.fake().then((api) => api.emit('tasks', { ...TASKS, apps: caughtUp }));
+    button('Music').click();
+    cy.calls('taskCommand').should('deep.equal', [[{ cmd: 'activate', id: 'w4' }], [{ cmd: 'minimize', id: 'w4' }]]);
+  });
+
+  it('a window list that comes in while a button is held waits for the release', () => {
+    cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
+    const renamed = [app(1, 'TextEdit', [win('w1', 'Renamed.txt', { focused: true })], { active: true }), ...TASKS.apps.slice(1)];
+    button('Notes.txt').then(($b) => {
+      cy.wrap($b).trigger('pointerdown', { button: 0, pointerId: 1 });
+      cy.fake().then((api) => api.emit('tasks', { ...TASKS, apps: renamed }));
+      // A redraw now would swap the button and the page would drop the click.
+      cy.wrap($b).then(($el) => expect($el[0].isConnected).to.equal(true));
+      cy.wrap($b).trigger('pointerup', { button: 0, pointerId: 1 });
+    });
+    button('Renamed.txt').should('exist');
   });
 
   it('with previews on, a click on a group pins its preview instead of opening the list', () => {

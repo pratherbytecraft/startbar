@@ -386,23 +386,29 @@
   }
 
   // What the last click clicked of a window, until the helper's window list
-  // shows it. A click right after one that minimized or restored a window
-  // would otherwise go by the old list and do the same thing again, since
-  // the list takes a second or two to catch up during the animation.
+  // shows it. The bar draws the button that way right away, and a click
+  // right after one that minimized or restored a window goes by it instead
+  // of the old list, which takes a second or so to catch up during the
+  // animation and would otherwise do the same thing again.
   let clicked: { id: string; active: boolean; at: number } | null = null; // { id, active, at }
-  function clickActive(item: TaskItem) {
-    if (item.kind === 'window' && clicked && clicked.id === item.win.id && Date.now() - clicked.at < 3000) return clicked.active;
-    return isActive(item);
-  }
+  const pendingClick = () => (clicked && Date.now() - clicked.at < 3000 ? clicked : null);
   function settleAsked() {
     if (!clicked) return;
     // clicked is set, checked above, and win is one of app's windows.
     const app = tasks.apps.find((a) => a.windows.some((w) => w.id === clicked!.id));
     const win = app && app.windows.find((w) => w.id === clicked!.id);
-    if (!win || isActive({ kind: 'window', app, win } as WindowItem) === clicked.active) clicked = null;
+    if (!win || listActive({ kind: 'window', app, win } as WindowItem) === clicked.active) clicked = null;
   }
 
   function isActive(item: TaskItem) {
+    const c = pendingClick();
+    if (c && item.kind === 'window' && item.win.id === c.id) return c.active;
+    // Another window is coming forward.
+    if (c && c.active) return false;
+    return listActive(item);
+  }
+
+  function listActive(item: TaskItem) {
     if (!item.app.active) return false;
     if (item.kind === 'app') return true;
     // An app whose focus is on a sheet or panel reports no focused window.
@@ -415,6 +421,8 @@
 
   function isDim(item: TaskItem) {
     if (item.app.hidden) return true;
+    const c = pendingClick();
+    if (c && item.kind === 'window' && item.win.id === c.id) return !c.active;
     if (item.kind === 'window') return item.win.minimized;
     if (item.kind === 'group') return item.wins.every((w) => w.minimized);
     return false;
@@ -497,9 +505,15 @@
         windows: item.wins.map((w) => ({ id: w.id, title: w.title || item.app.name, minimized: w.minimized, active: item.app.active && w.focused && !w.minimized }))
       });
     }
-    const minimize = clickActive(item) && t.clickActiveMinimizes;
-    clicked = { id: item.win.id, active: !minimize, at: Date.now() };
+    // The button can be from an older list, since the bar redraws only when
+    // something on it changes, so go by the window in the newest one.
+    const id = item.win.id;
+    const app = tasks.apps.find((a) => a.windows.some((w) => w.id === id));
+    const now = app ? { ...item, app, win: app.windows.find((w) => w.id === id)! } : item; // the find above found it
+    const minimize = isActive(now) && t.clickActiveMinimizes;
+    clicked = { id, active: !minimize, at: Date.now() };
     api.taskCommand({ cmd: minimize ? 'minimize' : 'activate', id: item.win.id });
+    renderTasks();
   }
 
   function pinTask(p: string) {
@@ -715,10 +729,28 @@
   }
   moveByDrag();
 
+  // A redraw between pressing a button and letting go swaps the button
+  // under the mouse, and the page drops a click whose press and release
+  // land on different elements. The list changes most right after a click,
+  // when the next one is likely, so redraws wait for the release and come
+  // after the click.
+  let pressing = false;
+  tasksEl.addEventListener('pointerdown', (e) => {
+    if (e.button === 0) pressing = true;
+  });
+  const release = () => {
+    if (!pressing) return;
+    pressing = false;
+    setTimeout(renderTasks);
+  };
+  window.addEventListener('pointerup', release, true);
+  window.addEventListener('pointercancel', release, true);
+  window.addEventListener('blur', release);
+
   // The helper sends the list a few times a second, so only redraw when
   // something on the bar would change.
   function renderTasks() {
-    if (!state || moving || tasksEl.matches('.reordering, .regrouping')) return;
+    if (!state || pressing || moving || tasksEl.matches('.reordering, .regrouping')) return;
     const t = state.settings.taskbar;
     const pinList = pinsInRow(t) ? state.pins : [];
     const items = buildItems(t);
