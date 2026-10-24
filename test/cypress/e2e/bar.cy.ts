@@ -144,6 +144,20 @@ describe('bar', () => {
     cy.calls('showGroup').should('have.length', 0);
   });
 
+  it('a group with more windows than the pictures hold opens the list', () => {
+    const many = { ...TASKS, apps: [...TASKS.apps, app(4, 'Mail', [1, 2, 3, 4, 5, 6, 7].map((n) => win(`m${n}`, `Mail ${n}`)))] };
+    cy.page('bar/index.html', (state, extra) => {
+      extra.tasks = many;
+      state.settings.taskbar.previews = true;
+    });
+    button('Mail').trigger('mouseenter');
+    cy.wait(600);
+    cy.calls('showPreview').should('have.length', 0);
+    button('Mail').click();
+    cy.calls('pinPreview').should('have.length', 0);
+    cy.calls<[GroupPayload]>('showGroup').its(0).its(0).its('windows').should('have.length', 7);
+  });
+
   it('right click asks for the button menu, middle click for a new window', () => {
     cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
     button('Notes.txt').rightclick();

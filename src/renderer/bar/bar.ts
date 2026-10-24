@@ -447,6 +447,10 @@
   let previewUp = false;
   let previewLeft = 0;
   const previewsOn = () => state.settings.taskbar.previews;
+  // Pictures fit a few windows across; a bigger group gets the list, which
+  // scrolls, so every window stays reachable.
+  const PREVIEW_MAX = 6;
+  const pictured = (item: TaskItem) => previewsOn() && item.kind !== 'app' && (item.kind !== 'group' || item.wins.length <= PREVIEW_MAX);
 
   function previewPayload(item: WindowItem | GroupItem, el: HTMLElement) {
     const wins = item.kind === 'group' ? item.wins : [item.win];
@@ -495,7 +499,7 @@
     }
     // With previews on, a click on a group keeps its pictures open instead
     // of showing the list.
-    if (item.kind === 'group' && previewsOn()) {
+    if (item.kind === 'group' && pictured(item)) {
       clearTimeout(previewTimer);
       previewUp = false;
       return api.pinPreview(previewPayload(item, el));
@@ -613,7 +617,7 @@
       // window that's on screen is pictured now, so a click that minimizes
       // it doesn't wait for a picture.
       if (previewsOn() && item.kind === 'window' && !item.win.minimized) api.warmPicture(item.win.id);
-      if (previewsOn() && item.kind !== 'app') return schedulePreview(item, b);
+      if (item.kind !== 'app' && pictured(item)) return schedulePreview(item, b);
       if (!state.settings.taskbar.titleOnHover) return;
       clearTimeout(tipTimer);
       tipTimer = setTimeout(() => api.showTip({ text: label.textContent!, rect: rectOf(b) }), 500); // the label's text is set above
