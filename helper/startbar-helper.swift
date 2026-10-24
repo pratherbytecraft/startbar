@@ -1024,6 +1024,13 @@ final class WindowWatcher {
             case "minimize":
                 minimizeAsked = Date()
                 defer { changed() }
+                // A window with no minimize button (a game in its own full
+                // screen mode) says it minimized and stays put, so it goes
+                // out of the way with its app hidden instead.
+                if axElement(window, kAXMinimizeButtonAttribute) == nil {
+                    return AXUIElementSetAttributeValue(AXUIElementCreateApplication(pid), kAXHiddenAttribute as CFString, kCFBooleanTrue) == .success
+                        ? nil : "the app did not hide"
+                }
                 return AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanTrue) == .success
                     ? nil : "the window did not minimize"
             case "unminimize":
