@@ -202,7 +202,7 @@ let axCallback: AXObserverCallback = { _, element, notification, refcon in
     guard let refcon else { return }
     let watcher = Unmanaged<WindowWatcher>.fromOpaque(refcon).takeUnretainedValue()
     if notification as String == kAXUIElementDestroyedNotification || notification as String == kAXWindowMiniaturizedNotification {
-        watcher.closed(element)
+        watcher.closed(element, minimized: notification as String == kAXWindowMiniaturizedNotification)
     }
     watcher.changed()
 }
@@ -251,7 +251,10 @@ final class WindowWatcher {
         var standard = true // a standard window, not a dialog
     }
     var frontOrder: [(pid: pid_t, id: CGWindowID)] = [] // on screen windows front to back, from the last scan
+    var frontGone: (order: [(pid: pid_t, id: CGWindowID)], at: Date)? // the order from before the front window left the screen
     var peeked: (id: CGWindowID, back: (pid: pid_t, id: CGWindowID)?)? // the window shown by a peek, and the one to put back in front
+    var lastActivate = Date.distantPast // the last window or app brought forward on request
+    var minimizeAsked = Date.distantPast // the last minimize command
     var lastFront: pid_t? // the last app in front other than Startbar
 
     var trusted = AXIsProcessTrusted()
@@ -529,6 +532,10 @@ final class WindowWatcher {
                 if (info[kCGWindowLayer as String] as? Int) == 0, let pid = info[kCGWindowOwnerPID as String] as? pid_t { order.append((pid, id)) }
             }
         }
+        // A minimize is reported once its animation ends, and a scan during
+        // it no longer lists the window, so closed() needs the order from
+        // before.
+        if let first = frontOrder.first, !order.contains(where: { $0.id == first.id }) { frontGone = (frontOrder, Date()) }
         frontOrder = order
         if let list = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
             for info in list {
@@ -626,17 +633,22 @@ final class WindowWatcher {
             // A window seen before keeps its place, even when it comes back as
             // a different element (listed now, found by token before).
             var item: Known
+            var seenBefore = true
             if let seen = before.first(where: { CFEqual($0.element, window) }) {
                 item = seen
             } else if windowId != 0, let seen = before.first(where: { $0.id == "w\(windowId)" }) {
-                item = Known(element: window, id: seen.id, order: seen.order)
+                item = Known(element: window, id: seen.id, order: seen.order, standard: seen.standard)
                 watch(window, pid: pid)
             } else {
+                seenBefore = false
                 counter += 1
                 item = Known(element: window, id: windowId != 0 ? "w\(windowId)" : "p\(pid)-\(counter)", order: counter)
                 watch(window, pid: pid)
             }
-            item.standard = standard
+            // A minimized window says it's a dialog, so one seen before keeps
+            // what it was.
+            let minimized = axBool(window, kAXMinimizedAttribute)
+            if !minimized || !seenBefore { item.standard = standard }
             after.append(item)
             let onScreen = windowId != 0 && server.onScreen.contains(windowId)
             if onScreen, let frame { nudge(window, id: item.id, frame: frame) }
@@ -644,7 +656,7 @@ final class WindowWatcher {
                 "id": item.id,
                 "order": item.order,
                 "title": axValue(window, kAXTitleAttribute) as? String ?? "",
-                "minimized": axBool(window, kAXMinimizedAttribute),
+                "minimized": minimized,
                 "focused": focused.map { CFEqual($0, window) } ?? false,
                 "onScreen": onScreen,
                 "fullScreen": axBool(window, "AXFullScreen"),
@@ -924,6 +936,7 @@ final class WindowWatcher {
                 changed()
                 return nil
             case "minimize":
+                minimizeAsked = Date()
                 defer { changed() }
                 return AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanTrue) == .success
                     ? nil : "the window did not minimize"
@@ -1030,6 +1043,7 @@ final class WindowWatcher {
     // an app forward from a background process, NSRunningApplication isn't
     // always on macOS 14 and later.
     func activateApp(_ app: NSRunningApplication) {
+        lastActivate = Date()
         if app.isHidden { app.unhide() }
         if let url = app.bundleURL {
             let config = NSWorkspace.OpenConfiguration()
@@ -1104,20 +1118,33 @@ final class WindowWatcher {
     // should reveal what was under the window instead, so when that is
     // another app's window it is raised alone, a moment after macOS has done
     // its reorder. Dialogs are left alone, their app's own window should
-    // stay in front.
-    func closed(_ element: AXUIElement) {
+    // stay in front. A minimize is only reported once its animation ends, so
+    // the raise is dropped when something was brought forward since it
+    // started, the window is back, or another app came to the front.
+    func closed(_ element: AXUIElement, minimized: Bool) {
         guard let (pid, item) = known.lazy.compactMap({ (pid, list) in list.first(where: { CFEqual($0.element, element) }).map { (pid, $0) } }).first,
-              item.standard, item.id.hasPrefix("w"), let number = CGWindowID(item.id.dropFirst()),
-              frontOrder.first?.id == number, frontOrder.count > 1 else { return }
-        let under = frontOrder[1]
+              item.standard, item.id.hasPrefix("w"), let number = CGWindowID(item.id.dropFirst()) else { return }
+        var order = frontOrder
+        if order.first?.id != number, let gone = frontGone, gone.order.first?.id == number, Date().timeIntervalSince(gone.at) < 3 { order = gone.order }
+        guard order.first?.id == number, order.count > 1 else { return }
+        let under = order[1]
         guard under.pid != pid, let target = known[under.pid]?.first(where: { $0.id == "w\(under.id)" }) else {
             note("window \(item.id) went away, under it is \(under.id) of \(under.pid), left alone")
             return
         }
-        note("window \(item.id) closed, raising \(target.id) under it")
+        // When it started: Startbar's own minimize command, or for the
+        // window's own button, about the animation's length ago.
+        let since = !minimized ? Date() : Date().timeIntervalSince(minimizeAsked) < 1.5 ? minimizeAsked : Date().addingTimeInterval(-1)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self else { return }
             if axBool(target.element, kAXMinimizedAttribute) { return }
+            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            if self.lastActivate > since || (minimized && !axBool(element, kAXMinimizedAttribute))
+                || ![pid, under.pid, getppid()].contains(front ?? pid) {
+                self.note("window \(item.id) closed, \(target.id) left alone, something else came forward")
+                return
+            }
+            self.note("window \(item.id) closed, raising \(target.id) under it")
             _ = self.raiseOnly(target.element, pid: under.pid)
         }
     }
@@ -1175,6 +1202,7 @@ final class WindowWatcher {
 
     func activate(_ window: AXUIElement, pid: pid_t) {
         peeked = nil // a click during a peek keeps the window where it is
+        lastActivate = Date()
         // The kept front to back order knows about the raise right away, so
         // a close or minimize before the next scan still reveals what's
         // under this window.
