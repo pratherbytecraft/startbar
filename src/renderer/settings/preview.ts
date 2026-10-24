@@ -79,8 +79,9 @@
     trayEl.replaceChildren(...(collapsed ? [] : all).map((kind) => {
       const s = document.createElement('span');
       s.className = 'tray-icon';
-      // Each kind draws from its own reading, the Shotdrawer button from none.
-      s.innerHTML = window.trayIcons[kind](status![kind as PopoverKind] as TrayReading);
+      // Each kind draws from its own reading, the Shotdrawer button from none,
+      // so it draws before the readings come in too.
+      s.innerHTML = window.trayIcons[kind]((status ? status[kind as PopoverKind] : undefined) as TrayReading);
       return s;
     }));
     const grouped = tb.grouping === 'always';

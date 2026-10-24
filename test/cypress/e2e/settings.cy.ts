@@ -169,4 +169,14 @@ describe('settings window', () => {
     cy.fake().then((api) => api.emit('state', { ...api.state, filedrawer: true }));
     cy.contains('#pages h2', 'Folders').should('be.visible');
   });
+
+  it('the live preview draws the Shotdrawer button before the tray readings come in', () => {
+    cy.page('settings/index.html', (state, extra) => {
+      state.shotdrawer = true;
+      state.settings.tray.shotdrawer = true;
+      // The readings never come in, so the preview only ever has none.
+      extra.status = new Promise(() => {}) as unknown as Status;
+    });
+    cy.get('#pv').its('0.contentDocument.body').find('.tray-icon').should('have.length', 1);
+  });
 });
