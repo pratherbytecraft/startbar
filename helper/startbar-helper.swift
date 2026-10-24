@@ -236,7 +236,9 @@ let axCallback: AXObserverCallback = { _, element, notification, refcon in
 //   {"cmd":"watchClicks","on":true}   report every mouse down anywhere as {"type":"click","x":..,"y":..}
 //   {"cmd":"clickThrough","on":true}  a left click on a window that isn't in front raises just that
 //                                     window and lands as a click, see clickThrough below
-//   {"cmd":"postClick","x":..,"y":..} press and release the left button at a point (for the tests)
+//   {"cmd":"postClick","x":..,"y":..,"id":"w123"}
+//                                     press and release the left button at a point (for the tests),
+//                                     with an id only while that window is on top there
 //   {"cmd":"keepOff","areas":[{"top":25,"bottom":830,"screen":{"x":0,"y":0,"w":1512,"h":866}}]}
 //     one area per bar, or a single area's keys at the top level
 //     move windows on that screen up when they would cover the bar, which
@@ -481,6 +483,25 @@ final class WindowWatcher {
             // NSWorkspace's idea of the front app lags behind a raise.
             if frontmost == id { return nil }
             return (pid, item)
+        }
+        return nil
+    }
+
+    // The window on top at a point, passing over the pointer and Notification
+    // Center's invisible window the way windowUnder does.
+    func topWindow(at point: CGPoint) -> CGWindowID? {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
+        var display: CGDirectDisplayID = 0
+        var count: UInt32 = 0
+        CGGetDisplaysWithPoint(point, 1, &display, &count)
+        let screen = count > 0 ? CGDisplayBounds(display) : .null
+        for info in list {
+            guard let dict = info[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: dict), bounds.contains(point),
+                  (info[kCGWindowAlpha as String] as? Double ?? 1) > 0 else { continue }
+            let layer = info[kCGWindowLayer as String] as? Int ?? 0
+            if layer > 1000 || (layer != 0 && bounds.contains(screen)) { continue }
+            return info[kCGWindowNumber as String] as? CGWindowID
         }
         return nil
     }
@@ -893,6 +914,11 @@ final class WindowWatcher {
             return nil
         case "postClick":
             guard let x = command["x"] as? Double, let y = command["y"] as? Double else { return "no point" }
+            // With an id, only while that window is the one on top there, so
+            // a test never clicks into another app.
+            if let id = command["id"] as? String, topWindow(at: CGPoint(x: x, y: y)).map({ "w\($0)" }) != id {
+                return "the window is not on top there"
+            }
             postClick(CGPoint(x: x, y: y))
             return nil
         case "askScreen":

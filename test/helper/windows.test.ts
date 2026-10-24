@@ -102,8 +102,16 @@ describe('the window list', async () => {
       const a = textEdit(m);
       return a && a.active && a.windows.some((w) => w.id === win.id && w.focused);
     });
-    // The title bar, where a press and release does nothing on its own.
-    assert.equal((await helper.send({ cmd: 'postClick', x: win.x + win.w / 2, y: win.y + 10 })).ok, true);
+    // The title bar, where a press and release does nothing on its own. The
+    // helper clicks only once the window is back on top there (the restore
+    // in the test before can still be running), never into another app.
+    const click = { cmd: 'postClick', x: win.x + win.w / 2, y: win.y + 10, id: win.id } as const;
+    let clicked = await helper.send(click);
+    for (let i = 0; i < 20 && !clicked.ok; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      clicked = await helper.send(click);
+    }
+    assert.equal(clicked.ok, true, clicked.error);
     await next;
     assert.equal((await helper.send({ cmd: 'clickThrough', on: false })).ok, true);
   });

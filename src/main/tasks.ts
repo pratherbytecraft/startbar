@@ -28,7 +28,7 @@ export type HelperCommand =
   | { cmd: 'keepOff'; areas: KeepOffArea[] }
   | { cmd: 'spaces'; all: boolean }
   | { cmd: 'watchClicks' | 'clickThrough'; on: boolean }
-  | { cmd: 'postClick'; x: number; y: number };
+  | { cmd: 'postClick'; x: number; y: number; id?: string };
 
 // What the helper prints, one JSON object per line.
 type HelperMessage =
