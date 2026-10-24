@@ -252,6 +252,7 @@ final class WindowWatcher {
     }
     var frontOrder: [(pid: pid_t, id: CGWindowID)] = [] // on screen windows front to back, from the last scan
     var peeked: (id: CGWindowID, back: (pid: pid_t, id: CGWindowID)?)? // the window shown by a peek, and the one to put back in front
+    var lastFront: pid_t? // the last app in front other than Startbar
 
     var trusted = AXIsProcessTrusted()
     var observers: [pid_t: AXObserver] = [:]
@@ -543,7 +544,16 @@ final class WindowWatcher {
     }
 
     func scan() -> [[String: Any]] {
-        let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        var front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        // A click on the bar brings Startbar forward, since macOS lets a
+        // window that only says it's a panel do that. While none of
+        // Startbar's own windows has the keyboard, the app that was in front
+        // still counts as the active one, the way a taskbar click works.
+        if front != getppid() {
+            lastFront = front
+        } else if let previous = lastFront, axElement(AXUIElementCreateApplication(getppid()), kAXFocusedWindowAttribute) == nil {
+            front = previous
+        }
         let server = trusted ? windowServerList() : (onScreen: Set<CGWindowID>(), all: [])
         var out: [[String: Any]] = []
         var alive = Set<pid_t>()
