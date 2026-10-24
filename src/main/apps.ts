@@ -18,7 +18,6 @@ const APP_DIRS = [
   '/System/Applications/Utilities'
 ];
 
-let cache: AppEntry[] | null = null; // [{ name, path, icon }]
 let loading: Promise<AppEntry[]> | null = null;
 const iconCache = new Map<string, string>();
 
@@ -115,11 +114,11 @@ export async function icons(paths: string[]): Promise<Record<string, string>> {
   return Object.fromEntries(list.map((a) => [a.path, a.icon]));
 }
 
-export function load(force = false) {
-  if (cache && !force) return Promise.resolve(cache);
+// The folders are read again each time, so an app installed or removed
+// since the last time shows up or goes away. Only a new app's icon is drawn.
+export function load() {
   if (loading) return loading;
   loading = withIcons(listAppBundles()).then((list) => {
-    cache = list;
     loading = null;
     return list;
   });
