@@ -374,8 +374,9 @@ final class WindowWatcher {
     // front app that isn't its focused window, the mouse down is swallowed,
     // that window alone is raised, and a copy of the mouse down is posted a
     // moment later so the click lands. The copy carries a marker in its
-    // user data so the tap lets it through, and a mouse up that arrives
-    // before the copy is held and sent after it, so the press stays whole.
+    // user data so the tap lets it through. Drags and a mouse up that
+    // arrive before the copy are held and sent after it (the newest drag
+    // only), so the press stays whole and no drag reaches the old window.
     // Clicks are left alone on Startbar's own windows, the menu bar, the
     // Dock, menus, sheets and anything else above layer 0, on the focused
     // window of the front app, just outside a window's edge (where macOS
@@ -385,6 +386,7 @@ final class WindowWatcher {
     var throughTap: CFMachPort?
     var throughSource: CFRunLoopSource?
     var heldUp: CGEvent? // a mouse up that came before the posted mouse down
+    var heldDrag: CGEvent? // the newest drag that came before it
     var repostPending = false
     func clickThrough(_ on: Bool) {
         if !on {
@@ -396,12 +398,14 @@ final class WindowWatcher {
             throughTap = nil
             throughSource = nil
             heldUp = nil
+            heldDrag = nil
             repostPending = false
             return
         }
         guard throughTap == nil else { return }
         guard skylight != nil else { note("clickThrough: no SkyLight, staying off"); return }
         let mask = (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
+            | (1 << CGEventType.leftMouseDragged.rawValue)
         let me = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
                                           eventsOfInterest: CGEventMask(mask), callback: { _, type, event, refcon in
@@ -426,17 +430,31 @@ final class WindowWatcher {
             heldUp = event.copy()
             return nil
         }
+        // Drags before the posted mouse down would go to the window that
+        // had the last press (which then scrolled as if text were being
+        // selected), so they wait too.
+        if type == .leftMouseDragged {
+            guard repostPending else { return Unmanaged.passUnretained(event) }
+            heldDrag = event.copy()
+            return nil
+        }
         guard type == .leftMouseDown, !repostPending, !event.flags.contains(.maskCommand),
               let hit = windowUnder(event.location) else { return Unmanaged.passUnretained(event) }
         note("click through to \(hit.item.id) of \(hit.pid)")
         repostPending = true
         heldUp = nil
+        heldDrag = nil
         let copy = event.copy()
         copy?.setIntegerValueField(.eventSourceUserData, value: WindowWatcher.clickMark)
         activate(hit.item.element, pid: hit.pid)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in
             guard let self else { return }
             copy?.post(tap: .cgSessionEventTap)
+            if let drag = self.heldDrag {
+                self.heldDrag = nil
+                drag.setIntegerValueField(.eventSourceUserData, value: WindowWatcher.clickMark)
+                drag.post(tap: .cgSessionEventTap)
+            }
             self.repostPending = false
             if let up = self.heldUp {
                 self.heldUp = nil
