@@ -1,37 +1,47 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const { tempAppData } = require('../support/electron');
-const timers = require('../support/timers');
-const settings = require('../../src/main/settings');
+import { test, type TestContext } from 'node:test';
+import assert from 'node:assert/strict';
+import { tempAppData } from '../support/electron';
+import * as timers from '../support/timers';
+import * as settings from '../../src/main/settings';
+import type { HelperCommand } from '../../src/main/tasks';
+import type { AppCommand, HelperReply, Settings, TaskApp, Tasks } from '../../src/shared/types';
+
+type QuitterModule = typeof import('../../src/main/quitter');
+
 // The quitter reaches the window list through tasks, whose exports are
 // read only now that it's TypeScript. A writable copy takes its place in
 // the module cache, so the quitter loads the copy and its stand-ins below.
-const tasks = { ...require('../../src/main/tasks') };
-require.cache[require.resolve('../../src/main/tasks')].exports = tasks;
+type TasksModule = typeof import('../../src/main/tasks');
+const tasks: { -readonly [K in keyof TasksModule]: TasksModule[K] } = { ...require('../../src/main/tasks') };
+// Required just above, so it's in the cache.
+require.cache[require.resolve('../../src/main/tasks')]!.exports = tasks;
 
 // The window list comes from these instead of the helper.
-let watcher = null;
-let state = { accessibility: true, apps: [] };
-let sent = [];
-let reply = { ok: true, windows: false }; // the helper's answer to hasWindows
-tasks.onChange = (fn) => { watcher = fn; };
+let watcher: ((state: Tasks) => void) | null = null;
+let state: Tasks = { accessibility: true, apps: [] };
+let sent: HelperCommand[] = [];
+let reply: HelperReply = { ok: true, windows: false }; // the helper's answer to hasWindows
+// The quitter doesn't use what onChange returns.
+tasks.onChange = ((fn) => { watcher = fn; }) as typeof tasks.onChange;
 tasks.get = () => state;
 tasks.send = async (command) => {
   sent.push(command);
   return command.cmd === 'hasWindows' ? reply : { ok: true };
 };
 
-function app(pid, windows, extra = {}) {
-  return { pid, name: `App ${pid}`, bundleId: `com.example.app${pid}`, path: `/Applications/App ${pid}.app`, hidden: false, windows: windows.map((id) => ({ id })), ...extra };
+// A made up app carries only what the quitter reads.
+function app(pid: number, windows: string[], extra: Partial<TaskApp> = {}) {
+  return { pid, name: `App ${pid}`, bundleId: `com.example.app${pid}`, path: `/Applications/App ${pid}.app`, hidden: false, windows: windows.map((id) => ({ id })), ...extra } as TaskApp;
 }
 
-function show(apps, accessibility = true) {
+function show(apps: TaskApp[], accessibility = true) {
   state = { accessibility, apps };
-  watcher(state);
+  // start() loaded the quitter, which set it.
+  watcher!(state);
 }
 
 // A fresh quitter (it remembers each app's windows), settings and clock.
-function start(t, quitApps = { on: true }) {
+function start(t: TestContext, quitApps: Partial<Settings['quitApps']> = { on: true }) {
   tempAppData();
   settings.init();
   settings.update({ quitApps });
@@ -40,11 +50,11 @@ function start(t, quitApps = { on: true }) {
   const clock = timers.install();
   t.after(() => clock.restore());
   delete require.cache[require.resolve('../../src/main/quitter')];
-  require('../../src/main/quitter').start();
+  (require('../../src/main/quitter') as QuitterModule).start();
   return clock;
 }
 
-const quit = () => sent.filter((c) => c.cmd === 'quitApp').map((c) => c.pid);
+const quit = () => sent.filter((c): c is AppCommand => c.cmd === 'quitApp').map((c) => c.pid);
 
 test('an app quits a second after its last window closes', async (t) => {
   const clock = start(t);
@@ -188,7 +198,7 @@ test('nothing quits when more than one app loses its last window at once', async
 
 test('nothing quits while the screen is locked or just after', async (t) => {
   const clock = start(t);
-  const quitter = require('../../src/main/quitter');
+  const quitter: QuitterModule = require('../../src/main/quitter');
   show([app(1, ['w1'])]);
   quitter.setLocked(true);
   show([app(1, [])]);
@@ -210,7 +220,7 @@ test('locking the screen during the wait stops the quit', async (t) => {
   const clock = start(t);
   show([app(1, ['w1'])]);
   show([app(1, [])]);
-  require('../../src/main/quitter').setLocked(true);
+  (require('../../src/main/quitter') as QuitterModule).setLocked(true);
   await clock.advance(2000);
   assert.deepEqual(sent, []);
 });

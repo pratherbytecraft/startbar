@@ -1,6 +1,8 @@
 // The bar, drawn from a made up window list.
-const win = (id, title, extra = {}) => ({ id, order: Number(id.slice(1)), title, minimized: false, focused: false, onScreen: true, otherSpace: false, fullScreen: false, x: 0, y: 30, w: 600, h: 400, ...extra });
-const app = (pid, name, windows, extra = {}) => ({ pid, name, bundleId: `com.example.${pid}`, path: `/Applications/${name}.app`, active: false, hidden: false, windows, ...extra });
+export {};
+
+const win = (id: string, title: string, extra: Partial<TaskWindow> = {}): TaskWindow => ({ id, order: Number(id.slice(1)), title, minimized: false, focused: false, onScreen: true, otherSpace: false, fullScreen: false, x: 0, y: 30, w: 600, h: 400, ...extra });
+const app = (pid: number, name: string, windows: TaskWindow[], extra: Partial<TaskApp> = {}): TaskApp => ({ pid, name, bundleId: `com.example.${pid}`, path: `/Applications/${name}.app`, active: false, hidden: false, windows, ...extra });
 
 const TASKS = {
   accessibility: true,
@@ -11,7 +13,7 @@ const TASKS = {
   ]
 };
 
-const button = (text) => cy.contains('#tasks .task', text);
+const button = (text: string) => cy.contains('#tasks .task', text);
 
 describe('bar', () => {
   it('draws a button per window, two windows of one app grouped', () => {
@@ -34,7 +36,7 @@ describe('bar', () => {
   it('dragging a pulled out button onto its group puts it back', () => {
     const apps = [TASKS.apps[0], app(2, 'Safari', [win('w2', 'Apple'), win('w3', 'News'), win('w5', 'Weather')]), TASKS.apps[2]];
     cy.page('bar/index.html', (_state, extra) => { extra.tasks = { ...TASKS, apps, ungrouped: ['w3'] }; });
-    const center = ($el) => { const r = $el[0].getBoundingClientRect(); return { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, pointerId: 1, button: 0 }; };
+    const center = ($el: JQuery<HTMLElement>) => { const r = $el[0].getBoundingClientRect(); return { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, pointerId: 1, button: 0 }; };
     button('News').then(($b) => cy.wrap($b).trigger('pointerdown', center($b)));
     button('Safari').then(($g) => {
       const at = center($g);
@@ -48,7 +50,7 @@ describe('bar', () => {
 
   it('dragging a button past another moves it there and saves the order', () => {
     cy.page('bar/index.html', (_state, extra) => { extra.tasks = TASKS; });
-    const center = ($el) => { const r = $el[0].getBoundingClientRect(); return { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, pointerId: 1, button: 0 }; };
+    const center = ($el: JQuery<HTMLElement>) => { const r = $el[0].getBoundingClientRect(); return { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, pointerId: 1, button: 0 }; };
     button('Notes.txt').then(($b) => cy.wrap($b).trigger('pointerdown', center($b)));
     button('Safari').then(($g) => {
       const at = center($g);
@@ -90,7 +92,7 @@ describe('bar', () => {
     button('Notes.txt').click();
     cy.calls('taskCommand').should('deep.include', [{ cmd: 'minimize', id: 'w1' }]);
     button('Safari').click();
-    cy.calls('showGroup').its(0).its(0).should((g) => {
+    cy.calls<[GroupPayload]>('showGroup').its(0).its(0).should((g) => {
       expect(g.pid).to.equal(2);
       expect(g.windows.map((w) => w.title)).to.deep.equal(['Apple', 'News']);
     });
@@ -102,7 +104,7 @@ describe('bar', () => {
       state.settings.taskbar.previews = true;
     });
     button('Safari').click();
-    cy.calls('pinPreview').its(0).its(0).should((p) => {
+    cy.calls<[PreviewPayload]>('pinPreview').its(0).its(0).should((p) => {
       expect(p.pid).to.equal(2);
       expect(p.group).to.equal(true);
       expect(p.windows.map((w) => w.title)).to.deep.equal(['Apple', 'News']);

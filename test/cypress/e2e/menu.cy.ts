@@ -1,8 +1,10 @@
 // The Start menu, with a made up app list. The app reads the list each time
 // the menu is shown, so each test sends menuShown first.
+import type { Extra } from '../support/fake';
+
 const APPS = ['Calculator', 'Calendar', 'Notes', 'Safari', 'TextEdit'].map((name) => ({ name, path: `/Applications/${name}.app`, icon: '' }));
 
-function openMenu(change) {
+function openMenu(change?: (state: State, extra: Extra) => void) {
   cy.page('menu/index.html', (state, extra) => {
     extra.apps = APPS;
     extra.recent = [APPS[3]];

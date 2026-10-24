@@ -1,12 +1,12 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const { tempAppData } = require('../support/electron');
-const settings = require('../../src/main/settings');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'fs';
+import path from 'path';
+import { tempAppData } from '../support/electron';
+import * as settings from '../../src/main/settings';
 
 // A fresh settings folder, with settings.json holding saved when given.
-function start(saved) {
+function start(saved?: unknown) {
   const dir = path.join(tempAppData(), 'Startbar');
   if (saved !== undefined) {
     fs.mkdirSync(dir, { recursive: true });
@@ -16,7 +16,7 @@ function start(saved) {
   return path.join(dir, 'settings.json');
 }
 
-const onDisk = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+const onDisk = (file: string) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
 test('a first run gets the defaults', () => {
   start();
@@ -75,7 +75,7 @@ test('a color scheme saved before schemes existed reads as the theme default', (
 
 test('update merges into nested settings, saves and tells listeners', () => {
   const file = start();
-  const seen = [];
+  const seen: boolean[] = [];
   const stop = settings.onChange((s) => seen.push(s.clock.seconds));
   settings.update({ clock: { seconds: true } });
   stop();

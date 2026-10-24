@@ -2,15 +2,16 @@
 // Needs Accessibility for the app running the tests (the terminal), and
 // steps aside while TextEdit is already open so nobody's documents are
 // touched. TextEdit is quit at the end.
-const { describe, test, before, after } = require('node:test');
-const assert = require('node:assert/strict');
-const { execFileSync } = require('child_process');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { run } = require('../support/helper');
+import { describe, test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'child_process';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { run, type WindowsLine } from '../support/helper';
+import type { TaskApp, TaskWindow } from '../../src/shared/types';
 
-const running = (name) => {
+const running = (name: string) => {
   try {
     execFileSync('pgrep', ['-x', name]);
     return true;
@@ -29,9 +30,10 @@ describe('the window list', async () => {
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'startbar-test-'));
   const file = path.join(dir, `Startbar test ${process.pid}.txt`);
-  const textEdit = (state) => state.type === 'state' && state.apps.find((a) => a.bundleId === 'com.apple.TextEdit');
-  let app = null;
-  let win = null;
+  const textEdit = (state: WindowsLine) => state.type === 'state' && state.apps.find((a) => a.bundleId === 'com.apple.TextEdit');
+  // Set in before(). The tests that read them skip when it doesn't run.
+  let app = null as unknown as TaskApp;
+  let win = null as unknown as TaskWindow;
 
   before(async () => {
     if (why) return;
@@ -41,8 +43,9 @@ describe('the window list', async () => {
       const a = textEdit(m);
       return a && a.windows.some((w) => w.title === path.basename(file));
     }, 15000);
-    app = textEdit(state);
-    win = app.windows.find((w) => w.title === path.basename(file));
+    // The wait above passed only a list with TextEdit and that window.
+    app = textEdit(state) as TaskApp;
+    win = app.windows.find((w) => w.title === path.basename(file))!;
   });
 
   after(async () => {
@@ -80,7 +83,7 @@ describe('the window list', async () => {
   });
 
   test('minimizes and brings the window back', { skip: why || false }, async () => {
-    const isMin = (want) => (m) => {
+    const isMin = (want: boolean) => (m: WindowsLine) => {
       const a = textEdit(m);
       return a && a.windows.some((w) => w.id === win.id && w.minimized === want);
     };
@@ -132,7 +135,8 @@ describe('the window list', async () => {
       return a && a.active && a.windows.some((w) => w.focused && !w.minimized);
     });
     assert.equal((await helper.send({ cmd: 'newWindow', pid: app.pid })).ok, true);
-    const fresh = textEdit(await next).windows.find((w) => w.focused);
+    // The wait passed only a list with TextEdit and a focused window.
+    const fresh = (textEdit(await next) as TaskApp).windows.find((w) => w.focused)!;
     assert.equal((await helper.send({ cmd: 'close', id: fresh.id })).ok, true);
   });
 

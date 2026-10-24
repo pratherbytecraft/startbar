@@ -24,6 +24,7 @@
     "src/scripts",
     "scripts",
     "test/unit",
-    "test/support"
+    "test/support",
+    "test/helper"
   ]
 }

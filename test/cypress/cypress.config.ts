@@ -1,17 +1,20 @@
 // Cypress loads each renderer page on its own, served from dist/renderer by
 // a small server started here, with the preload's window.startbar replaced
-// by a fake (support/fake.js). Run with npm run test:pages.
-const { defineConfig } = require('cypress');
-const fs = require('fs');
-const http = require('http');
-const path = require('path');
+// by a fake (support/fake.ts). Run with npm run test:pages.
+import { defineConfig } from 'cypress';
+import fs from 'fs';
+import http from 'http';
+import type { AddressInfo } from 'net';
+import path from 'path';
+import type { State } from '../../src/shared/types';
 
 const ROOT = path.join(__dirname, '..', '..', 'dist', 'renderer');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
+const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
-function serve() {
+function serve(): Promise<number> {
   const server = http.createServer((req, res) => {
-    const file = path.join(ROOT, decodeURIComponent(new URL(req.url, 'http://x').pathname));
+    // A request to the server always has a url.
+    const file = path.join(ROOT, decodeURIComponent(new URL(req.url!, 'http://x').pathname));
     if (!file.startsWith(ROOT + path.sep)) {
       res.writeHead(403).end();
       return;
@@ -21,13 +24,13 @@ function serve() {
       res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' }).end(data);
     });
   });
-  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server.address().port)));
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve((server.address() as AddressInfo).port)));
 }
 
 // What the main process sends as state, with every setting at its default.
 // The defaults come from the built main process in dist (test:pages builds
 // first), since Cypress can't load the TypeScript source.
-function startbarState() {
+function startbarState(): State {
   require('../support/electron');
   const { DEFAULTS } = require('../../dist/main/settings');
   return {
@@ -60,14 +63,14 @@ function apiNames() {
   return [...preload.matchAll(/^  (\w+): /gm)].map((m) => m[1]);
 }
 
-module.exports = defineConfig({
+export default defineConfig({
   video: false,
   screenshotsFolder: path.join(__dirname, 'screenshots'),
   downloadsFolder: path.join(__dirname, 'downloads'),
   fixturesFolder: false,
   e2e: {
-    specPattern: path.join(__dirname, 'e2e', '*.cy.js'),
-    supportFile: path.join(__dirname, 'support', 'e2e.js'),
+    specPattern: path.join(__dirname, 'e2e', '*.cy.ts'),
+    supportFile: path.join(__dirname, 'support', 'e2e.ts'),
     async setupNodeEvents(on, config) {
       config.env.pages = `http://127.0.0.1:${await serve()}`;
       on('task', { startbarState, apiNames });

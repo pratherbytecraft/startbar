@@ -1,14 +1,14 @@
 // The helper's icon and status modes, which need no permissions.
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { run } = require('../support/helper');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { run, type IconLine, type StatusLine } from '../support/helper';
 
 test('icons are drawn once into the cache folder', async (t) => {
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'startbar-test-'));
-  const icons = run('icons', cache);
+  const icons = run<IconLine>('icons', cache);
   t.after(() => {
     icons.stop();
     fs.rmSync(cache, { recursive: true, force: true });
@@ -27,12 +27,12 @@ test('icons are drawn once into the cache folder', async (t) => {
 });
 
 test('status reports the tray items and the permissions it can see', async (t) => {
-  const status = run('status');
+  const status = run<StatusLine>('status');
   t.after(() => status.stop());
   const s = await status.waitFor((m) => m.type === 'status');
   for (const key of ['volume', 'wifi', 'battery', 'bluetooth', 'access']) assert.ok(key in s, key);
   if (s.volume) assert.ok(s.volume.level >= 0 && s.volume.level <= 1);
-  assert.ok(['allowed', 'denied', 'notAsked', 'off', 'unknown'].includes(s.access.location), s.access.location);
+  assert.ok(['allowed', 'denied', 'notAsked', 'off', 'unknown'].includes(s.access.location!), s.access.location);
 });
 
 test('the window helper takes the click watch on and off', async (t) => {

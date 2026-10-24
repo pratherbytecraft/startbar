@@ -1,4 +1,6 @@
 // The pictures over a window button, alone with the fake API.
+export {};
+
 const PAYLOAD = {
   pid: 2, icon: '', group: true,
   windows: [

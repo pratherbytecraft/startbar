@@ -1,7 +1,7 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-require('../support/electron');
-const { newer } = require('../../src/main/updates');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import '../support/electron';
+import { newer } from '../../src/main/updates';
 
 test('a higher version is newer', () => {
   assert.equal(newer('0.2.6', '0.2.5'), true);

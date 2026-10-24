@@ -2,16 +2,16 @@
 // into Node's module cache under Electron's own name, so a module that
 // requires 'electron' after this gets it instead. app.getPath('appData')
 // answers with the temp folder from the last tempAppData().
-const fs = require('fs');
-const Module = require('module');
-const os = require('os');
-const path = require('path');
+import fs from 'fs';
+import Module from 'module';
+import os from 'os';
+import path from 'path';
 
-const paths = {};
-const made = [];
+const paths: Record<string, string> = {};
+const made: string[] = [];
 
-const app = {
-  getPath: (name) => {
+export const app = {
+  getPath: (name: string) => {
     if (!paths[name]) throw new Error(`no test path for ${name}, call tempAppData() first`);
     return paths[name];
   }
@@ -25,7 +25,7 @@ stub.exports = { app };
 require.cache[id] = stub;
 
 // A new empty folder to stand in for ~/Library/Application Support.
-function tempAppData() {
+export function tempAppData() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'startbar-test-'));
   made.push(dir);
   paths.appData = dir;
@@ -35,5 +35,3 @@ function tempAppData() {
 process.on('exit', () => {
   for (const dir of made) fs.rmSync(dir, { recursive: true, force: true });
 });
-
-module.exports = { app, tempAppData };

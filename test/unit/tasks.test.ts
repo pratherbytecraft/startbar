@@ -1,21 +1,23 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const timers = require('../support/timers');
+import { test, type TestContext } from 'node:test';
+import assert from 'node:assert/strict';
+import * as timers from '../support/timers';
+import type { TaskApp } from '../../src/shared/types';
 
 // A fresh tasks module (it remembers which Finder windows it has seen) and
 // clock. hold says whether Filedrawer is taking over Finder windows.
-function start(t, hold = true) {
+function start(t: TestContext, hold = true) {
   const clock = timers.install();
   t.after(() => clock.restore());
   delete require.cache[require.resolve('../../src/main/tasks')];
-  const tasks = require('../../src/main/tasks');
+  const tasks: typeof import('../../src/main/tasks') = require('../../src/main/tasks');
   tasks.setHoldFinder(() => hold);
   return { clock, tasks };
 }
 
-const finder = (...ids) => ({ pid: 1, bundleId: 'com.apple.finder', windows: ids.map((id) => ({ id })) });
-const other = (...ids) => ({ pid: 2, bundleId: 'com.example.app', windows: ids.map((id) => ({ id })) });
-const ids = (apps) => apps.map((a) => a.windows.map((w) => w.id));
+// Made up apps carry only what heldBack reads.
+const finder = (...ids: string[]) => ({ pid: 1, bundleId: 'com.apple.finder', windows: ids.map((id) => ({ id })) }) as TaskApp;
+const other = (...ids: string[]) => ({ pid: 2, bundleId: 'com.example.app', windows: ids.map((id) => ({ id })) }) as TaskApp;
+const ids = (apps: TaskApp[]) => apps.map((a) => a.windows.map((w) => w.id));
 
 test('Finder windows open when Startbar starts show at once', (t) => {
   const { tasks } = start(t);

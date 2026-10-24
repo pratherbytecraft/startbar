@@ -1,14 +1,17 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const { tempAppData } = require('../support/electron');
-const settings = require('../../src/main/settings');
-const { load, plain } = require('../support/renderer');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'fs';
+import path from 'path';
+import { tempAppData } from '../support/electron';
+import * as settings from '../../src/main/settings';
+import { load, plain } from '../support/renderer';
+import type { Tasks } from '../../src/shared/types';
+
+type OrderModule = typeof import('../../src/main/order');
 
 // main/order.js keeps the saved list in memory, so each test loads it fresh,
 // on a fresh settings folder.
-function start() {
+function start(): OrderModule {
   tempAppData();
   settings.init();
   delete require.cache[require.resolve('../../src/main/order')];
@@ -29,23 +32,26 @@ test('a closed window\'s key is dropped, apps stay, and odd keys are ignored', (
   const order = start();
   order.set(['app:a', 'win:w1', 'win:w2', 'nope', 3], ['w2']);
   assert.deepEqual(order.get(), ['app:a', 'win:w2']);
-  assert.deepEqual(order.withOrder({ apps: [] }).order, ['app:a', 'win:w2']);
+  // withOrder only adds the order to the list it's given.
+  assert.deepEqual(order.withOrder({ apps: [] } as Partial<Tasks> as Tasks).order, ['app:a', 'win:w2']);
 });
 
 test('a broken order.json starts empty', () => {
   start();
   fs.writeFileSync(file(), '{ broken');
-  const order = (delete require.cache[require.resolve('../../src/main/order')], require('../../src/main/order'));
+  const order: OrderModule = (delete require.cache[require.resolve('../../src/main/order')], require('../../src/main/order'));
   assert.deepEqual(order.get(), []);
 });
 
 const { byOrder, orderKeys } = load('order.js');
-const app = (id) => ({ bundleId: id, name: id });
+const app = (id: string) => ({ bundleId: id, name: id });
+type App = ReturnType<typeof app>;
+type Item = { kind: 'window'; app: App; win: { id: string } } | { kind: 'group'; app: App; wins: unknown[] } | { kind: 'app'; app: App };
 const A = app('a');
 const B = app('b');
 const C = app('c');
-const win = (a, id) => ({ kind: 'window', app: a, win: { id } });
-const names = (items) => plain(items).map((it) => (it.kind === 'window' ? it.win.id : it.app.bundleId));
+const win = (a: App, id: string): Item => ({ kind: 'window', app: a, win: { id } });
+const names = (items: Item[]) => plain(items).map((it) => (it.kind === 'window' ? it.win.id : it.app.bundleId));
 
 test('without a saved order the bar keeps its own order', () => {
   const items = [win(A, 'w1'), win(B, 'w2')];
@@ -66,11 +72,11 @@ test('after a restart an app\'s windows, with new ids, come back where the app w
 });
 
 test('groups and windowless apps are kept by app', () => {
-  const items = [{ kind: 'group', app: A, wins: [] }, { kind: 'app', app: B }];
+  const items: Item[] = [{ kind: 'group', app: A, wins: [] }, { kind: 'app', app: B }];
   assert.deepEqual(names(byOrder(items, ['app:b', 'app:a'])), ['b', 'a']);
 });
 
 test('the keys to save mark each app at its first button', () => {
-  const items = [win(B, 'w2'), { kind: 'group', app: A, wins: [] }, win(B, 'w4'), win(A, 'w1')];
+  const items: Item[] = [win(B, 'w2'), { kind: 'group', app: A, wins: [] }, win(B, 'w4'), win(A, 'w1')];
   assert.deepEqual(plain(orderKeys(items)), ['app:b', 'win:w2', 'app:a', 'win:w4', 'win:w1']);
 });

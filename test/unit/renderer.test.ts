@@ -1,15 +1,16 @@
 // The renderer's shared helpers that are plain functions: color schemes,
 // light or dark and the accent color, and the clock text.
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const { load, plain } = require('../support/renderer');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { load, plain } from '../support/renderer';
+import type { SystemLook, Theme } from '../../src/shared/types';
 
 const window = load('schemes.js', 'theme.js', 'clock.js');
 const { schemeVars, schemes, resolveTheme, ACCENTS, clockText, dateText } = window;
 const LIGHT = { accent: '#007aff', appearance: 'light' };
 const DARK = { accent: '#0a84ff', appearance: 'dark' };
-const vars = (theme, colors, look = LIGHT) => plain(schemeVars({ theme, colors }, look));
-const filled = (v) => Object.values(v).every((x) => typeof x === 'string' && x.length > 0);
+const vars = (theme: Theme, colors: Record<string, unknown>, look = LIGHT) => plain(schemeVars({ theme, colors }, look));
+const filled = (v: Record<string, string>) => Object.values(v).every((x) => typeof x === 'string' && x.length > 0);
 
 test('the System theme takes no scheme variables', () => {
   assert.deepEqual(vars('system', { scheme: 'default' }), {});
@@ -67,7 +68,7 @@ test('mix goes from one color to the other', () => {
 });
 
 test('colors come back from hue, saturation and lightness, give or take rounding', () => {
-  const channels = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
   for (const hex of ['#4a9ff5', '#c8343b', '#808080', '#000000', '#ffffff']) {
     const back = channels(schemes.fromHsl(schemes.toHsl(hex)));
     channels(hex).forEach((v, i) => assert.ok(Math.abs(v - back[i]) <= 3, `${hex} came back as ${back}`));
@@ -75,7 +76,7 @@ test('colors come back from hue, saturation and lightness, give or take rounding
 });
 
 test('Follow Mac takes the Mac look, a picked accent has a light and a dark shade', () => {
-  const system = { appearance: 'dark', accent: '#ff9f0a' };
+  const system: SystemLook = { appearance: 'dark', accent: '#ff9f0a' };
   let r = plain(resolveTheme({ settings: { appearance: 'auto', accent: 'auto' }, system }));
   assert.equal(r.appearance, 'dark');
   assert.equal(r.accent, '#ff9f0a');

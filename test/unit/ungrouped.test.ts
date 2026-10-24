@@ -1,13 +1,16 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const { tempAppData } = require('../support/electron');
-const settings = require('../../src/main/settings');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'fs';
+import path from 'path';
+import { tempAppData } from '../support/electron';
+import * as settings from '../../src/main/settings';
+import type { TaskApp, Tasks, TaskWindow } from '../../src/shared/types';
+
+type UngroupedModule = typeof import('../../src/main/ungrouped');
 
 // ungrouped keeps its list and the live ids in memory, so each test loads
 // it fresh, on a fresh settings folder.
-function start() {
+function start(): UngroupedModule {
   tempAppData();
   settings.init();
   delete require.cache[require.resolve('../../src/main/ungrouped')];
@@ -15,9 +18,10 @@ function start() {
 }
 
 const file = () => path.join(settings.dataDir(), 'ungrouped.json');
-const win = (id, title) => ({ id, title });
-const state = (...apps) => ({ accessibility: true, apps });
-const safari = (...wins) => ({ pid: 2, name: 'Safari', bundleId: 'com.apple.Safari', path: '/Applications/Safari.app', windows: wins });
+// Made up windows and apps carry only what ungrouped reads.
+const win = (id: string, title: string) => ({ id, title }) as TaskWindow;
+const state = (...apps: TaskApp[]): Tasks => ({ accessibility: true, apps });
+const safari = (...wins: TaskWindow[]) => ({ pid: 2, name: 'Safari', bundleId: 'com.apple.Safari', path: '/Applications/Safari.app', windows: wins }) as TaskApp;
 
 test('a pulled out window is remembered by its app and title', () => {
   const u = start();
@@ -40,7 +44,7 @@ test('a saved entry comes back as its own button after a restart, one window per
   let u = start();
   u.ungroup('w2', state(safari(win('w1', 'Apple'), win('w2', 'News'))));
   delete require.cache[require.resolve('../../src/main/ungrouped')];
-  u = require('../../src/main/ungrouped');
+  u = require('../../src/main/ungrouped') as UngroupedModule;
   assert.deepEqual(u.withIds(state(safari(win('w5', 'News'), win('w6', 'News')))).ungrouped, ['w5']);
   assert.deepEqual(u.withIds(state(safari(win('w5', 'News'), win('w6', 'News')))).ungrouped, ['w5']);
 });
@@ -50,7 +54,7 @@ test('putting a window back forgets it, and put all back clears the file', () =>
   const s = state(safari(win('w1', 'Apple'), win('w2', 'News'), win('w3', 'Weather')));
   u.ungroup('w2', s);
   u.ungroup('w3', s);
-  const seen = [];
+  const seen: string[][] = [];
   u.onChange((ids) => seen.push(ids));
   u.regroup('w2');
   assert.deepEqual(u.withIds(s).ungrouped, ['w3']);

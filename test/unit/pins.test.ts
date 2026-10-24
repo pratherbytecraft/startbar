@@ -1,21 +1,21 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const { tempAppData } = require('../support/electron');
-const settings = require('../../src/main/settings');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'fs';
+import path from 'path';
+import { tempAppData } from '../support/electron';
+import * as settings from '../../src/main/settings';
 
 // pins keeps its list in memory once read, so each test loads it fresh.
-function freshPins() {
+function freshPins(): typeof import('../../src/main/pins') {
   delete require.cache[require.resolve('../../src/main/pins')];
   return require('../../src/main/pins');
 }
 
 // A fresh settings folder with fake apps in it, as folders named X.app.
-function start(apps = []) {
+function start(apps: string[] = []) {
   const root = tempAppData();
   settings.init();
-  const made = {};
+  const made: Record<string, string> = {};
   for (const name of apps) {
     made[name] = path.join(root, 'Apps', `${name}.app`);
     fs.mkdirSync(made[name], { recursive: true });
@@ -82,7 +82,7 @@ test('a broken pins file means no pins rather than the defaults', () => {
 test('listeners hear each change', () => {
   const { apps } = start(['A', 'B']);
   const pins = freshPins();
-  const seen = [];
+  const seen: number[] = [];
   const stop = pins.onChange((list) => seen.push(list.length));
   pins.set([apps.A]);
   pins.add(apps.B);
