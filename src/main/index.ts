@@ -1169,7 +1169,16 @@ app.whenReady().then(() => {
   applyAppearance();
   setAppMenu();
   wireIpc();
-  windowdrag.init();
+  // A settings window dragged to a screen's edge stops above the bar.
+  windowdrag.init({
+    cut: (f) => {
+      let cut = 0;
+      for (const { bottom, screen: b } of windows.barAreas()) {
+        if (f.x >= b.x && f.x < b.x + b.width && f.y >= b.y && f.y < b.y + b.height) cut = Math.max(cut, f.y + f.height - bottom);
+      }
+      return cut;
+    }
+  });
   windows.createBars(settings.get());
   windows.createMenu(settings.get());
   windows.createTip();
