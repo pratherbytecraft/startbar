@@ -5,14 +5,14 @@
 (function () {
   const THRESHOLD = 4;
 
-  function reorderable(list, { axis = 'x', onStart, onDrop }) {
-    let press = null;
+  function reorderable(list: HTMLElement, { axis = 'x', onStart, onDrop }: ReorderOptions) {
+    let press: { item: HTMLElement; x: number; y: number; moved: boolean } | null = null;
     let swallowClick = false;
 
     list.addEventListener('pointerdown', (e) => {
       swallowClick = false;
-      if (e.button !== 0 || e.target.closest('.no-drag')) return;
-      const item = e.target.closest('[data-key]');
+      if (e.button !== 0 || (e.target as HTMLElement).closest('.no-drag')) return;
+      const item = (e.target as HTMLElement).closest<HTMLElement>('[data-key]');
       if (!item || item.parentElement !== list) return;
       press = { item, x: e.clientX, y: e.clientY, moved: false };
     });
@@ -28,7 +28,7 @@
         if (onStart) onStart();
       }
       const pos = axis === 'x' ? e.clientX : e.clientY;
-      const others = [...list.children].filter((c) => c !== press.item && c.dataset.key);
+      const others = [...list.children].filter((c) => c !== press!.item && (c as HTMLElement).dataset.key); // press is set, checked above
       const before = others.find((c) => {
         const r = c.getBoundingClientRect();
         return pos < (axis === 'x' ? r.left + r.width / 2 : r.top + r.height / 2);
@@ -48,7 +48,7 @@
       item.classList.remove('dragging');
       list.classList.remove('reordering');
       swallowClick = true; // the click that ends a drag isn't a click
-      onDrop([...list.children].map((c) => c.dataset.key).filter(Boolean));
+      onDrop([...list.children].map((c) => (c as HTMLElement).dataset.key).filter(Boolean) as string[]);
     };
     // Icons are images, and dragging an image starts the browser's own drag,
     // which cancels this one.

@@ -5,11 +5,11 @@
 // window to it.
 (function () {
   const api = window.startbar;
-  const pv = document.getElementById('pv');
+  const pv = document.getElementById('pv')!; // in index.html
   const MAX = 6; // more than this and the group list is the better fit
-  let current = null; // the preview shown
+  let current: PreviewPayload | null = null; // the preview shown
 
-  function thumb(w, icon, p) {
+  function thumb(w: ListedWindow, icon: string, p: PreviewPayload) {
     const d = document.createElement('div');
     d.className = 'thumb' + (w.active ? ' current' : '');
     d.dataset.id = w.id;
@@ -63,9 +63,9 @@
   // Resting on a picture for a moment shows its window alone; moving off
   // puts things back, unless the pointer lands on another picture right
   // away, which keeps the same window to put back.
-  let peekTimer = null;
-  let unpeekTimer = null;
-  function enterThumb(id) {
+  let peekTimer: number | null = null;
+  let unpeekTimer: number | null = null;
+  function enterThumb(id: string) {
     clearTimeout(unpeekTimer);
     clearTimeout(peekTimer);
     peekTimer = setTimeout(() => api.previewPeek(id), 500);
@@ -77,7 +77,8 @@
   }
 
   // Dragging a picture out onto the bar gives that window its own button.
-  window.dragOut(pv, { payload: (el) => ({ id: el.dataset.id, pid: current.pid, title: el.querySelector('.label').textContent, icon: current.icon }) });
+  // A drag starts only on a picture, so a preview is shown and the picture has its id and label.
+  window.dragOut(pv, { payload: (el) => ({ id: el.dataset.id!, pid: current!.pid, title: el.querySelector('.label')!.textContent!, icon: current!.icon }) });
 
   api.onPreviewShow((p) => {
     current = p;
@@ -92,14 +93,14 @@
   // A minimized window's picture is the last one taken, faded, and keeps
   // its Minimized note.
   api.onPreviewImage(({ id, image, minimized }) => {
-    const d = [...pv.children].find((c) => c.dataset.id === id);
+    const d = [...pv.children].find((c) => (c as HTMLElement).dataset.id === id);
     if (!d) return;
-    const shot = d.querySelector('.shot');
+    const shot = d.querySelector('.shot')!; // every picture has one
     const pic = document.createElement('img');
     pic.className = 'pic';
     pic.alt = '';
     pic.src = image;
-    const parts = [pic];
+    const parts: HTMLElement[] = [pic];
     if (minimized) {
       shot.classList.add('was');
       const note = document.createElement('small');

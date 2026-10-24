@@ -4,10 +4,10 @@
 // the cursor while a window is dragged out of its group onto the bar.
 (function () {
   const api = window.startbar;
-  const tip = document.getElementById('tip');
+  const tip = document.getElementById('tip')!; // in index.html
 
   api.onTipText((payload) => {
-    const p = typeof payload === 'string' ? { text: payload } : payload;
+    const p: { text: string; icon?: string } = typeof payload === 'string' ? { text: payload } : payload;
     tip.classList.toggle('ghost', !!p.icon);
     tip.replaceChildren();
     if (p.icon) {

@@ -3,10 +3,10 @@
 // can size the window to fit.
 (function () {
   const api = window.startbar;
-  const list = document.getElementById('list');
-  let current = null; // the group shown
+  const list = document.getElementById('list')!; // in index.html
+  let current: GroupPayload | null = null; // the group shown
 
-  function row(w, icon) {
+  function row(w: ListedWindow & { pid: number }, icon: string) {
     const d = document.createElement('div');
     d.className = 'item' + (w.active ? ' current' : '') + (w.minimized ? ' dim' : '');
     d.dataset.id = w.id;
@@ -34,7 +34,8 @@
   }
 
   // Dragging a row out onto the bar gives that window its own button.
-  window.dragOut(list, { payload: (el) => ({ id: el.dataset.id, pid: current.pid, title: el.dataset.title, icon: current.icon }) });
+  // A drag starts only on a row, so a group is shown and the row has its id and title.
+  window.dragOut(list, { payload: (el) => ({ id: el.dataset.id!, pid: current!.pid, title: el.dataset.title!, icon: current!.icon }) });
 
   api.onGroupShow((group) => {
     current = group;

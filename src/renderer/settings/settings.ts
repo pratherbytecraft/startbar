@@ -2,17 +2,51 @@
 // search box. Each control writes straight to the settings, so the real bar
 // and the preview change as you go.
 (function () {
-  const api = window.startbar;
-  const el = (id) => document.getElementById(id);
-  const navEl = el('nav'), titleEl = el('title'), pagesEl = el('pages'), contentEl = el('content');
-  const queryEl = el('q'), previewEl = el('preview'), pv = el('pv');
+  // What PAGES is made of. A control's type names its builder in CONTROLS,
+  // and a row with a list draws one of LISTS.
+  type When = (s: Settings) => boolean;
+  type Unused = { when: When; note: string };
+  type Click = { text: string; click: () => void };
+  type Control =
+    | { type: 'toggle'; key: string }
+    | { type: 'swatches'; key: string }
+    | { type: 'shortcut'; key: string }
+    | { type: 'seg'; key: string; options: [string | boolean, string][] }
+    | { type: 'select'; key: string; options: [string, string][] }
+    | { type: 'range'; key: string; min: number; max: number; step: number; unit?: string }
+    | { type: 'stepper'; key: string; min: number; max: number }
+    | { type: 'mixer'; part: number; max: number; unit: string }
+    | { type: 'colors95'; keys: string[] }
+    | ({ type: 'button' } & Click)
+    | { type: 'buttons'; list: Click[] }
+    | { type: 'permission'; name: PermissionKey }
+    | { type: 'glass' | 'mixerLink' | 'login' | 'dock' | 'putBack' };
+  type Of<K extends Control['type']> = Extract<Control, { type: K }>;
+  type Hint = { when: (st: State) => unknown; text: string; link?: string; after?: string; click?: () => void; warn?: boolean };
+  type ControlRow = {
+    label: string; note?: string; control: Control; hint?: Hint; list?: undefined;
+    showWhen?: When; showIf?: (st: State) => boolean; systemOnly?: boolean; unused?: Unused; onlyWith?: Unused;
+  };
+  type ListName = 'pins' | 'folders' | 'keepRunning';
+  type Row = ControlRow | { list: ListName; label: string; note?: undefined; control?: undefined };
+  type Group = { title: string; rows: Row[]; showIf?: (st: State) => boolean };
+  type Page = { id: SettingsPage; title: string; color: string; groups: Group[]; note?: string; preview?: boolean; about?: boolean };
+  type PathList = {
+    get: () => string[]; name: (p: string) => string; where?: (p: string) => string; set: (list: string[]) => void;
+    remove: (p: string) => void; empty: string; fixed?: () => string[]; fixedNote?: string; unused?: When;
+  };
 
-  let state = null;
-  let tasks = { accessibility: null };
-  let page = 'appearance';
-  let syncs = []; // functions that refresh the drawn controls from the settings
-  const previewIcons = {};
-  let trayStatus = null; // volume, Wi-Fi and battery, for the preview's tray
+  const api = window.startbar;
+  const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T; // ids in index.html
+  const navEl = el('nav'), titleEl = el('title'), pagesEl = el('pages'), contentEl = el('content');
+  const queryEl = el<HTMLInputElement>('q'), previewEl = el('preview'), pv = el<HTMLIFrameElement>('pv');
+
+  let state = null as unknown as State; // null until getState answers; the controls sync only after
+  let tasks: Partial<TaskState> = { accessibility: null };
+  let page: SettingsPage = 'appearance';
+  let syncs: (() => void)[] = []; // functions that refresh the drawn controls from the settings
+  const previewIcons: Record<string, string> = {};
+  let trayStatus: Status | null = null; // volume, Wi-Fi and battery, for the preview's tray
 
   const ICONS = {
     appearance: '<circle cx="8" cy="8" r="6"/><path d="M8 2v12M2 8h12"/>',
@@ -25,16 +59,16 @@
     about: '<circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5v.5"/>'
   };
 
-  const SYSTEM_ONLY = { when: (s) => s.theme !== 'system', note: 'Not used by the classic themes.' };
-  const GLASS = { when: (s) => s.theme !== 'system' && s.theme !== 'classic-2009', note: 'Not used by Classic 2001 and Classic 1995.' };
+  const SYSTEM_ONLY: Unused = { when: (s) => s.theme !== 'system', note: 'Not used by the classic themes.' };
+  const GLASS: Unused = { when: (s) => s.theme !== 'system' && s.theme !== 'classic-2009', note: 'Not used by Classic 2001 and Classic 1995.' };
   // The accent color shows in the System theme, and in a classic theme set
   // to its System color scheme.
-  const ACCENT = {
+  const ACCENT: Unused = {
     when: (s) => s.theme !== 'system' && s.colors.scheme !== 'system',
     note: "Used by this theme's System color scheme."
   };
 
-  const PAGES = [
+  const PAGES: Page[] = [
     {
       id: 'appearance', title: 'Appearance', color: '#5e5ce6',
       groups: [
@@ -50,7 +84,7 @@
               control: { type: 'select', key: 'colors.scheme', options: [['system', 'System'], ['blue', 'Blue'], ['olive', 'Olive Green'], ['silver', 'Silver']] } },
             { label: 'Color scheme', note: 'Pick one, System for your accent color and light or dark, or change a color below for your own.',
               showWhen: (s) => s.theme === 'classic-1995',
-              control: { type: 'select', key: 'colors.scheme', options: [['system', 'System'], ...Object.entries(window.schemes.W95).map(([id, s]) => [id, s[0]]), ['custom', 'Custom']] } },
+              control: { type: 'select', key: 'colors.scheme', options: [['system', 'System'], ...Object.entries(window.schemes.W95).map(([id, s]): [string, string] => [id, s[0]]), ['custom', 'Custom']] } },
             { label: 'Glass color', note: 'System follows your accent color.', showWhen: (s) => s.theme === 'classic-2009', control: { type: 'glass' } },
             { label: 'Color intensity', showWhen: (s) => s.theme === 'classic-2009', control: { type: 'range', key: 'colors.intensity', min: 10, max: 80, step: 1, unit: '%' } },
             { label: 'Color mixer', showWhen: (s) => s.theme === 'classic-2009', control: { type: 'mixerLink' } },
@@ -210,7 +244,7 @@
             { label: 'Show seconds', control: { type: 'toggle', key: 'clock.seconds' } },
             { label: 'Show the date under the time', control: { type: 'toggle', key: 'clock.showDate' } },
             { label: 'Date style',
-              control: { type: 'select', key: 'clock.dateStyle', options: ['short', 'weekday', 'numeric', 'dayFirst'].map((v) => [v, window.dateText(new Date(), v)]) } },
+              control: { type: 'select', key: 'clock.dateStyle', options: ['short', 'weekday', 'numeric', 'dayFirst'].map((v): [string, string] => [v, window.dateText(new Date(), v)]) } },
             { label: 'Clicking the clock opens', note: 'Hovering always shows the full date.',
               control: { type: 'select', key: 'clock.click', options: [['calendar', 'A small calendar'], ['app', 'The Calendar app'], ['nothing', 'Nothing']] } }
           ]
@@ -327,13 +361,13 @@
 
   // MARK: settings access
 
-  function getPath(path) {
-    return path.split('.').reduce((o, k) => (o == null ? o : o[k]), state.settings);
+  function getPath(path: string) {
+    return path.split('.').reduce<unknown>((o, k) => (o == null ? o : (o as Record<string, unknown>)[k]), state.settings);
   }
 
-  function setPath(path, value) {
+  function setPath(path: string, value: unknown) {
     const keys = path.split('.');
-    const patch = {};
+    const patch: Record<string, unknown> = {};
     let o = patch;
     keys.slice(0, -1).forEach((k) => { o = o[k] = {}; });
     o[keys[keys.length - 1]] = value;
@@ -342,33 +376,33 @@
 
   // MARK: controls
 
-  function node(tag, cls, text) {
+  function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string | null, text?: string | null) {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
     if (text != null) n.textContent = text;
     return n;
   }
 
-  function toggle(c) {
+  function toggle(c: Of<'toggle'>) {
     const t = node('div', 'toggle');
     t.addEventListener('click', () => setPath(c.key, !getPath(c.key)));
     syncs.push(() => t.classList.toggle('on', !!getPath(c.key)));
     return t;
   }
 
-  function seg(c) {
+  function seg(c: Of<'seg'>) {
     const s = node('div', 'seg');
     const parts = c.options.map(([v, text]) => {
       const p = node('span', null, text);
       p.addEventListener('click', () => setPath(c.key, v));
       s.append(p);
-      return [v, p];
+      return [v, p] as const;
     });
     syncs.push(() => parts.forEach(([v, p]) => p.classList.toggle('on', getPath(c.key) === v)));
     return s;
   }
 
-  function select(c) {
+  function select(c: Of<'select'>) {
     const s = node('select');
     for (const [v, text] of c.options) {
       const o = node('option', null, text);
@@ -376,7 +410,7 @@
       s.append(o);
     }
     s.addEventListener('change', () => setPath(c.key, s.value));
-    syncs.push(() => { s.value = getPath(c.key); });
+    syncs.push(() => { s.value = getPath(c.key) as string; });
     return s;
   }
 
@@ -385,10 +419,10 @@
   const W95_KEYS = ['face', 'selected', 'title1', 'title2'];
   const w95Now = () => {
     const list = window.schemes.w95Colors(state.settings.colors, window.resolveTheme(state));
-    return Object.fromEntries(W95_KEYS.map((k, i) => [k, list[i]]));
+    return Object.fromEntries(W95_KEYS.map((k, i) => [k, list[i]] as const));
   };
-  let colorWrite = null; // the picker sends many changes a second, so writes wait a moment
-  function colors95(c) {
+  let colorWrite: number | null = null; // the picker sends many changes a second, so writes wait a moment
+  function colors95(c: Of<'colors95'>) {
     const box = node('div', 'colors');
     const inputs = c.keys.map((k) => {
       const input = node('input');
@@ -399,7 +433,7 @@
         colorWrite = setTimeout(() => api.updateSettings({ colors: { scheme: 'custom', ...next } }), 60);
       });
       box.append(input);
-      return [k, input];
+      return [k, input] as const;
     });
     syncs.push(() => {
       const now = w95Now();
@@ -422,7 +456,7 @@
       d.title = label;
       d.addEventListener('click', () => setPath('colors.scheme', id));
       box.append(d);
-      return [id, d];
+      return [id, d] as const;
     });
     wrap.append(box, name);
     syncs.push(() => {
@@ -441,13 +475,14 @@
     });
     return l;
   }
-  function mixer(c) {
+  // The DOM turns the numbers given to an input into strings.
+  function mixer(c: Of<'mixer'>) {
     const box = node('div', 'ctl-inner');
     box.style.display = 'contents';
     const r = node('input');
     r.type = 'range';
-    r.min = 0;
-    r.max = c.max;
+    r.min = 0 as unknown as string;
+    r.max = c.max as unknown as string;
     const val = node('span', 'val');
     let frame = 0;
     r.addEventListener('input', () => {
@@ -459,22 +494,22 @@
     });
     syncs.push(() => {
       const v = window.schemes.toHsl(glassNow())[c.part];
-      if (document.activeElement !== r) r.value = v;
-      val.textContent = Math.round(document.activeElement === r ? r.value : v) + c.unit;
+      if (document.activeElement !== r) r.value = v as unknown as string;
+      val.textContent = Math.round((document.activeElement === r ? r.value : v) as number) + c.unit; // Math.round reads the string as a number
     });
     box.append(r, val);
     return box;
   }
 
-  function swatches(c) {
+  function swatches(c: Of<'swatches'>) {
     const box = node('div', 'swatches');
-    const names = { auto: 'Follow Mac', blue: 'Blue', purple: 'Purple', pink: 'Pink', red: 'Red', orange: 'Orange', yellow: 'Yellow', green: 'Green', graphite: 'Graphite' };
+    const names: Record<string, string> = { auto: 'Follow Mac', blue: 'Blue', purple: 'Purple', pink: 'Pink', red: 'Red', orange: 'Orange', yellow: 'Yellow', green: 'Green', graphite: 'Graphite' };
     const dots = Object.keys(names).map((v) => {
       const d = node('i', v === 'auto' ? 'auto' : null);
       d.title = names[v];
       d.addEventListener('click', () => setPath(c.key, v));
       box.append(d);
-      return [v, d];
+      return [v, d] as const;
     });
     syncs.push(() => {
       const dark = window.resolveTheme(state).appearance === 'dark';
@@ -487,14 +522,15 @@
   }
 
   // Dragging writes as it goes, at most once a frame.
-  function range(c) {
+  function range(c: Of<'range'>) {
     const box = node('div', 'ctl-inner');
     box.style.display = 'contents';
     const r = node('input');
     r.type = 'range';
-    r.min = c.min;
-    r.max = c.max;
-    r.step = c.step;
+    // The DOM turns these numbers into strings, and the setting's too.
+    r.min = c.min as unknown as string;
+    r.max = c.max as unknown as string;
+    r.step = c.step as unknown as string;
     const val = node('span', 'val');
     let frame = 0;
     r.addEventListener('input', () => {
@@ -503,35 +539,35 @@
       frame = requestAnimationFrame(() => setPath(c.key, Number(r.value)));
     });
     syncs.push(() => {
-      if (document.activeElement !== r) r.value = getPath(c.key);
-      val.textContent = getPath(c.key) + (c.unit || ' px');
+      if (document.activeElement !== r) r.value = getPath(c.key) as string;
+      val.textContent = (getPath(c.key) as number) + (c.unit || ' px');
     });
     box.append(r, val);
     return box;
   }
 
-  function stepper(c) {
+  function stepper(c: Of<'stepper'>) {
     const s = node('div', 'stepper');
     const boxEl = node('span', 'box');
     const arrows = node('span', 'arrows');
     const up = node('i', null, '▲');
     const down = node('i', null, '▼');
-    const step = (d) => setPath(c.key, Math.max(c.min, Math.min(c.max, getPath(c.key) + d)));
+    const step = (d: number) => setPath(c.key, Math.max(c.min, Math.min(c.max, (getPath(c.key) as number) + d)));
     up.addEventListener('click', () => step(1));
     down.addEventListener('click', () => step(-1));
     arrows.append(up, down);
     s.append(boxEl, arrows);
-    syncs.push(() => { boxEl.textContent = getPath(c.key); });
+    syncs.push(() => { boxEl.textContent = getPath(c.key) as string; }); // a number, which the DOM turns into a string
     return s;
   }
 
-  function button(c) {
+  function button(c: Click) {
     const b = node('span', 'btn', c.text);
     b.addEventListener('click', c.click);
     return b;
   }
 
-  function buttons(c) {
+  function buttons(c: Of<'buttons'>) {
     const box = node('div', 'ctl-inner');
     box.style.display = 'contents';
     box.append(...c.list.map(button));
@@ -540,11 +576,11 @@
 
   // The login item as macOS has it. A new login item can wait for the
   // person to allow it in System Settings, which the row says.
-  function login(c, rowEl) {
+  function login(c: Of<'login'>, rowEl: HTMLElement) {
     const t = node('div', 'toggle');
     t.addEventListener('click', () => api.setLoginItem(!state.loginItem.on));
     const warn = node('small', 'warn hidden', 'macOS is waiting for you to allow Startbar in System Settings, General, Login Items.');
-    rowEl.querySelector('.lbl').append(warn);
+    rowEl.querySelector('.lbl')!.append(warn); // every row has one
     syncs.push(() => {
       t.classList.toggle('on', !!state.loginItem.on);
       warn.classList.toggle('hidden', !state.loginItem.needsApproval);
@@ -554,14 +590,14 @@
 
   // Where a permission stands, with the button that asks for it, or opens
   // System Settings once it's been turned down.
-  const STANDING = {
+  const STANDING: Record<string, [string, string]> = {
     allowed: ['', 'Allowed'],
     notAsked: ['wait', 'Not asked yet'],
     denied: ['bad', 'Turned off'],
     off: ['warn', 'Location Services is off']
   };
 
-  function permission(c) {
+  function permission(c: Of<'permission'>) {
     const box = node('div', 'ctl-inner');
     box.style.display = 'contents';
     const status = node('span', 'status');
@@ -573,7 +609,7 @@
       // Accessibility can't be asked for, only switched on in System Settings.
       const acc = tasks.accessibility;
       const now = c.name === 'accessibility' ? (acc ? 'allowed' : acc === false ? 'denied' : null) : state.permissions[c.name];
-      const [cls, label] = STANDING[now] || ['wait', 'Checking'];
+      const [cls, label] = STANDING[now as string] || ['wait', 'Checking']; // null finds nothing too
       dot.className = cls;
       text.textContent = label;
       b.textContent = now === 'notAsked' ? 'Allow…' : 'Open System Settings…';
@@ -586,8 +622,8 @@
   // Whether the Dock hides itself, with a button to change it. A Dock on
   // the left or right doesn't share the bottom edge, but minimized windows
   // fly off toward it, so the button offers to move it down.
-  function dock(c, rowEl) {
-    const note = rowEl.querySelector('.lbl small'); // about sharing the bottom edge
+  function dock(c: Of<'dock'>, rowEl: HTMLElement) {
+    const note = rowEl.querySelector('.lbl small')!; // about sharing the bottom edge
     const box = node('div', 'ctl-inner');
     box.style.display = 'contents';
     const status = node('span', 'status');
@@ -609,7 +645,7 @@
       text.textContent = !d ? 'Checking' : side ? `The Dock is on the ${d.position}` : d.autohide ? 'The Dock hides itself' : 'The Dock is visible';
       b.textContent = side ? 'Move to the Bottom' : d && d.autohide ? 'Show the Dock' : 'Hide the Dock';
       b.classList.toggle('hidden', !d);
-      note.classList.toggle('hidden', side);
+      note.classList.toggle('hidden', side as boolean); // null counts as false
     });
     box.append(status, b);
     return box;
@@ -617,14 +653,14 @@
 
   // Keyboard shortcut field. Records the next key with at least one
   // modifier (function keys work alone) as an Electron accelerator.
-  const SYMBOLS = { Control: '⌃', Alt: '⌥', Shift: '⇧', Command: '⌘' };
-  const NAMED = {
+  const SYMBOLS: Record<string, string> = { Control: '⌃', Alt: '⌥', Shift: '⇧', Command: '⌘' };
+  const NAMED: Record<string, string> = {
     Space: 'Space', Enter: 'Return', Tab: 'Tab', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
     Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Semicolon: ';',
     Quote: "'", Comma: ',', Period: '.', Slash: '/', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown'
   };
 
-  function keyName(code) {
+  function keyName(code: string) {
     let m = /^Key([A-Z])$/.exec(code);
     if (m) return m[1];
     m = /^Digit(\d)$/.exec(code);
@@ -633,21 +669,21 @@
     return NAMED[code] || null;
   }
 
-  function mods(e) {
-    return [e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Command'].filter(Boolean);
+  function mods(e: KeyboardEvent) {
+    return [e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Command'].filter(Boolean) as string[];
   }
 
-  function pretty(accel) {
+  function pretty(accel: string) {
     if (!accel) return 'None';
     return accel.split('+').map((p) => SYMBOLS[p] || p).join(' ');
   }
 
-  function shortcut(c, rowEl) {
+  function shortcut(c: Of<'shortcut'>, rowEl: HTMLElement) {
     const k = node('div', 'kbd');
     k.tabIndex = 0;
     let recording = false;
     const warn = node('small', 'warn hidden');
-    rowEl.querySelector('.lbl').append(warn);
+    rowEl.querySelector('.lbl')!.append(warn); // every row has one
 
     function stop() {
       if (!recording) return;
@@ -683,7 +719,7 @@
       stop();
     });
     syncs.push(() => {
-      if (!recording) k.textContent = pretty(getPath(c.key));
+      if (!recording) k.textContent = pretty(getPath(c.key) as string);
       const err = state.shortcutError;
       warn.textContent = err === 'taken' ? 'Another app is using this shortcut. Pick another one.'
         : err === 'invalid' ? "macOS doesn't accept this shortcut. Pick another one." : '';
@@ -693,24 +729,24 @@
   }
 
   // Pulled out windows go back into their groups and are forgotten, see
-  // main/ungrouped.js. Greyed while nothing is remembered.
+  // main/ungrouped.ts. Greyed while nothing is remembered.
   function putBack() {
     const b = button({ text: 'Put All Windows Back', click: () => api.putAllBack() });
-    syncs.push(() => b.classList.toggle('disabled', !(tasks.remembered > 0)));
+    syncs.push(() => b.classList.toggle('disabled', !((tasks.remembered as number) > 0))); // undefined isn't > 0 either
     return b;
   }
 
-  const CONTROLS = { toggle, seg, select, swatches, colors95, glass, mixerLink, mixer, range, stepper, button, buttons, login, permission, dock, shortcut, putBack };
+  const CONTROLS: { [K in Control['type']]: (c: Of<K>, rowEl: HTMLElement) => HTMLElement } = { toggle, seg, select, swatches, colors95, glass, mixerLink, mixer, range, stepper, button, buttons, login, permission, dock, shortcut, putBack };
 
   // Lists of paths drawn inside a group, one row each, drag to reorder:
   // the pinned apps, the folders added to the Start menu and the apps left
   // running. A list's fixed rows come first, greyed, and can't be moved or
   // removed.
   const home = () => state.home;
-  const LISTS = {
+  const LISTS: Record<ListName, PathList> = {
     pins: {
       get: () => state.pins,
-      name: (p) => p.split('/').pop().replace(/\.app$/, ''),
+      name: (p) => p.split('/').pop()!.replace(/\.app$/, ''),
       set: (list) => api.setPins(list),
       remove: (p) => api.unpin(p),
       empty: 'No pinned apps.'
@@ -727,16 +763,16 @@
       get: () => state.settings.quitApps.keepRunning,
       fixed: () => state.alwaysRunning,
       fixedNote: 'Always left running',
-      name: (p) => p.split('/').pop().replace(/\.app$/, ''),
+      name: (p) => p.split('/').pop()!.replace(/\.app$/, ''),
       set: (list) => api.setKeepRunning(list),
       remove: (p) => api.setKeepRunning(state.settings.quitApps.keepRunning.filter((x) => x !== p)),
       unused: (s) => !s.quitApps.on,
       empty: 'No apps added.'
     }
   };
-  const listKey = (paths) => JSON.stringify(paths.map((p) => [p, !!previewIcons[p]]));
+  const listKey = (paths: string[]) => JSON.stringify(paths.map((p) => [p, !!previewIcons[p]]));
 
-  function listRow(spec, p) {
+  function listRow(spec: PathList, p: string) {
     const r = node('div', 'row');
     r.dataset.key = p;
     const grip = node('span', 'handle');
@@ -752,7 +788,7 @@
     return r;
   }
 
-  function fixedRow(spec, p) {
+  function fixedRow(spec: PathList, p: string) {
     const r = node('div', 'row fixed');
     const img = node('img');
     img.alt = '';
@@ -763,7 +799,7 @@
     return r;
   }
 
-  function pathList(name) {
+  function pathList(name: ListName) {
     const spec = LISTS[name];
     const list = node('div', 'paths');
     let drawn = '';
@@ -790,28 +826,29 @@
 
   // MARK: drawing
 
-  function row(r) {
+  function row(r: ControlRow) {
     const rowEl = node('div', 'row');
     const lbl = node('div', 'lbl', r.label);
     if (r.note) lbl.append(node('small', null, r.note));
     const ctl = node('div', 'ctl');
     rowEl.append(lbl, ctl);
-    ctl.append(CONTROLS[r.control.type](r.control, rowEl));
+    // Each builder takes its own type of control, the one r.control names.
+    ctl.append((CONTROLS[r.control.type] as (c: Control, rowEl: HTMLElement) => HTMLElement)(r.control, rowEl));
     // A line that shows only in some states, sometimes ending in a link.
     if (r.hint) {
       const hint = node('small', r.hint.warn ? 'hint warn hidden' : 'hint hidden', r.hint.text);
       if (r.hint.link) {
         const link = node('span', 'link', r.hint.link);
-        link.addEventListener('click', r.hint.click);
+        link.addEventListener('click', r.hint.click!); // a hint with a link has a click
         hint.append(link, r.hint.after || '');
       }
       lbl.append(hint);
-      syncs.push(() => hint.classList.toggle('hidden', !r.hint.when(state)));
+      syncs.push(() => hint.classList.toggle('hidden', !r.hint!.when(state))); // checked above
     }
-    if (r.showWhen) syncs.push(() => rowEl.classList.toggle('hidden', !r.showWhen(state.settings)));
-    if (r.showIf) syncs.push(() => rowEl.classList.toggle('hidden', !r.showIf(state)));
+    if (r.showWhen) syncs.push(() => rowEl.classList.toggle('hidden', !r.showWhen!(state.settings)));
+    if (r.showIf) syncs.push(() => rowEl.classList.toggle('hidden', !r.showIf!(state)));
     const unusedIf = r.systemOnly ? SYSTEM_ONLY
-      : r.onlyWith ? { when: (s) => !r.onlyWith.when(s), note: r.onlyWith.note } : r.unused;
+      : r.onlyWith ? { when: (s: Settings) => !r.onlyWith!.when(s), note: r.onlyWith.note } : r.unused;
     if (unusedIf) {
       const note = node('small', 'unused-note hidden', unusedIf.note);
       lbl.append(note);
@@ -824,14 +861,14 @@
     return rowEl;
   }
 
-  function groups(list) {
-    const out = [];
+  function groups(list: Group[]) {
+    const out: HTMLElement[] = [];
     for (const g of list) {
       if (g.rows.length === 0) continue;
       const head = node('h2', null, g.title);
       const box = node('div', 'group');
       g.rows.forEach((r) => box.append(r.list ? pathList(r.list) : row(r)));
-      if (g.showIf) syncs.push(() => [head, box].forEach((el) => el.classList.toggle('hidden', !g.showIf(state))));
+      if (g.showIf) syncs.push(() => [head, box].forEach((el) => el.classList.toggle('hidden', !g.showIf!(state))));
       out.push(head, box);
     }
     return out;
@@ -849,7 +886,7 @@
     const version = node('div', 'ver');
     syncs.push(() => { version.textContent = 'Version ' + state.version; });
     const links = node('div', 'links');
-    for (const [key, text] of [['website', 'Website'], ['github', 'GitHub'], ['community', 'Community'], ['kofi', 'Ko-fi']]) {
+    for (const [key, text] of [['website', 'Website'], ['github', 'GitHub'], ['community', 'Community'], ['kofi', 'Ko-fi']] satisfies [LinkKey, string][]) {
       const b = node('span', 'pill', text);
       b.addEventListener('click', () => api.openLink(key));
       links.append(b);
@@ -865,13 +902,13 @@
     checkCtl.append(button({ text: 'Check Now', click: () => api.checkUpdates() }));
     check.append(checkLbl, checkCtl);
     syncs.push(() => {
-      const u = state.update || { state: 'idle' };
-      line.textContent = {
+      const u: UpdateStatus = state.update || { state: 'idle' };
+      line.textContent = ({
         checking: 'Checking…',
         current: 'Startbar is up to date.',
         available: `Version ${u.latest} is out. Run the line below in Terminal, then quit Startbar and open it again.`,
         failed: "The check didn't go through. Try again in a bit."
-      }[u.state] || 'Startbar checks for a newer version now and then.';
+      } as Record<string, string>)[u.state] || 'Startbar checks for a newer version now and then.'; // idle has no line of its own
       line.classList.toggle('available', u.state === 'available');
     });
     // The line matches how this copy was installed, Homebrew or npm.
@@ -882,7 +919,7 @@
     small.append(command);
     installLbl.append(small);
     const installCtl = node('div', 'ctl');
-    const copy = button({ text: 'Copy', click: () => {
+    const copy: HTMLElement = button({ text: 'Copy', click: () => {
       api.copyText(state.updateCommand);
       copy.textContent = 'Copied';
       setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
@@ -925,7 +962,7 @@
           ctl.append(node('span', 'sib-state', 'Installed'), button({ text: 'Open', click: () => api.openSibling(s.key) }));
         } else {
           lbl.append(node('code', null, s.line));
-          const copy = button({ text: 'Copy', click: () => {
+          const copy: HTMLElement = button({ text: 'Copy', click: () => {
             api.copyText(s.line);
             copy.textContent = 'Copied';
             setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
@@ -962,15 +999,15 @@
     syncs = [];
   }
 
-  function draw(children, title) {
+  function draw(children: HTMLElement[], title: string) {
     titleEl.textContent = title;
     pagesEl.replaceChildren(...children);
     if (state) syncs.forEach((fn) => fn());
   }
 
-  function show(id) {
+  function show(id: SettingsPage) {
     page = id;
-    const p = PAGES.find((x) => x.id === id);
+    const p = PAGES.find((x) => x.id === id)!; // every page id is in PAGES
     navEl.querySelectorAll('a').forEach((a) => a.classList.toggle('on', a.dataset.page === id));
     previewEl.classList.toggle('hidden', !!p.about || p.preview === false);
     reset();
@@ -981,20 +1018,21 @@
   }
 
   // A page from a link or from the main process. Leaves search, like the sidebar does.
-  function openPage(id) {
+  function openPage(id: SettingsPage) {
     if (!PAGES.some((p) => p.id === id)) return;
     queryEl.value = '';
     show(id);
   }
 
   // Search shows every matching row, under its page's name.
-  function search(q) {
+  function search(q: string) {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     if (words.length === 0) return show(page);
     navEl.querySelectorAll('a').forEach((a) => a.classList.remove('on'));
     previewEl.classList.remove('hidden');
-    const text = (r) => [r.label, r.note, ...((r.control && r.control.options) || []).map((o) => o[1])].join(' ').toLowerCase();
-    const matches = (r) => words.every((w) => text(r).includes(w));
+    // Only selects and segments have options.
+    const text = (r: Row) => [r.label, r.note, ...((r.control && (r.control as { options?: [unknown, string][] }).options) || []).map((o) => o[1])].join(' ').toLowerCase();
+    const matches = (r: Row) => words.every((w) => text(r).includes(w));
     const found = PAGES.filter((p) => !p.about).map((p) => ({
       title: p.title,
       rows: p.groups.flatMap((g) => g.rows.filter(matches))
@@ -1021,7 +1059,7 @@
 
   // Icons for the sample apps and the pins, fetched once each.
   const askedIcons = new Set();
-  function fetchIcons(paths) {
+  function fetchIcons(paths: string[]) {
     const missing = paths.filter((p) => !askedIcons.has(p));
     if (missing.length === 0) return;
     missing.forEach((p) => askedIcons.add(p));
@@ -1032,7 +1070,7 @@
     });
   }
 
-  function apply(next) {
+  function apply(next: State) {
     state = next;
     fetchIcons(state.pins);
     const theme = window.resolveTheme(state);
@@ -1056,20 +1094,20 @@
   drawNav();
   // Opened on a page, for example About from the Start menu's update item.
   const asked = location.hash.slice(1);
-  if (PAGES.some((p) => p.id === asked)) page = asked;
+  if (PAGES.some((p) => p.id === asked)) page = asked as SettingsPage; // checked against PAGES
   show(page);
   api.onSettingsPage(openPage);
   api.getState().then(apply);
   api.onState(apply);
   // The task list comes in a few times a second. Only the permission row
   // and the Put All Windows Back button use it.
-  const applyTasks = (t) => {
+  const applyTasks = (t: TaskState) => {
     const changed = t.accessibility !== tasks.accessibility || t.remembered !== tasks.remembered;
     tasks = t;
     if (changed && state) syncs.forEach((fn) => fn());
   };
   api.getTasks().then(applyTasks);
-  const applyStatus = (s) => {
+  const applyStatus = (s: Status) => {
     trayStatus = s;
     pushPreview();
   };

@@ -8,15 +8,15 @@
 (function () {
   const THRESHOLD = 4;
 
-  function dragOut(list, { payload }) {
+  function dragOut(list: HTMLElement, { payload }: { payload: (el: HTMLElement) => DragPayload }) {
     const api = window.startbar;
-    let press = null;
+    let press: { el: HTMLElement; x: number; y: number; moved: boolean } | null = null;
     let swallowClick = false;
 
     list.addEventListener('pointerdown', (e) => {
       swallowClick = false;
-      if (e.button !== 0 || e.target.closest('.no-drag')) return;
-      const el = e.target.closest('[data-id]');
+      if (e.button !== 0 || (e.target as HTMLElement).closest('.no-drag')) return;
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-id]');
       if (!el || !list.contains(el)) return;
       press = { el, x: e.clientX, y: e.clientY, moved: false };
     });
@@ -33,7 +33,7 @@
       api.dragOut({ phase: 'move', x: e.screenX, y: e.screenY });
     });
 
-    const end = (e) => {
+    const end = (e: PointerEvent) => {
       if (!press) return;
       const { el, moved } = press;
       press = null;

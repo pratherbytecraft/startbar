@@ -1,5 +1,5 @@
 // The order of the bar's buttons once some were dragged, as keys (see
-// renderer/shared/order.js), saved in order.json next to pins.json. Apps
+// renderer/shared/order.ts), saved in order.json next to pins.json. Apps
 // keep their place across restarts. Windows are kept by id, which lasts as
 // long as the window, so a closed window's key is dropped.
 import fs from 'fs';

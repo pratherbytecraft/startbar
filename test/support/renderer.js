@@ -1,11 +1,12 @@
 // Loads the renderer's shared scripts, which attach their functions to
-// window, into a fresh sandbox and returns that window. Objects made in the
-// sandbox have its own prototypes, so compare them through plain().
+// window, into a fresh sandbox and returns that window. They're TypeScript,
+// so this reads the built ones in dist (npm test builds first). Objects made
+// in the sandbox have its own prototypes, so compare them through plain().
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const SHARED = path.join(__dirname, '..', '..', 'src', 'renderer', 'shared');
+const SHARED = path.join(__dirname, '..', '..', 'dist', 'renderer', 'shared');
 
 function load(...names) {
   const window = {};

@@ -388,7 +388,7 @@ export interface PreviewImage {
 }
 
 // A window dragged out of the group list or the previews, see
-// renderer/shared/dragout.js. Points are on the screen.
+// renderer/shared/dragout.ts. Points are on the screen.
 export type DragOut =
   | { phase: 'start'; x: number; y: number; id: string; pid: number; title: string; icon: string }
   | { phase: 'move' | 'drop' | 'cancel'; x: number; y: number };

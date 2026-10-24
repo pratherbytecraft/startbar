@@ -1,0 +1,4 @@
+{
+  "extends": "../tsconfig.base.json",
+  "files": ["../shared/schemes.ts", "../shared/theme.ts", "../shared/dragout.ts", "group.ts", "../global.d.ts"]
+}

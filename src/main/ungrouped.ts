@@ -1,5 +1,5 @@
 // Windows pulled out of their app's group onto their own button, see
-// collapse in renderer/bar/bar.js. Saved by app and title in ungrouped.json
+// collapse in renderer/bar/bar.ts. Saved by app and title in ungrouped.json
 // next to pins.json, so the same window comes back as its own button after
 // a restart while its title matches. While Startbar runs the window ids are
 // kept too, so a window stays out when its title changes. The bar only sees

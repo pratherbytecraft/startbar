@@ -1,5 +1,5 @@
 // A stand-in for the preload's window.startbar, with the same function
-// names (read from src/preload.js). Every function the page calls is noted
+// names (read from src/preload.ts). Every function the page calls is noted
 // in calls as [name, ...args]. The ones that ask the main
 // process for something answer from state and extra, and updateSettings
 // merges the patch and sends the new state back, like the main process.

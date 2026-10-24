@@ -29,7 +29,7 @@ import type {
 } from '../shared/types';
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
-// it stays the same across updates (see scripts/build-app.js).
+// it stays the same across updates (see scripts/build-app.ts).
 import PKG from '../../package.json';
 const VERSION = PKG.version;
 import { helperPath } from '../scripts/build-helper';
@@ -373,7 +373,7 @@ function checkScreen() {
 // entry in the list, switched on but no longer counting (it happened with the
 // move to name based signing in 0.2.0). With previews on, when it worked under
 // another build, or before builds were stamped, Startbar clears its entry and
-// asks once more, the way access.js does for Accessibility.
+// asks once more, the way access.ts does for Accessibility.
 function screenAfterUpdate(allowed: boolean) {
   const s = settings.get();
   const now = access.buildStamp();
@@ -909,7 +909,7 @@ function ungroupWindow(id: string) {
 const taskState = () => order.withOrder(ungrouped.withIds(tasks.get()));
 
 // A window dragged out of the group list or the preview, see
-// renderer/shared/dragout.js. The bar under the pointer shows a slot for
+// renderer/shared/dragout.ts. The bar under the pointer shows a slot for
 // it; dropping there pulls the window out of its group. The tip window is
 // the ghost under the cursor.
 let drag: { id: string; pid: number; bar: BrowserWindow | null } | null = null; // { id, pid, bar }

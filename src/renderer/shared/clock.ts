@@ -1,7 +1,7 @@
 // The clock's text for a date and the clock settings. Shared by the bar and
 // the settings preview.
 (function () {
-  function dateText(d, style) {
+  function dateText(d: Date, style: string) {
     switch (style) {
       case 'weekday': return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
       case 'numeric': return d.toLocaleDateString([], { year: '2-digit', month: 'numeric', day: 'numeric' });
@@ -10,7 +10,7 @@
     }
   }
 
-  function clockText(d, c) {
+  function clockText(d: Date, c: ClockSettings) {
     return {
       time: d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: c.seconds ? '2-digit' : undefined, hour12: c.hour12 }),
       date: dateText(d, c.dateStyle),

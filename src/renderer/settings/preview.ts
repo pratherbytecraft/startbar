@@ -2,16 +2,17 @@
 // Finder group, an active Safari window, Notes and a minimized Terminal. It
 // follows the theme, colors, size, labels, grouping and clock settings.
 (function () {
-  const tasksEl = document.getElementById('tasks');
-  const quickEl = document.querySelector('.quick');
-  const trayEl = document.getElementById('tray-icons');
-  const chevEl = document.getElementById('chev');
-  let status = null;
-  const clock = document.getElementById('clock');
-  const timeEl = document.getElementById('time');
-  const dateEl = document.getElementById('date');
-  let state = null;
-  let icons = {};
+  // Every element looked up here is in preview.html.
+  const tasksEl = document.getElementById('tasks')!;
+  const quickEl = document.querySelector('.quick')!;
+  const trayEl = document.getElementById('tray-icons')!;
+  const chevEl = document.getElementById('chev')!;
+  let status: Status | null = null;
+  const clock = document.getElementById('clock')!;
+  const timeEl = document.getElementById('time')!;
+  const dateEl = document.getElementById('date')!;
+  let state = null as unknown as State; // drawn from only once the window sends it
+  let icons: Record<string, string> = {};
 
   const SAMPLE = [
     { name: 'Finder', path: '/System/Library/CoreServices/Finder.app', windows: ['Downloads', 'Documents', 'Applications'] },
@@ -20,7 +21,7 @@
     { name: 'Terminal', path: '/System/Applications/Utilities/Terminal.app', windows: ['zsh'], dim: true }
   ];
 
-  function button(app, title, count) {
+  function button(app: (typeof SAMPLE)[number], title: string, count?: number) {
     const b = document.createElement('div');
     b.className = 'task' + (app.active ? ' active' : '') + (app.dim ? ' dim' : '');
     const img = document.createElement('img');
@@ -30,7 +31,7 @@
     if (count) {
       const c = document.createElement('span');
       c.className = 'count';
-      c.textContent = count;
+      c.textContent = count as unknown as string; // the DOM turns it into a string
       b.append(c);
     }
     const label = document.createElement('span');
@@ -45,7 +46,7 @@
     return b;
   }
 
-  function pinned(p) {
+  function pinned(p: string) {
     const b = document.createElement('div');
     b.className = 'task pinned';
     const img = document.createElement('img');
@@ -78,11 +79,12 @@
     trayEl.replaceChildren(...(collapsed ? [] : all).map((kind) => {
       const s = document.createElement('span');
       s.className = 'tray-icon';
-      s.innerHTML = window.trayIcons[kind](status[kind]);
+      // Each kind draws from its own reading, the Shotdrawer button from none.
+      s.innerHTML = window.trayIcons[kind](status![kind as PopoverKind] as TrayReading);
       return s;
     }));
     const grouped = tb.grouping === 'always';
-    const buttons = (app) => (app.windows.length > 1 && grouped ? [button(app, app.name, app.windows.length)] : app.windows.map((w) => button(app, w)));
+    const buttons = (app: (typeof SAMPLE)[number]) => (app.windows.length > 1 && grouped ? [button(app, app.name, app.windows.length)] : app.windows.map((w) => button(app, w)));
     // In the row, pins come first in their order, open ones as their windows.
     const rowPins = row ? state.pins : [];
     const list = [];

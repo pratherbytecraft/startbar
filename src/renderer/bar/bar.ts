@@ -1,15 +1,33 @@
 (function () {
+  // The buttons on the bar. Only a window pulled out of its group is loose,
+  // and the first button of a pinned app in the row carries the pin.
+  type AppItem = { kind: 'app'; app: TaskApp; loose?: undefined; pin?: string };
+  type WindowItem = { kind: 'window'; app: TaskApp; win: TaskWindow; loose?: true; pin?: string };
+  type GroupItem = { kind: 'group'; app: TaskApp; wins: TaskWindow[]; loose?: undefined; pin?: string };
+  type TaskItem = AppItem | WindowItem | GroupItem;
+  type BarItem = TaskItem | { kind: 'pin'; path: string } | { kind: 'slot' };
+  // A button being dragged along the bar, see moveByDrag. The fields after
+  // moved are filled in once it moves.
+  type Press = {
+    el: HTMLElement; x: number; y: number; moved: boolean;
+    els: HTMLElement[]; rects: DOMRect[]; from: number; to: number; step: number;
+    target: HTMLElement | null | undefined; group: HTMLElement | null | undefined;
+  };
+  // The Shotdrawer button has no reading.
+  type TrayStatus = Status & { shotdrawer?: undefined };
+
   const api = window.startbar;
-  let state = null;
-  const start = document.getElementById('start');
-  const clock = document.getElementById('clock');
-  const timeEl = document.getElementById('time');
-  const dateEl = document.getElementById('date');
-  const tasksEl = document.getElementById('tasks');
-  const quickEl = document.getElementById('quick');
-  const trayEl = document.getElementById('tray-icons');
-  const chevEl = document.getElementById('chev');
-  let status = { volume: null, wifi: null, battery: null };
+  let state = null as unknown as State; // null until getState answers, which the drawing checks
+  // Every element looked up here is in index.html.
+  const start = document.getElementById('start')!;
+  const clock = document.getElementById('clock')!;
+  const timeEl = document.getElementById('time')!;
+  const dateEl = document.getElementById('date')!;
+  const tasksEl = document.getElementById('tasks')!;
+  const quickEl = document.getElementById('quick')!;
+  const trayEl = document.getElementById('tray-icons')!;
+  const chevEl = document.getElementById('chev')!;
+  let status = { volume: null, wifi: null, battery: null } as TrayStatus; // until the first reading
   let trayDrawn = '';
 
   // Narrowest a button with a label gets before windows are grouped or
@@ -17,34 +35,34 @@
   const LABEL_MIN = 90;
   const GAP = 4;
 
-  let tasks = { accessibility: null, apps: [] };
-  let ungrouped = new Set(); // ids of windows pulled out of their group, see main/ungrouped.js
-  let dragSlot = null; // the pid of the app whose window is being dragged onto this bar, see main/index.js dragOut
+  let tasks: Tasks & Partial<TaskState> = { accessibility: null, apps: [] };
+  let ungrouped = new Set<string>(); // ids of windows pulled out of their group, see main/ungrouped.ts
+  let dragSlot: number | null = null; // the pid of the app whose window is being dragged onto this bar, see main/index.ts dragOut
   // Which display this bar is on: { id, main, bars, displays: [{ id, main, bounds }] }.
-  let place = null;
+  let place: BarPlace | null = null;
   let drawn = '';
-  let shownList = []; // the items drawn on the bar, in their order
-  let moving = null; // the button being dragged along the bar, see moveByDrag
+  let shownList: BarItem[] = []; // the items drawn on the bar, in their order
+  let moving: Press | null = null; // the button being dragged along the bar, see moveByDrag
   let pinsDrawn = '';
-  let tipTimer = null;
-  const icons = new Map(); // app path -> data URL
-  const glows = new Map(); // app path -> the icon's main color, for themes that light buttons with it
+  let tipTimer: number | null = null;
+  const icons = new Map<string, string>(); // app path -> data URL
+  const glows = new Map<string, string>(); // app path -> the icon's main color, for themes that light buttons with it
   let glowRedraw = 0;
-  const asked = new Set(); // app paths whose icon has been requested
+  const asked = new Set<string>(); // app paths whose icon has been requested
 
   start.addEventListener('click', () => api.clickStart());
 
   // The corner counts as the Start button: the bar's edge left of it, below
   // it and above it, so throwing the mouse into the bottom left corner hits.
-  const barEl = document.querySelector('.bar');
-  const inCorner = (e) => e.target === barEl && e.clientX <= start.getBoundingClientRect().right;
+  const barEl = document.querySelector<HTMLElement>('.bar')!;
+  const inCorner = (e: MouseEvent) => e.target === barEl && e.clientX <= start.getBoundingClientRect().right;
   barEl.addEventListener('click', (e) => {
     if (inCorner(e)) api.clickStart();
   });
   barEl.addEventListener('mousemove', (e) => start.classList.toggle('hot', inCorner(e)));
   barEl.addEventListener('mouseleave', () => start.classList.remove('hot'));
 
-  const desk = document.getElementById('desk');
+  const desk = document.getElementById('desk')!;
   desk.addEventListener('click', () => {
     hideTip();
     api.taskCommand({ cmd: 'showDesktop' });
@@ -54,7 +72,7 @@
     tipTimer = setTimeout(() => api.showTip({ text: 'Show Desktop', rect: rectOf(desk) }), 500);
   });
   desk.addEventListener('mouseleave', () => hideTip());
-  document.querySelector('.bar').addEventListener('contextmenu', (e) => {
+  document.querySelector('.bar')!.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     api.barMenu();
   });
@@ -71,11 +89,11 @@
 
   // MARK: tray
 
-  function trayIcon(kind) {
+  function trayIcon(kind: TrayKind) {
     const b = document.createElement('span');
     b.className = 'tray-icon';
     b.dataset.kind = kind;
-    b.innerHTML = window.trayIcons[kind](status[kind]);
+    b.innerHTML = window.trayIcons[kind](status[kind] as TrayReading); // each kind reads its own
     b.addEventListener('click', () => {
       hideTip();
       api.trayClick(kind, rectOf(b));
@@ -84,7 +102,7 @@
       clearTimeout(tipTimer);
       // The Shotdrawer button has no reading behind it, only its tooltip.
       const has = kind === 'shotdrawer' || status[kind];
-      tipTimer = setTimeout(() => has && api.showTip({ text: window.trayIcons.tip(kind, status[kind]), rect: rectOf(b) }), 500);
+      tipTimer = setTimeout(() => has && api.showTip({ text: window.trayIcons.tip(kind, status[kind] as TrayReading), rect: rectOf(b) }), 500);
     });
     b.addEventListener('mouseleave', hideTip);
     return b;
@@ -111,7 +129,7 @@
     chevEl.classList.toggle('hidden', !t.collapseArrow || all.length === 0);
     chevEl.textContent = collapsed ? '‹' : '›';
     const kinds = collapsed ? [] : all;
-    const key = JSON.stringify(kinds.map((k) => window.trayIcons[k](status[k])));
+    const key = JSON.stringify(kinds.map((k) => window.trayIcons[k](status[k] as TrayReading)));
     if (key === trayDrawn) return;
     trayDrawn = key;
     trayEl.replaceChildren(...kinds.map(trayIcon));
@@ -122,10 +140,10 @@
     if (!state || !place) return;
     const d = state.settings.displays;
     const hide = place.bars > 1 && d.bars === 'all' && d.tray === 'main' && !place.main;
-    document.querySelector('.tray').classList.toggle('hidden', hide);
+    document.querySelector('.tray')!.classList.toggle('hidden', hide);
   }
 
-  function applyStatus(next) {
+  function applyStatus(next: Status) {
     status = next || status;
     renderTray();
   }
@@ -141,7 +159,7 @@
     api.clockClick(rectOf(clock));
   });
 
-  function fetchIcons(paths) {
+  function fetchIcons(paths: string[]) {
     const missing = paths.filter((p) => p && !asked.has(p));
     if (missing.length === 0) return;
     missing.forEach((p) => asked.add(p));
@@ -158,13 +176,13 @@
 
   // The average of an icon's colored pixels, brightened. Grey pixels count
   // for little, so a colorful badge on a grey icon still wins.
-  function findGlow(p, url) {
+  function findGlow(p: string, url: string) {
     const img = new Image();
     img.onload = () => {
       const size = 16;
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = size;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })!; // a 2d canvas always has one
       ctx.drawImage(img, 0, 0, size, size);
       const d = ctx.getImageData(0, 0, size, size).data;
       let r = 0, g = 0, b = 0, n = 0;
@@ -185,17 +203,17 @@
     img.src = url;
   }
 
-  const appName = (p) => p.split('/').pop().replace(/\.app$/, '');
+  const appName = (p: string) => p.split('/').pop()!.replace(/\.app$/, ''); // split gives at least one part
 
   // MARK: pinned apps
 
-  function pinButton(p) {
+  function pinButton(p: string) {
     const b = document.createElement('div');
     b.className = 'icon';
     b.dataset.key = p;
     const img = document.createElement('img');
     img.alt = '';
-    if (icons.get(p)) img.src = icons.get(p);
+    if (icons.get(p)) img.src = icons.get(p)!; // just checked
     b.append(img);
     b.addEventListener('click', () => {
       hideTip();
@@ -216,10 +234,10 @@
     return b;
   }
 
-  const pinsKey = (list) => JSON.stringify(list.map((p) => [p, !!icons.get(p)]));
+  const pinsKey = (list: string[]) => JSON.stringify(list.map((p) => [p, !!icons.get(p)]));
 
   // Pins in the row with the windows instead of their own spot.
-  const pinsInRow = (t) => t.showPins && t.pinsPlace === 'row';
+  const pinsInRow = (t: TaskbarSettings) => t.showPins && t.pinsPlace === 'row';
 
   function renderPins() {
     if (!state) return;
@@ -244,9 +262,9 @@
   // In the row, each pin takes its place in pin order: the app's buttons if
   // it's open, a bare icon if not. The first button of each carries the pin,
   // so dragging it reorders the pins.
-  function inRow(list, pinList) {
-    const out = [];
-    const used = new Set();
+  function inRow(list: TaskItem[], pinList: string[]) {
+    const out: BarItem[] = [];
+    const used = new Set<TaskItem>();
     for (const p of pinList) {
       const mine = list.filter((item) => item.app.path === p);
       if (mine.length === 0) out.push({ kind: 'pin', path: p });
@@ -278,23 +296,25 @@
   }
 
   // The display a window is on: the one with its middle, else the main one.
-  function displayOf(w) {
+  // Asked only while perDisplay(), which needs a place.
+  function displayOf(w: TaskWindow) {
     const cx = w.x + w.w / 2;
     const cy = w.y + w.h / 2;
-    const hit = place.displays.find(({ bounds: b }) => cx >= b.x && cx < b.x + b.width && cy >= b.y && cy < b.y + b.height);
-    return (hit || place.displays.find((d) => d.main) || place.displays[0]).id;
+    const hit = place!.displays.find(({ bounds: b }) => cx >= b.x && cx < b.x + b.width && cy >= b.y && cy < b.y + b.height);
+    return (hit || place!.displays.find((d) => d.main) || place!.displays[0]).id;
   }
 
   // The buttons, left to right, before grouping. Without the Accessibility
   // permission there are no windows to show, so every app gets one button.
   // Buttons that aren't windows go on the main display's bar.
-  function buildItems(t) {
-    const mine = perDisplay() ? (w) => displayOf(w) === place.id : () => true;
+  function buildItems(t: TaskbarSettings): TaskItem[] {
+    // place is set whenever perDisplay() is true.
+    const mine = perDisplay() ? (w: TaskWindow) => displayOf(w) === place!.id : () => true;
     const otherSpaces = state.settings.spaces.show === 'all';
-    const appsHere = !perDisplay() || place.main;
+    const appsHere = !perDisplay() || place!.main;
     if (!tasks.accessibility) return appsHere ? tasks.apps.map((a) => ({ kind: 'app', app: a })) : [];
-    const wins = [];
-    const windowless = [];
+    const wins: WindowItem[] = [];
+    const windowless: AppItem[] = [];
     for (const a of tasks.apps) {
       // Minimized windows and hidden apps are off screen but still belong
       // on the bar. Windows on other Spaces only show when asked for.
@@ -308,19 +328,19 @@
     }
     wins.sort((x, y) => x.win.order - y.win.order);
     if (t.order === 'app') {
-      const first = new Map();
+      const first = new Map<number, number>();
       for (const item of wins) if (!first.has(item.app.pid)) first.set(item.app.pid, item.win.order);
-      wins.sort((x, y) => first.get(x.app.pid) - first.get(y.app.pid) || x.win.order - y.win.order);
+      wins.sort((x, y) => first.get(x.app.pid)! - first.get(y.app.pid)! || x.win.order - y.win.order); // every pid was set just above
     }
-    return wins.concat(windowless);
+    return (wins as TaskItem[]).concat(windowless); // windows, then apps
   }
 
   // Each grouped app's windows fold into one button where its first window
   // was. A window pulled out of the group keeps its own button, right after
   // the group.
-  function collapse(items, grouped) {
-    let out = [];
-    const groups = new Map();
+  function collapse(items: TaskItem[], grouped: Set<number>): TaskItem[] {
+    let out: TaskItem[] = [];
+    const groups = new Map<number, GroupItem>();
     for (const item of items) {
       if (item.kind !== 'window' || !grouped.has(item.app.pid)) {
         out.push(item);
@@ -349,12 +369,12 @@
 
   // Grouping per the setting, then more grouping while the buttons would get
   // narrower than LABEL_MIN (biggest app first), then labels drop. No scrolling.
-  function arrange(items, mode, width) {
-    const counts = new Map();
+  function arrange(items: TaskItem[], mode: TaskbarSettings['grouping'], width: number) {
+    const counts = new Map<number, number>();
     for (const item of items) if (item.kind === 'window') counts.set(item.app.pid, (counts.get(item.app.pid) || 0) + 1);
-    const grouped = new Set();
+    const grouped = new Set<number>();
     if (mode === 'always') for (const [pid, n] of counts) if (n > 1) grouped.add(pid);
-    const fits = (n) => n * LABEL_MIN + (n - 1) * GAP <= width;
+    const fits = (n: number) => n * LABEL_MIN + (n - 1) * GAP <= width;
     let list = collapse(items, grouped);
     while (mode !== 'never' && !fits(list.length)) {
       const next = [...counts].filter(([pid, n]) => n > 1 && !grouped.has(pid)).sort((x, y) => y[1] - x[1])[0];
@@ -369,19 +389,20 @@
   // shows it. A click right after one that minimized or restored a window
   // would otherwise go by the old list and do the same thing again, since
   // the list takes a second or two to catch up during the animation.
-  let clicked = null; // { id, active, at }
-  function clickActive(item) {
+  let clicked: { id: string; active: boolean; at: number } | null = null; // { id, active, at }
+  function clickActive(item: TaskItem) {
     if (item.kind === 'window' && clicked && clicked.id === item.win.id && Date.now() - clicked.at < 3000) return clicked.active;
     return isActive(item);
   }
   function settleAsked() {
     if (!clicked) return;
-    const app = tasks.apps.find((a) => a.windows.some((w) => w.id === clicked.id));
-    const win = app && app.windows.find((w) => w.id === clicked.id);
-    if (!win || isActive({ kind: 'window', app, win }) === clicked.active) clicked = null;
+    // clicked is set, checked above, and win is one of app's windows.
+    const app = tasks.apps.find((a) => a.windows.some((w) => w.id === clicked!.id));
+    const win = app && app.windows.find((w) => w.id === clicked!.id);
+    if (!win || isActive({ kind: 'window', app, win } as WindowItem) === clicked.active) clicked = null;
   }
 
-  function isActive(item) {
+  function isActive(item: TaskItem) {
     if (!item.app.active) return false;
     if (item.kind === 'app') return true;
     // An app whose focus is on a sheet or panel reports no focused window.
@@ -392,7 +413,7 @@
     return item.kind === 'group' ? item.wins.includes(focused) : item.win === focused;
   }
 
-  function isDim(item) {
+  function isDim(item: TaskItem) {
     if (item.app.hidden) return true;
     if (item.kind === 'window') return item.win.minimized;
     if (item.kind === 'group') return item.wins.every((w) => w.minimized);
@@ -405,7 +426,7 @@
     api.hideTip();
   }
 
-  function rectOf(el) {
+  function rectOf(el: Element) {
     const r = el.getBoundingClientRect();
     return { x: r.left, y: r.top, width: r.width, height: r.height };
   }
@@ -414,12 +435,12 @@
 
   // Shown after a short hover, and right away when moving from one button
   // to the next while they're up.
-  let previewTimer = null;
+  let previewTimer: number | null = null;
   let previewUp = false;
   let previewLeft = 0;
   const previewsOn = () => state.settings.taskbar.previews;
 
-  function previewPayload(item, el) {
+  function previewPayload(item: WindowItem | GroupItem, el: HTMLElement) {
     const wins = item.kind === 'group' ? item.wins : [item.win];
     return {
       pid: item.app.pid,
@@ -430,7 +451,7 @@
     };
   }
 
-  function schedulePreview(item, el) {
+  function schedulePreview(item: WindowItem | GroupItem, el: HTMLElement) {
     clearTimeout(previewTimer);
     const show = () => {
       previewUp = true;
@@ -453,7 +474,7 @@
     api.hidePreview();
   }
 
-  function onClick(item, el) {
+  function onClick(item: TaskItem, el: HTMLElement) {
     hideTip();
     const t = state.settings.taskbar;
     if (item.kind === 'app') {
@@ -481,14 +502,14 @@
     api.taskCommand({ cmd: minimize ? 'minimize' : 'activate', id: item.win.id });
   }
 
-  function pinTask(p) {
+  function pinTask(p: string) {
     const b = document.createElement('div');
     b.className = 'task pinned';
     b.dataset.key = p;
-    if (glows.has(p)) b.style.setProperty('--glow', glows.get(p));
+    if (glows.has(p)) b.style.setProperty('--glow', glows.get(p)!); // just checked
     const img = document.createElement('img');
     img.alt = '';
-    if (icons.get(p)) img.src = icons.get(p);
+    if (icons.get(p)) img.src = icons.get(p)!; // just checked
     const label = document.createElement('span');
     label.className = 'label';
     label.textContent = appName(p);
@@ -512,7 +533,7 @@
     return b;
   }
 
-  function button(item) {
+  function button(item: BarItem) {
     if (item.kind === 'pin') return pinTask(item.path);
     if (item.kind === 'slot') {
       const s = document.createElement('div');
@@ -521,24 +542,25 @@
     }
     const b = document.createElement('div');
     b.className = 'task' + (isActive(item) ? ' active' : '') + (isDim(item) ? ' dim' : '');
-    if (glows.has(item.app.path)) b.style.setProperty('--glow', glows.get(item.app.path));
+    if (glows.has(item.app.path)) b.style.setProperty('--glow', glows.get(item.app.path)!); // just checked
     if (item.pin) b.dataset.key = item.pin;
     // For putting a pulled out window back by dragging its button onto
     // its app's group, see moveByDrag.
     if (item.loose) {
+      // The DOM turns the pids into strings.
       b.dataset.loose = item.win.id;
-      b.dataset.pid = item.app.pid;
+      b.dataset.pid = item.app.pid as unknown as string;
     }
-    if (item.kind === 'group') b.dataset.group = item.app.pid;
+    if (item.kind === 'group') b.dataset.group = item.app.pid as unknown as string;
     b.dataset.order = window.orderKey(item); // found again after a redraw, see moveByDrag
     const img = document.createElement('img');
     img.alt = '';
-    if (icons.get(item.app.path)) img.src = icons.get(item.app.path);
+    if (icons.get(item.app.path)) img.src = icons.get(item.app.path)!; // just checked
     b.append(img);
     if (item.kind === 'group') {
       const count = document.createElement('span');
       count.className = 'count';
-      count.textContent = item.wins.length;
+      count.textContent = item.wins.length as unknown as string; // the DOM turns it into a string
       b.append(count);
     }
     const label = document.createElement('span');
@@ -573,7 +595,7 @@
       if (previewsOn() && item.kind !== 'app') return schedulePreview(item, b);
       if (!state.settings.taskbar.titleOnHover) return;
       clearTimeout(tipTimer);
-      tipTimer = setTimeout(() => api.showTip({ text: label.textContent, rect: rectOf(b) }), 500);
+      tipTimer = setTimeout(() => api.showTip({ text: label.textContent!, rect: rectOf(b) }), 500); // the label's text is set above
     });
     b.addEventListener('mouseleave', () => {
       hideTip();
@@ -584,7 +606,7 @@
 
   // Any button but a pin's can be dragged to a new spot on the bar: it
   // follows the mouse, the others slide aside to make room, and on letting go
-  // it glides into its spot and the new order is saved (main/order.js). A
+  // it glides into its spot and the new order is saved (main/order.ts). A
   // window pulled out of its group, dropped on the middle of its app's group,
   // goes back in instead; the group lights up as the target. A press that
   // moves less than a few pixels stays a click. Pins in the row reorder
@@ -592,15 +614,15 @@
   function moveByDrag() {
     const THRESHOLD = 4;
     const SETTLE = 160; // the glide into place, as long as the slide in base.css
-    let press = null;
+    let press: Press | null = null;
     let swallowClick = false;
-    const movable = (el) => el.classList.contains('task') && !el.dataset.key && !el.classList.contains('slot');
+    const movable = (el: HTMLElement) => el.classList.contains('task') && !el.dataset.key && !el.classList.contains('slot');
     tasksEl.addEventListener('pointerdown', (e) => {
       swallowClick = false;
       if (e.button !== 0 || moving) return;
-      const el = e.target.closest('.task');
+      const el = (e.target as HTMLElement).closest<HTMLElement>('.task');
       if (!el || el.parentElement !== tasksEl || !movable(el)) return;
-      press = { el, x: e.clientX, y: e.clientY, moved: false };
+      press = { el, x: e.clientX, y: e.clientY, moved: false } as Press; // the rest once it moves
     });
     tasksEl.addEventListener('pointermove', (e) => {
       if (!press) return;
@@ -611,17 +633,18 @@
         // The window list comes in a few times a second and can redraw the
         // bar between the press and the drag, so find the button again.
         if (!press.el.isConnected) {
-          press.el = [...tasksEl.children].find((x) => x.dataset.order === press.el.dataset.order) || null;
+          // Typed as found; the null is checked right below.
+          press.el = (([...tasksEl.children] as HTMLElement[]).find((x) => x.dataset.order === press!.el.dataset.order) || null) as HTMLElement;
           if (!press.el) { press = null; return; }
         }
-        const els = [...tasksEl.children].filter(movable);
+        const els = ([...tasksEl.children] as HTMLElement[]).filter(movable);
         const rects = els.map((x) => x.getBoundingClientRect());
         const from = els.indexOf(press.el);
         const style = getComputedStyle(press.el);
         Object.assign(press, {
           els, rects, from, to: from, target: null,
           step: rects[from].width + parseFloat(style.marginRight) + GAP,
-          group: press.el.dataset.loose ? els.find((x) => x.dataset.group === press.el.dataset.pid) : null
+          group: press.el.dataset.loose ? els.find((x) => x.dataset.group === press!.el.dataset.pid) : null
         });
         moving = press;
         press.el.classList.add('held');
@@ -647,7 +670,7 @@
         x.style.transform = shift ? `translateX(${shift}px)` : '';
       });
     });
-    const end = (e) => {
+    const end = (e: PointerEvent) => {
       if (!press) return;
       const p = press;
       press = null;
@@ -661,7 +684,7 @@
         renderTasks();
       };
       if (p.target && e.type === 'pointerup') {
-        api.regroup(p.el.dataset.loose);
+        api.regroup(p.el.dataset.loose!); // only a loose button has a target
         done();
         return;
       }
@@ -705,14 +728,14 @@
     const width = tasksEl.clientWidth - 8 - closed * (state.settings.barHeight * 1.5 + GAP); // .tasks has 4px padding each side
     const arranged = arrange(items, t.grouping, width);
     const compact = arranged.compact;
-    // Buttons dragged to a spot of their own keep it (shared/order.js).
+    // Buttons dragged to a spot of their own keep it (shared/order.ts).
     const ordered = window.byOrder(arranged.list, tasks.order);
-    const list = pinList.length ? inRow(ordered, pinList) : ordered;
+    const list: BarItem[] = pinList.length ? inRow(ordered, pinList) : ordered;
     // While a window is dragged out of its group, the slot where its button
     // lands: after the app's last button, or at the end.
     if (dragSlot !== null) {
       let at = list.length - 1;
-      list.forEach((item, i) => { if (item.kind !== 'pin' && item.app.pid === dragSlot) at = i; });
+      list.forEach((item, i) => { if (item.kind !== 'pin' && (item as TaskItem).app.pid === dragSlot) at = i; }); // no slot yet
       list.splice(at + 1, 0, { kind: 'slot' });
     }
     const key = JSON.stringify([compact, t, place, state.settings.displays, state.settings.spaces, pinList, list.map((item) => item.kind === 'pin' ? ['pin', item.path] : item.kind === 'slot' ? ['slot'] : [
@@ -731,14 +754,14 @@
     fetchIcons(tasks.apps.map((a) => a.path).concat(pinList));
   }
 
-  function applyTasks(next) {
+  function applyTasks(next: TaskState) {
     tasks = next;
     settleAsked();
     ungrouped = new Set(next.ungrouped || []);
     renderTasks();
   }
 
-  function apply(next) {
+  function apply(next: State) {
     state = next;
     window.applyTheme(state);
     tick();

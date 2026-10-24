@@ -4,17 +4,19 @@
 // process can size the window to fit.
 (function () {
   const api = window.startbar;
-  const box = document.getElementById('cal');
-  const titleEl = document.getElementById('title');
-  const namesEl = document.getElementById('names');
-  const daysEl = document.getElementById('days');
-  const todayEl = document.getElementById('today');
+  // Every element looked up here is in index.html.
+  const box = document.getElementById('cal')!;
+  const titleEl = document.getElementById('title')!;
+  const namesEl = document.getElementById('names')!;
+  const daysEl = document.getElementById('days')!;
+  const todayEl = document.getElementById('today')!;
   let month = new Date(); // any day in the month shown
 
   // The first day of the week for the Mac's language, as getDay() counts (0 is Sunday).
   const firstDay = (() => {
     try {
-      const locale = new Intl.Locale(navigator.language);
+      // Chromium has getWeekInfo, older versions weekInfo. TypeScript's lib has neither yet.
+      const locale = new Intl.Locale(navigator.language) as Intl.Locale & { getWeekInfo?(): { firstDay: number }; weekInfo?: { firstDay: number } };
       const info = locale.getWeekInfo ? locale.getWeekInfo() : locale.weekInfo;
       return info ? info.firstDay % 7 : 0;
     } catch {
@@ -22,12 +24,12 @@
     }
   })();
 
-  const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-  function cell(cls, text) {
+  function cell(cls: string, text: string | number) {
     const s = document.createElement('span');
     s.className = cls;
-    s.textContent = text;
+    s.textContent = text as string; // a day's number goes in as is
     return s;
   }
 
@@ -58,13 +60,13 @@
     api.calendarSize({ height: Math.ceil(box.getBoundingClientRect().height) });
   }
 
-  function step(n) {
+  function step(n: number) {
     month = new Date(month.getFullYear(), month.getMonth() + n, 1);
     render();
   }
 
-  document.getElementById('prev').addEventListener('click', () => step(-1));
-  document.getElementById('next').addEventListener('click', () => step(1));
+  document.getElementById('prev')!.addEventListener('click', () => step(-1));
+  document.getElementById('next')!.addEventListener('click', () => step(1));
   todayEl.addEventListener('click', () => {
     month = new Date();
     render();
@@ -81,7 +83,7 @@
     window.playOpen(document.getElementById('cal'));
   });
 
-  const apply = (state) => {
+  const apply = (state: State) => {
     window.applyTheme(state);
     render();
   };

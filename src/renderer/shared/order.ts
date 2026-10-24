@@ -2,17 +2,18 @@
 // has a key: an app's group, or its button when it has no windows, is the
 // app ('app:' and its bundle id), and a window's button is the window
 // ('win:' and its id). The saved order is a list of keys, kept by
-// main/order.js. Shared by the bar and the unit tests.
+// main/order.ts. Shared by the bar and the unit tests.
 (function () {
-  const appKey = (app) => 'app:' + (app.bundleId || app.path || app.name || '');
-  const keyOf = (item) => (item.kind === 'window' ? 'win:' + item.win.id : appKey(item.app));
+  const appKey = (app: NonNullable<OrderItem['app']>) => 'app:' + (app.bundleId || app.path || app.name || '');
+  // Only asked about buttons with an app, and a window's button has its window.
+  const keyOf = (item: OrderItem) => (item.kind === 'window' ? 'win:' + item.win!.id : appKey(item.app!));
 
   // The keys to save for the buttons in this order. A window also marks
   // where its app is, at the app's first button, so the app's other and
   // future windows know where they belong.
-  function orderKeys(items) {
-    const out = [];
-    const apps = new Set();
+  function orderKeys(items: OrderItem[]) {
+    const out: string[] = [];
+    const apps = new Set<string>();
     for (const item of items) {
       if (!item.app) continue;
       const app = appKey(item.app);
@@ -29,17 +30,18 @@
   // after the last saved button of its app, or after the app's own place,
   // and one of an app that isn't saved at all goes at the end. Buttons that
   // land on the same spot keep the order they came in.
-  function byOrder(items, order) {
+  function byOrder<I extends OrderItem>(items: I[], order: string[] | undefined) {
     if (!order || !order.length) return items;
-    const at = new Map(order.map((k, i) => [k, i]));
-    const last = new Map(); // app key -> the furthest saved spot of its buttons
-    const note = (app, i) => { if (i !== undefined && !(last.get(app) >= i)) last.set(app, i); };
+    const at = new Map(order.map((k, i) => [k, i] as const));
+    const last = new Map<string, number>(); // app key -> the furthest saved spot of its buttons
+    // A spot not noted yet compares as undefined, which is never >= i.
+    const note = (app: string, i: number | undefined) => { if (i !== undefined && !((last.get(app) as number) >= i)) last.set(app, i); };
     for (const item of items) {
       if (!item.app) continue;
       note(appKey(item.app), at.get(appKey(item.app)));
       note(appKey(item.app), at.get(keyOf(item)));
     }
-    const rank = (item) => {
+    const rank = (item: I) => {
       if (!item.app) return Infinity;
       const own = at.get(keyOf(item));
       if (own !== undefined) return own;

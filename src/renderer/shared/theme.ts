@@ -2,7 +2,7 @@
 // stylesheet is loaded, light or dark, the accent color, the bar height.
 // Shared by the bar, the Start menu and the settings preview.
 (function () {
-  const ACCENTS = {
+  const ACCENTS: Record<string, [string, string]> = {
     blue: ['#007aff', '#0a84ff'],
     purple: ['#af52de', '#bf5af2'],
     pink: ['#ff2d55', '#ff375f'],
@@ -13,7 +13,7 @@
     graphite: ['#8e8e93', '#98989d']
   };
 
-  function luminance(hex) {
+  function luminance(hex: string) {
     const n = parseInt(hex.slice(1, 7), 16);
     const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
@@ -21,7 +21,7 @@
 
   // Light or dark and the accent color after the settings' "Follow Mac"
   // choices are filled in from the Mac.
-  function resolve(state) {
+  function resolve(state: State): ResolvedTheme {
     const { settings, system } = state;
     const appearance = settings.appearance === 'auto' ? system.appearance : settings.appearance;
     const dark = appearance === 'dark';
@@ -29,9 +29,9 @@
     return { appearance, accent, accentText: luminance(accent) > 0.7 ? '#1d1d1f' : '#ffffff' };
   }
 
-  let schemeNames = []; // the scheme variables set last time, to clear on a theme change
+  let schemeNames: string[] = []; // the scheme variables set last time, to clear on a theme change
 
-  function apply(state) {
+  function apply(state: State) {
     const { settings } = state;
     const root = document.documentElement;
     const { appearance, accent, accentText } = resolve(state);
@@ -52,14 +52,14 @@
     root.style.setProperty('--bar-h', settings.barHeight + 'px');
     root.style.setProperty('--max-button', settings.maxButtonWidth + 'px');
 
-    const link = document.getElementById('theme-css');
+    const link = document.getElementById('theme-css')!; // every page has it
     const href = `../themes/${settings.theme}.css`;
     if (link.getAttribute('href') !== href) link.setAttribute('href', href);
   }
 
   // Plays an element's opening animation again, for windows that are hidden
   // and shown instead of made each time. See "motion" in base.css.
-  function playOpen(el) {
+  function playOpen(el: HTMLElement | null) {
     if (!el) return;
     el.classList.remove('opening');
     void el.offsetWidth;
@@ -68,13 +68,13 @@
   // Done opening. The rows' own animations bubble up here too, so only the
   // element's own end counts.
   document.addEventListener('animationend', (e) => {
-    if (e.target.classList && e.target.classList.contains('opening')) e.target.classList.remove('opening');
+    if ((e.target as HTMLElement).classList && (e.target as HTMLElement).classList.contains('opening')) (e.target as HTMLElement).classList.remove('opening');
   });
 
   // The same for a list's rows, one after another, when it fills.
-  function playRows(el) {
+  function playRows(el: HTMLElement | null) {
     if (!el) return;
-    [...el.children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 14)));
+    [...el.children].forEach((c, i) => (c as HTMLElement).style.setProperty('--i', Math.min(i, 14) as unknown as string));
     el.classList.remove('entering');
     void el.offsetWidth;
     el.classList.add('entering');

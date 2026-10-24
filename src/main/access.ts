@@ -44,7 +44,7 @@ export function openPane() {
   shell.openExternal(PANE);
 }
 
-// The stamp of the Startbar.app this runs from (see scripts/build-app.js),
+// The stamp of the Startbar.app this runs from (see scripts/build-app.ts),
 // or '' when it runs as plain Electron.
 let stamp: string | null = null;
 export function buildStamp() {

@@ -1,22 +1,22 @@
 // The classic themes' color schemes. Each theme's stylesheet reads its colors
 // from CSS variables, and schemeVars fills them in from the settings: the
 // theme's own `colors` group, plus the accent color and light or dark for a
-// scheme named System. Loaded before theme.js, which sets the variables.
+// scheme named System. Loaded before theme.ts, which sets the variables.
 (function () {
-  function rgb(hex) {
+  function rgb(hex: string) {
     const n = parseInt(String(hex).replace('#', '').slice(0, 6), 16) || 0;
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
-  function hex([r, g, b]) {
+  function hex([r, g, b]: number[]) {
     return '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
   }
   // a moved toward b by t (0 to 1)
-  function mix(a, b, t) {
+  function mix(a: string, b: string, t: number) {
     const x = rgb(a), y = rgb(b);
     return hex(x.map((v, i) => v + (y[i] - v) * t));
   }
   // [hue 0 to 360, saturation 0 to 100, brightness (lightness) 0 to 100]
-  function toHsl(c) {
+  function toHsl(c: string) {
     const [r, g, b] = rgb(c).map((v) => v / 255);
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
     const l = (max + min) / 2;
@@ -29,14 +29,14 @@
     }
     return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
   }
-  function fromHsl([h, s, l]) {
+  function fromHsl([h, s, l]: number[]) {
     s /= 100; l /= 100;
-    const k = (n) => (n + h / 30) % 12;
+    const k = (n: number) => (n + h / 30) % 12;
     const a = s * Math.min(l, 1 - l);
-    const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
     return hex([f(0) * 255, f(8) * 255, f(4) * 255]);
   }
-  function luminance(c) {
+  function luminance(c: string) {
     const [r, g, b] = rgb(c);
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   }
@@ -47,7 +47,7 @@
     'tray1', 'tray2', 'trayEdge', 'chev1', 'chev2', 'glyph', 'head1', 'head2', 'headText', 'menuBg', 'menuText', 'col', 'colEdge', 'colText',
     'sel', 'foot1', 'foot2', 'footEdge', 'footText', 'field'];
   const XP_SHADOW = '0 1px 1px rgba(0, 0, 0, .35)';
-  const XP = {
+  const XP: Record<string, string[]> = {
     blue: ['#4f85f0', '#3168d5', '#2a5fd0', '#1941a5', '#0c2f8a', '#fff', XP_SHADOW, '#3c81f3', '#2a62d8', '#5a98ff', '#3b74e6', '#1a46b0', '#2b5ed1', '#fff',
       '#139ff9', '#0a7edc', '#0a5fb4', '#4bb1ff', '#1f8ded', '#2a62d8', '#2d6ad8', '#1f52bf', '#fff', '#fff', '#000', '#d3e5fa', '#95bdee', '#1b3f8f',
       '#316ac5', '#4178d6', '#2d5fc4', '#1d4aa8', '#fff', '#7f9db9'],
@@ -60,7 +60,7 @@
   };
   // System: the Mac's own greys, light or dark, with the accent color on the
   // active button, the Start menu header and selected items.
-  function xpSystem(accent, dark) {
+  function xpSystem(accent: string, dark: boolean) {
     const actA = mix(accent, '#ffffff', 0.25), headA = mix(accent, '#ffffff', 0.2), headB = mix(accent, '#000000', 0.15);
     return dark
       ? ['#5c5c60', '#3b3b3e', '#2e2e31', '#1b1b1d', '#000000', '#fff', '0 1px 1px rgba(0, 0, 0, .5)', '#4c4c50', '#333336', '#5a5a5e', '#3e3e42', actA, accent, '#fff',
@@ -70,9 +70,9 @@
         '#f6f6f8', '#dddde2', '#b4b4bc', '#ffffff', '#dcdce2', accent, headA, headB, '#fff', '#fff', '#000', '#f2f2f5', '#dcdce2', mix(accent, '#000000', 0.4),
         accent, '#ececf0', '#d4d4da', '#b4b4bc', '#1d1d1f', '#b4b4bc'];
   }
-  function xpVars(c, look) {
+  function xpVars(c: Colors, look: SchemeLook) {
     const list = c.scheme === 'system' ? xpSystem(look.accent, look.appearance === 'dark') : XP[c.scheme] || XP.blue;
-    const out = {};
+    const out: Record<string, string> = {};
     XP_KEYS.forEach((k, i) => { out['--xp-' + k] = list[i]; });
     return out;
   }
@@ -80,7 +80,7 @@
   // MARK: Classic 1995
 
   // [name, bar and buttons, selected items, title from, title to]
-  const W95 = {
+  const W95: Record<string, string[]> = {
     standard: ['Standard', '#c0c0c0', '#000080', '#000080', '#1084d0'],
     brick: ['Brick', '#c2bfa5', '#800000', '#800000', '#c08060'],
     desert: ['Desert', '#d5ccbb', '#008080', '#008080', '#80c0b8'],
@@ -100,7 +100,7 @@
     contrast: ['High Contrast', '#000000', '#800080', '#800080', '#800080']
   };
   // The four colors a Classic 1995 scheme stands for, System and Custom included.
-  function w95Colors(c, look) {
+  function w95Colors(c: Colors, look: SchemeLook) {
     if (c.scheme === 'custom') return [c.face, c.selected, c.title1, c.title2];
     if (c.scheme === 'system') {
       const a = look.accent;
@@ -109,7 +109,7 @@
     return (W95[c.scheme] || W95.standard).slice(1);
   }
   // The bevels, text and fields are worked out from the four colors.
-  function w95Vars(c, look) {
+  function w95Vars(c: Colors, look: SchemeLook) {
     const [face, sel, title1, title2] = w95Colors(c, look);
     const dark = luminance(face) < 0.45;
     const text = dark ? '#ffffff' : '#000000';
@@ -134,24 +134,24 @@
   // MARK: Classic 2009
 
   // [name, color]. System takes the accent color.
-  const GLASS = {
+  const GLASS: Record<string, [string, string | null]> = {
     system: ['System', null], sky: ['Sky', '#4a9ff5'], dusk: ['Dusk', '#2c4f8a'], sea: ['Sea', '#14a4a8'], leaf: ['Leaf', '#4ca54d'],
     lime: ['Lime', '#a3d55b'], sun: ['Sun', '#f2c94c'], pumpkin: ['Pumpkin', '#f39c32'], ruby: ['Ruby', '#c8343b'], pink: ['Pink', '#e055a5'],
     blush: ['Blush', '#f4a6c6'], violet: ['Violet', '#8b5bc0'], lavender: ['Lavender', '#b8a1e0'], taupe: ['Taupe', '#a69580'],
     cocoa: ['Cocoa', '#6b4a2f'], slate: ['Slate', '#6f7680'], frost: ['Frost', '#e8eef5'], graphite: ['Graphite', '#8e8e93']
   };
-  function glassColor(c, look) {
+  function glassColor(c: Colors, look: SchemeLook) {
     if (c.scheme === 'custom') return c.tint;
     const g = GLASS[c.scheme];
     return g && g[1] ? g[1] : look.accent;
   }
-  function glassVars(c, look) {
+  function glassVars(c: Colors, look: SchemeLook) {
     return { '--tint': glassColor(c, look), '--strength': (Number(c.intensity) || 34) + '%' };
   }
 
   // The variables for the current theme, as { '--name': value }.
-  function schemeVars(settings, look) {
-    const c = settings.colors || {};
+  function schemeVars(settings: Settings, look: SchemeLook): Record<string, string> {
+    const c = (settings.colors || {}) as Colors; // an old settings file can lack colors
     if (settings.theme === 'classic-2001') return xpVars(c, look);
     if (settings.theme === 'classic-1995') return w95Vars(c, look);
     if (settings.theme === 'classic-2009') return glassVars(c, look);

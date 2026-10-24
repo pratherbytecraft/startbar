@@ -64,7 +64,7 @@ function runBundle(bundle: string) {
 // The install builds Startbar.app, except where it can't write to the home
 // folder (Homebrew), or when the app belongs to an older install. Then the
 // first run builds it, finishing Electron's install first if it stopped
-// partway (see scripts/fix-electron.js).
+// partway (see scripts/fix-electron.ts).
 (async () => {
   let bundle = appPath();
   if (!bundle) {

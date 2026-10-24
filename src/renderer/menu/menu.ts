@@ -1,19 +1,19 @@
 (function () {
   const api = window.startbar;
-  const el = (id) => document.getElementById(id);
+  const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T; // ids in index.html
   const recentEl = el('recent'), recentHead = el('recent-head'), recentSep = el('recent-sep'), allToggle = el('all-toggle'), allArrow = el('all-arrow');
-  const listEl = el('list'), searchEl = el('search'), rightEl = el('right'), footEl = el('foot');
+  const listEl = el('list'), searchEl = el<HTMLInputElement>('search'), rightEl = el('right'), footEl = el('foot');
 
-  let state = null;
-  let allApps = [];
+  let state = null as unknown as State; // drawn from only once getState answers
+  let allApps: AppEntry[] = [];
   let showAll = false;
   let selected = -1;
-  let files = []; // home folder files for the current search
+  let files: FileHit[] = []; // home folder files for the current search
   let filesPending = false;
   let fileSeq = 0;
-  let fileTimer = null;
+  let fileTimer: number | null = null;
 
-  const RIGHT = [
+  const RIGHT: ([MenuTarget, string, string] | null)[] = [
     ['applications', 'Applications', '#f7b731'],
     ['documents', 'Documents', '#fed330'],
     ['downloads', 'Downloads', '#26de81'],
@@ -25,7 +25,7 @@
     ['update', 'Update Available', '#26de81'],
     ['about', 'About Startbar', '#45aaf2']
   ];
-  const POWER = [['sleep', 'Sleep', '#f7b731'], ['logout', 'Log Out', '#e8942a'], ['shutdown', 'Shut Down', '#d9412c']];
+  const POWER: [PowerAction, string, string][] = [['sleep', 'Sleep', '#f7b731'], ['logout', 'Log Out', '#e8942a'], ['shutdown', 'Shut Down', '#d9412c']];
   // White marks drawn on each power button's colored badge: a moon, a door
   // with an arrow, the power symbol.
   const POWER_MARKS = {
@@ -34,7 +34,7 @@
     shutdown: '<path d="M8 2.6v5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M4.9 4.6a4.6 4.6 0 1 0 6.2 0" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>'
   };
 
-  function appItem(a, fromRecent) {
+  function appItem(a: AppEntry, fromRecent?: boolean) {
     const d = document.createElement('div');
     d.className = 'item';
     d.dataset.path = a.path;
@@ -53,7 +53,7 @@
     return d;
   }
 
-  function fileItem(f) {
+  function fileItem(f: FileHit) {
     const d = document.createElement('div');
     d.className = 'item file';
     const img = document.createElement('img');
@@ -73,9 +73,9 @@
 
   // The system's icons for the right column, by key. A colored square until
   // they arrive.
-  let placeIcons = {};
+  let placeIcons: Record<string, string> = {};
 
-  function placeIcon(key, color) {
+  function placeIcon(key: string, color: string) {
     if (placeIcons[key]) {
       const img = document.createElement('img');
       img.alt = '';
@@ -86,7 +86,7 @@
     return ico;
   }
 
-  function folderItem(folder) {
+  function folderItem(folder: string) {
     const d = document.createElement('div');
     d.className = 'item';
     const ico = placeIcon('folder', '#54a0ff');
@@ -103,7 +103,7 @@
     for (const r of RIGHT) {
       if (!r) { const s = document.createElement('div'); s.className = 'sep'; rightEl.append(s); continue; }
       const [key, name, color] = r;
-      if (key in cols && !cols[key]) continue;
+      if (key in cols && !cols[key as keyof typeof cols]) continue; // a key of cols, checked with in
       // Shown once a check finds a newer version. Opens the About page.
       if (key === 'update' && !(state.update && state.update.state === 'available')) continue;
       const d = document.createElement('div');
@@ -168,7 +168,7 @@
 
   // Apps first, then files when the setting asks for them. keep holds the
   // keyboard selection when files arrive after the apps.
-  function renderList(keep) {
+  function renderList(keep?: boolean) {
     const q = searchEl.value.trim().toLowerCase();
     const searching = q.length > 0;
     const visible = searching ? allApps.filter((a) => a.name.toLowerCase().includes(q)) : (showAll ? allApps : []);
@@ -217,14 +217,14 @@
   }
 
   function highlight() {
-    const items = [...listEl.querySelectorAll('.item')];
+    const items = [...listEl.querySelectorAll<HTMLElement>('.item')];
     items.forEach((it, i) => it.classList.toggle('selected', i === selected));
     if (selected >= 0 && items[selected]) items[selected].scrollIntoView({ block: 'nearest' });
   }
 
   // All Applications slides its list in, and back out to the recent apps.
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  let leaving = null;
+  let leaving: number | null = null;
   allToggle.addEventListener('click', () => {
     if (leaving) return;
     if (!showAll) {
@@ -247,7 +247,7 @@
     renderList();
   });
   document.addEventListener('keydown', (e) => {
-    const items = [...listEl.querySelectorAll('.item')];
+    const items = [...listEl.querySelectorAll<HTMLElement>('.item')];
     if (e.key === 'Escape') { api.hideMenu(); e.preventDefault(); }
     else if (e.key === 'ArrowDown') { selected = Math.min(items.length - 1, selected + 1); highlight(); e.preventDefault(); }
     else if (e.key === 'ArrowUp') { selected = Math.max(0, selected - 1); highlight(); e.preventDefault(); }
@@ -258,7 +258,7 @@
     }
   });
 
-  async function apply(next) {
+  async function apply(next: State) {
     state = next;
     window.applyTheme(state);
     el('user').textContent = state.user;
@@ -266,7 +266,7 @@
     renderFoot();
   }
 
-  // The window fades in as a whole (fadeIn in main/windows.js), so the menu
+  // The window fades in as a whole (fadeIn in main/windows.ts), so the menu
   // itself doesn't play the open animation the other panels do.
   async function onShown() {
     searchEl.value = '';
@@ -285,7 +285,7 @@
     const img = document.createElement('img');
     img.alt = '';
     img.src = url;
-    document.querySelector('.avatar').append(img);
+    document.querySelector('.avatar')!.append(img); // in index.html
   });
   api.placeIcons().then((found) => {
     placeIcons = found || {};

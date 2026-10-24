@@ -1,0 +1,4 @@
+{
+  "extends": "../tsconfig.base.json",
+  "files": ["../shared/schemes.ts", "../shared/theme.ts", "../shared/clock.ts", "../shared/reorder.ts", "settings.ts", "../global.d.ts"]
+}

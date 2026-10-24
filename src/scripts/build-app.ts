@@ -191,6 +191,6 @@ export function build({ quiet = false } = {}) {
   }
 }
 
-// Without Electron yet (see fix-electron.js), the first run builds the app.
+// Without Electron yet (see fix-electron.ts), the first run builds the app.
 if (require.main === module && !process.env.ELECTRON_SKIP_BINARY_DOWNLOAD) build();
 

@@ -78,7 +78,7 @@ export const DEFAULTS = Object.freeze<Settings>({
   },
   menuBarIcon: 'hidden', // hidden (only while the bar is hidden) | always
   quitApps: {
-    on: false, // quit an app when its last window closes, see main/quitter.js
+    on: false, // quit an app when its last window closes, see main/quitter.ts
     keepRunning: [] // apps left running anyway, as paths
   },
   openFoldersWith: 'finder', // finder | filedrawer: the app the Start menu's folders open in, when Filedrawer is installed
@@ -86,13 +86,13 @@ export const DEFAULTS = Object.freeze<Settings>({
     auto: true // check npm for a newer version now and then, never installs
   },
   accessibilityAsked: false, // the one time Accessibility dialog has been shown
-  accessibilityStamp: '', // the app's build stamp while Accessibility last worked, see main/access.js
-  screenAsked: false, // Screen Recording has been asked for, see checkScreen in main/index.js
+  accessibilityStamp: '', // the app's build stamp while Accessibility last worked, see main/access.ts
+  screenAsked: false, // Screen Recording has been asked for, see checkScreen in main/index.ts
   screenStamp: '', // the app's build stamp while Screen Recording last worked, see screenAfterUpdate
   hideNoteShown: false, // the one time note on how to bring a hidden bar back
-  automationAnswer: '', // allowed | denied: the last answer for System Events, see main/index.js
+  automationAnswer: '', // allowed | denied: the last answer for System Events, see main/index.ts
   // A classic theme's color scheme, kept per theme. scheme is one of the
-  // theme's schemes in renderer/shared/schemes.js; the rest are the Classic
+  // theme's schemes in renderer/shared/schemes.ts; the rest are the Classic
   // 1995 Custom colors and Classic 2009's own glass color and strength.
   colors: {
     scheme: 'default',
