@@ -1,32 +1,39 @@
 // Startbar main process. Owns the windows, the settings, the app list and
 // everything that touches the Mac. Renderers only draw.
-const { app, ipcMain, shell, dialog, globalShortcut, screen, Menu, nativeTheme, BrowserWindow, clipboard, powerMonitor } = require('electron');
-const { execFile, execFileSync } = require('child_process');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const settings = require('./settings');
-const system = require('./system');
-const apps = require('./apps');
-const windows = require('./windows');
-const tasks = require('./tasks');
-const access = require('./access');
-const tray = require('./tray');
-const pins = require('./pins');
-const dock = require('./dock');
-const files = require('./files');
-const updates = require('./updates');
-const status = require('./status');
-const quitter = require('./quitter');
-const ungrouped = require('./ungrouped');
-const order = require('./order');
+import { app, shell, dialog, globalShortcut, screen, Menu, nativeTheme, BrowserWindow, clipboard, powerMonitor, type MenuItem, type MenuItemConstructorOptions, type WebContents } from 'electron';
+import { execFile, execFileSync } from 'child_process';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import * as settings from './settings';
+import * as system from './system';
+import * as apps from './apps';
+import * as windows from './windows';
+import * as tasks from './tasks';
+import * as access from './access';
+import * as tray from './tray';
+import * as pins from './pins';
+import * as dock from './dock';
+import * as files from './files';
+import * as updates from './updates';
+import * as status from './status';
+import * as quitter from './quitter';
+import * as ungrouped from './ungrouped';
+import * as order from './order';
+import * as ipc from './ipc';
+import type { HelperCommand } from './tasks';
+import type { DockResult } from './dock';
+import type {
+  DockStatus, DragOut, HelperReply, LinkKey, MenuTarget, PermissionName, Permissions, PopoverKind, PowerAction, PreviewPayload,
+  Rect, ScreenAccess, Settings, SettingsPage, SiblingKey, State, TaskApp, TaskMenuTarget, Tasks, Theme, WindowCommand
+} from '../shared/types';
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
-const PKG = require('../../package.json');
+import PKG from '../../package.json';
 const VERSION = PKG.version;
-const { helperPath } = require('../scripts/build-helper');
-const { appPath } = require('../scripts/build-app');
+import { helperPath } from '../scripts/build-helper';
+import { appPath } from '../scripts/build-app';
 
 // The line that updates this copy, for the About page: Homebrew keeps what
 // it installs in its Cellar folder, npm in a node_modules folder.
@@ -48,7 +55,7 @@ let selfOpenAt = 0;
 
 app.on('activate', () => {
   if (Date.now() - selfOpenAt < 3000) {
-    if (windows.settings) windows.settings.focus();
+    if (windows.settings) windows.settings!.focus(); // checked just before
     return;
   }
   // Startbar.app opened again from Spotlight, the Start menu or `startbar`.
@@ -78,14 +85,14 @@ function userName() {
 // The account picture from System Settings, as a small data URL, or '' when
 // there isn't one. The directory record keeps it as image data (JPEG or
 // TIFF), or only as the path of a picture file. sips turns either into a PNG.
-let userPictureUrl = null;
-function readRecord(key) {
-  return new Promise((resolve) => {
+let userPictureUrl: string | null = null;
+function readRecord(key: string) {
+  return new Promise<string>((resolve) => {
     execFile('dscl', ['.', '-read', `/Users/${os.userInfo().username}`, key], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (err, out) => resolve(err ? '' : out));
   });
 }
-function toPng(source, dest) {
-  return new Promise((resolve) => {
+function toPng(source: string, dest: string) {
+  return new Promise<boolean>((resolve) => {
     execFile('sips', ['-s', 'format', 'png', '-Z', '128', source, '--out', dest], (err) => resolve(!err && fs.existsSync(dest)));
   });
 }
@@ -111,10 +118,10 @@ async function userPicture() {
   return userPictureUrl;
 }
 
-let shortcutError = null; // the Start menu shortcut couldn't be registered
-let dockStatus = null; // { autohide, position }, read when the settings window opens
+let shortcutError: State['shortcutError'] = null; // the Start menu shortcut couldn't be registered
+let dockStatus: DockStatus | null = null; // { autohide, position }, read when the settings window opens
 
-function state() {
+function state(): State {
   return {
     settings: settings.get(),
     pins: pins.get(),
@@ -133,7 +140,7 @@ function state() {
     updateCommand: UPDATE_COMMAND,
     swiftQuit: quitter.swiftQuitRunning(),
     // Shown greyed at the top of the Leave these apps running list.
-    alwaysRunning: ['/System/Library/CoreServices/Finder.app', filedrawerApp(), appPath()].filter(Boolean)
+    alwaysRunning: ['/System/Library/CoreServices/Finder.app', filedrawerApp(), appPath()].filter(Boolean) as string[] // without the nulls
   };
 }
 
@@ -141,18 +148,18 @@ function state() {
 // Shotdrawer (recent screenshots), when they're installed. Each is found by
 // its bundle id, looked up now and then, not on every redraw.
 const FILEDRAWER_ID = 'com.pratherbytecraft.filedrawer';
-const SIBLINGS = {
+const SIBLINGS: Record<SiblingKey, { id: string; name: string }> = {
   filedrawer: { id: FILEDRAWER_ID, name: 'Filedrawer.app' },
   shotdrawer: { id: 'com.pratherbytecraft.shotdrawer', name: 'Shotdrawer.app' }
 };
-const siblingSeen = {};
+const siblingSeen: Partial<Record<SiblingKey, { at: number; path: string | null }>> = {};
 
-function siblingApp(key) {
+function siblingApp(key: SiblingKey) {
   const app = SIBLINGS[key];
   const seen = siblingSeen[key];
   if (seen && Date.now() - seen.at < 30 * 1000) return seen.path;
   const places = [path.join(os.homedir(), 'Applications', app.name), path.join('/Applications', app.name)];
-  let found = null;
+  let found: string | null = null;
   for (const p of places) {
     try {
       const id = execFileSync('plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', path.join(p, 'Contents', 'Info.plist')], { encoding: 'utf8' }).trim();
@@ -172,7 +179,7 @@ const filedrawerApp = () => siblingApp('filedrawer');
 
 // The About page's Also from Prather Bytecraft group: each app, whether it's
 // installed, and the line that installs it the same way this copy was.
-const ABOUT = [
+const ABOUT: { key: SiblingKey; name: string; desc: string }[] = [
   { key: 'filedrawer', name: 'Filedrawer', desc: 'A file manager laid out like the classic file windows, with tabs and two panes.' },
   { key: 'shotdrawer', name: 'Shotdrawer', desc: 'Your recent screenshots in the menu bar. Click one to copy its path.' }
 ];
@@ -190,7 +197,7 @@ function siblingsAbout() {
 // is read now and then, not on every redraw.
 let takeOverSeen = { at: 0, on: false };
 
-function filedrawerTakesFinder(apps) {
+function filedrawerTakesFinder(apps: TaskApp[]) {
   if (!apps.some((a) => a.bundleId === FILEDRAWER_ID)) return false;
   if (Date.now() - takeOverSeen.at < 5 * 1000) return takeOverSeen.on;
   let on = true;
@@ -206,7 +213,7 @@ function filedrawerTakesFinder(apps) {
 
 // A folder from the Start menu opens in Filedrawer when that's picked and
 // installed, and in Finder otherwise. Apps and files open as usual.
-function openFolder(p) {
+function openFolder(p: string) {
   let isFolder = false;
   try {
     isFolder = fs.statSync(p).isDirectory() && !/\.(app|bundle|framework|pkg)$/i.test(p);
@@ -225,7 +232,7 @@ function openFolder(p) {
 // The Shotdrawer button opens Shotdrawer's list just above it, through
 // Shotdrawer's link with the button's top center on screen. A second click
 // closes the list, Shotdrawer takes care of that.
-function openShotdrawer(rect, barWin) {
+function openShotdrawer(rect: Rect, barWin: BrowserWindow | null) {
   if (!barWin || barWin.isDestroyed() || !rect) return;
   windows.hidePopover();
   const b = barWin.getBounds();
@@ -251,20 +258,21 @@ function registerShortcut() {
     }
   } catch (err) {
     shortcutError = 'invalid';
-    console.log(`Startbar: could not register ${combo}: ${err.message}`);
+    console.log(`Startbar: could not register ${combo}: ${(err as Error).message}`);
   }
 }
 
 // The appearance setting also picks the window materials, so a dark choice
 // on a light Mac blurs dark too.
 function applyAppearance() {
-  const map = { auto: 'system', light: 'light', dark: 'dark' };
+  const map: Record<Settings['appearance'], 'system' | 'light' | 'dark'> = { auto: 'system', light: 'light', dark: 'dark' };
   nativeTheme.themeSource = map[settings.get().appearance] || 'system';
 }
 
 // While the settings window is open Startbar is in the Dock and the app
-// switcher, so the window can't get lost behind other windows.
-function openSettings(page) {
+// switcher, so the window can't get lost behind other windows. As a menu
+// item's click it gets the item instead of a page.
+function openSettings(page?: SettingsPage | MenuItem) {
   windows.hideMenu();
   app.setActivationPolicy('regular');
   const fresh = !windows.settings;
@@ -313,13 +321,13 @@ async function placeIcons() {
   return Object.fromEntries(Object.entries(PLACE_ICONS).map(([key, p]) => [key, found[p] || '']));
 }
 
-const PANES = {
+const PANES: Record<Exclude<PermissionName, 'accessibility'>, string> = {
   automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   bluetooth: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth',
   screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
 };
-let askingFor = null; // { name, at }: the permission whose macOS prompt is up
+let askingFor: { name: Exclude<PermissionName, 'accessibility'>; at: number } | null = null; // { name, at }: the permission whose macOS prompt is up
 let shownPermissions = '';
 
 // Clicks in a background window count: on with the setting, once the
@@ -328,7 +336,7 @@ function updateClickThrough() {
   tasks.setClickThrough(settings.get().taskbar.clickThrough && tasks.get().accessibility === true);
 }
 
-function permissions() {
+function permissions(): Permissions {
   const a = status.get().access || {};
   // macOS only answers for System Events while it's running. Otherwise go
   // by the last answer Startbar saw.
@@ -339,7 +347,7 @@ function permissions() {
 // Screen Recording, for window previews. A process that's already running
 // may not see a new grant, so a short helper run checks each time. macOS
 // can't say whether it was asked before, so Startbar remembers.
-let screenNow = null; // allowed | notAsked | denied
+let screenNow: ScreenAccess | null = null; // allowed | notAsked | denied
 function checkScreen() {
   const helper = helperPath();
   if (!helper) return;
@@ -366,7 +374,7 @@ function checkScreen() {
 // move to name based signing in 0.2.0). With previews on, when it worked under
 // another build, or before builds were stamped, Startbar clears its entry and
 // asks once more, the way access.js does for Accessibility.
-function screenAfterUpdate(allowed) {
+function screenAfterUpdate(allowed: boolean) {
   const s = settings.get();
   const now = access.buildStamp();
   if (!now) return false;
@@ -381,7 +389,7 @@ function screenAfterUpdate(allowed) {
   return true;
 }
 
-function rememberAutomation(result) {
+function rememberAutomation(result: DockResult) {
   if (result === 'ok') settings.update({ automationAnswer: 'allowed' });
   if (result === 'notAllowed') settings.update({ automationAnswer: 'denied' });
   status.send({ cmd: 'access' });
@@ -391,10 +399,10 @@ function rememberAutomation(result) {
 function focusSettings() {
   if (!windows.settings) return;
   app.focus({ steal: true });
-  windows.settings.focus();
+  windows.settings!.focus(); // checked just before
 }
 
-async function askPermission(name) {
+async function askPermission(name: PermissionName) {
   if (name === 'accessibility') return access.openPane();
   const now = permissions()[name];
   if (!PANES[name] || now === 'allowed') return;
@@ -434,7 +442,7 @@ function permissionsChanged() {
   if (answered) {
     // Only right after the prompt. A prompt left open and answered much
     // later shouldn't pull the settings window over whatever is in front.
-    const recent = Date.now() - askingFor.at < 60000;
+    const recent = Date.now() - askingFor!.at < 60000; // answered, so there was one
     askingFor = null;
     if (recent) focusSettings();
   }
@@ -451,19 +459,23 @@ function loginItem() {
   }
 }
 
-function setLoginItem(on) {
+function setLoginItem(on: boolean) {
   try {
     app.setLoginItemSettings({ openAtLogin: !!on, type: 'mainAppService' });
   } catch (err) {
-    console.log(`Startbar: could not change the login item: ${err.message}`);
+    console.log(`Startbar: could not change the login item: ${(err as Error).message}`);
   }
   pushState();
 }
 
+// The settings window, for a dialog to open on. Electron's dialogs take null
+// as well, for a dialog of its own, which their types leave out.
+const onSettings = () => windows.settings as BrowserWindow;
+
 // Settings and pins to a file and back. The one time dialogs aren't part of it.
 async function exportSettings() {
   app.focus({ steal: true });
-  const { canceled, filePath } = await dialog.showSaveDialog(windows.settings, {
+  const { canceled, filePath } = await dialog.showSaveDialog(onSettings(), {
     title: 'Export Settings and Pins',
     buttonLabel: 'Export',
     defaultPath: path.join(os.homedir(), 'Documents', 'Startbar Settings.json'),
@@ -476,7 +488,7 @@ async function exportSettings() {
 
 async function importSettings() {
   app.focus({ steal: true });
-  const { canceled, filePaths } = await dialog.showOpenDialog(windows.settings, {
+  const { canceled, filePaths } = await dialog.showOpenDialog(onSettings(), {
     title: 'Import Settings and Pins',
     buttonLabel: 'Import',
     defaultPath: path.join(os.homedir(), 'Documents'),
@@ -484,14 +496,14 @@ async function importSettings() {
     filters: [{ name: 'Startbar settings', extensions: ['json'] }]
   });
   if (canceled || !filePaths.length) return;
-  let data = null;
+  let data: { settings?: unknown; pins?: unknown } | null = null;
   try {
     data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
   } catch {
     data = null;
   }
   if (!data || typeof data.settings !== 'object' || Array.isArray(data.settings)) {
-    await dialog.showMessageBox(windows.settings, {
+    await dialog.showMessageBox(onSettings(), {
       type: 'warning',
       message: "That file isn't a Startbar settings file",
       detail: 'Pick a file made with Export on this page.',
@@ -499,7 +511,7 @@ async function importSettings() {
     });
     return;
   }
-  const { response } = await dialog.showMessageBox(windows.settings, {
+  const { response } = await dialog.showMessageBox(onSettings(), {
     type: 'warning',
     message: 'Replace your settings and pins?',
     detail: 'Every page here and the pinned apps will match the file. Export first if you want to keep what you have now.',
@@ -517,9 +529,9 @@ async function refreshDock() {
   pushState();
 }
 
-async function setDockHidden(hide) {
+async function setDockHidden(hide: boolean) {
   if (hide) {
-    const { response } = await dialog.showMessageBox(windows.settings, {
+    const { response } = await dialog.showMessageBox(onSettings(), {
       type: 'question',
       message: 'Hide the Dock?',
       detail: 'The Dock will stay out of sight until the mouse reaches the bottom of the screen, the same as "Automatically hide and show the Dock" in System Settings. You can show it again here.',
@@ -533,7 +545,7 @@ async function setDockHidden(hide) {
 }
 
 async function moveDockToBottom() {
-  const { response } = await dialog.showMessageBox(windows.settings, {
+  const { response } = await dialog.showMessageBox(onSettings(), {
     type: 'question',
     message: 'Move the Dock to the bottom?',
     detail: 'Minimized windows shrink toward the Dock. With the Dock at the bottom they go down toward the bar instead of off to the side.',
@@ -546,14 +558,14 @@ async function moveDockToBottom() {
 }
 
 // setting is the name of the same switch in System Settings, Desktop and Dock.
-async function dockChanged(result, setting) {
+async function dockChanged(result: DockResult, setting: string) {
   rememberAutomation(result);
   await refreshDock();
   // The first time, macOS asks for the permission, and closing its prompt
   // hands focus to the app that was in front before Startbar.
   focusSettings();
   if (result === 'ok') return;
-  const { response } = await dialog.showMessageBox(windows.settings, {
+  const { response } = await dialog.showMessageBox(onSettings(), {
     type: 'warning',
     message: result === 'notAllowed' ? "Startbar isn't allowed to change the Dock" : "The Dock didn't change",
     detail: result === 'notAllowed'
@@ -569,7 +581,7 @@ async function dockChanged(result, setting) {
 }
 
 async function resetSettings() {
-  const { response } = await dialog.showMessageBox(windows.settings, {
+  const { response } = await dialog.showMessageBox(onSettings(), {
     type: 'warning',
     message: 'Reset all settings to the defaults?',
     detail: 'The theme, the bar, the Start menu and the clock go back to how they were when Startbar was installed.',
@@ -580,11 +592,11 @@ async function resetSettings() {
   if (response === 0) settings.reset();
 }
 
-const THEME_NAMES = { system: 'System', 'classic-2009': 'Classic 2009', 'classic-2001': 'Classic 2001', 'classic-1995': 'Classic 1995' };
+const THEME_NAMES: Record<Theme, string> = { system: 'System', 'classic-2009': 'Classic 2009', 'classic-2001': 'Classic 2001', 'classic-1995': 'Classic 1995' };
 
 async function resetThemeSettings() {
   const name = THEME_NAMES[settings.get().theme] || 'this theme';
-  const { response } = await dialog.showMessageBox(windows.settings, {
+  const { response } = await dialog.showMessageBox(onSettings(), {
     type: 'warning',
     message: `Reset the ${name} settings to the defaults?`,
     detail: 'The look and size of the bar go back to how they were the first time you picked this theme. The other themes keep their settings.',
@@ -595,8 +607,8 @@ async function resetThemeSettings() {
   if (response === 0) settings.resetTheme();
 }
 
-async function runPower(action) {
-  const names = { sleep: 'sleep', logout: 'log out', shutdown: 'shut down' };
+async function runPower(action: PowerAction) {
+  const names: Record<PowerAction, string> = { sleep: 'sleep', logout: 'log out', shutdown: 'shut down' };
   const verb = names[action];
   if (!verb) return;
   if (settings.get().startMenu.confirmPower && action !== 'sleep') {
@@ -679,8 +691,8 @@ function updateTray() {
 
 // The displays with a full screen window in front, by id. The bar there
 // steps aside unless the setting says otherwise.
-function fullScreenDisplays(t) {
-  const ids = new Set();
+function fullScreenDisplays(t: Tasks) {
+  const ids = new Set<number>();
   for (const a of t.apps) {
     for (const w of a.windows) {
       if (w.fullScreen && w.onScreen) ids.add(screen.getDisplayNearestPoint({ x: w.x + w.w / 2, y: w.y + w.h / 2 }).id);
@@ -691,16 +703,16 @@ function fullScreenDisplays(t) {
 
 // Menus that open from a bar keep it up (with auto hide on) until they
 // close. A menu from another window, the group list for one, opens there.
-function popupOnBar(menu, sender) {
-  const barWin = sender ? windows.barOf(sender) : windows.bar;
-  const win = barWin || (sender && BrowserWindow.fromWebContents(sender)) || windows.bar;
+function popupOnBar(menu: Menu, sender?: WebContents) {
+  const barWin = sender ? windows.barOf(sender) : windows.bar();
+  const win = barWin || (sender && BrowserWindow.fromWebContents(sender)) || windows.bar();
   if (!win) return;
   menu.popup({ window: win, callback: windows.holdBar(barWin) });
 }
 
 // Right click on an empty part of the bar. Kept short: everything else lives
 // in the settings window.
-function showBarMenu(sender) {
+function showBarMenu(sender: WebContents) {
   popupOnBar(Menu.buildFromTemplate([
     { label: 'Hide the Bar', click: () => hideBar() },
     { label: 'Startbar Settings…', click: openSettings },
@@ -734,50 +746,50 @@ function setAppMenu() {
 // Like Quick Launch: opens a new window of an app that already has one,
 // raised on its own, and opens the app otherwise (which gives a running app
 // with no windows its first one).
-function openApp(appPath) {
+function openApp(appPath: string) {
   const running = tasks.get().apps.find((a) => a.path === appPath);
   if (running && running.windows.length > 0) tasks.send({ cmd: 'newWindow', pid: running.pid });
   else shell.openPath(appPath);
 }
 
-function launchApp(appPath) {
+function launchApp(appPath: string) {
   windows.hideMenu();
   apps.noteLaunch(appPath);
   openApp(appPath);
 }
 
-function pinItem(appPath) {
+function pinItem(appPath: string): MenuItemConstructorOptions {
   return pins.has(appPath)
     ? { label: 'Unpin from Bar', click: () => pins.remove(appPath) }
     : { label: 'Pin to Bar', click: () => pins.add(appPath) };
 }
 
 // Right click on a pinned app.
-function showPinMenu(appPath, sender) {
+function showPinMenu(appPath: string, sender: WebContents) {
   if (!pins.has(appPath)) return;
   popupOnBar(Menu.buildFromTemplate([pinItem(appPath)]), sender);
 }
 
 // Right click on an app in the Start menu.
-function showAppMenu(appPath, fromRecent) {
+function showAppMenu(appPath: string, fromRecent: boolean) {
   if (!windows.menu || !pins.isApp(appPath)) return;
-  const items = [{ label: 'Open', click: () => launchApp(appPath) }, { type: 'separator' }, pinItem(appPath)];
+  const items: MenuItemConstructorOptions[] = [{ label: 'Open', click: () => launchApp(appPath) }, { type: 'separator' }, pinItem(appPath)];
   if (fromRecent) {
     items.push({
       label: 'Remove from Recent',
       click: () => {
         apps.forgetRecent(appPath);
-        windows.menu.webContents.send('menu:recentChanged');
+        ipc.send(windows.menu!.webContents, 'menu:recentChanged'); // checked when the menu opened
       }
     });
   }
-  Menu.buildFromTemplate(items).popup({ window: windows.menu });
+  Menu.buildFromTemplate(items).popup({ window: windows.menu! });
 }
 
 // Folders added to the Start menu's right column.
 async function addFolders() {
   app.focus({ steal: true }); // the picker is a sheet, which waits for Startbar to be in front
-  const { canceled, filePaths } = await dialog.showOpenDialog(windows.settings, {
+  const { canceled, filePaths } = await dialog.showOpenDialog(onSettings(), {
     title: 'Add Folders to the Start Menu',
     buttonLabel: 'Add',
     defaultPath: os.homedir(),
@@ -787,13 +799,13 @@ async function addFolders() {
   setFolders([...settings.get().startMenu.folders, ...filePaths]);
 }
 
-function setFolders(list) {
+function setFolders(list: string[]) {
   const clean = (Array.isArray(list) ? list : []).filter((p) => typeof p === 'string' && path.isAbsolute(p));
   settings.update({ startMenu: { folders: [...new Set(clean)] } });
 }
 
 // Files from the home folder for the Start menu search, with icons.
-async function searchFiles(q) {
+async function searchFiles(q: string) {
   if (settings.get().startMenu.search !== 'files') return [];
   const found = await files.search(q);
   const icons = await apps.icons(found.map((f) => f.path));
@@ -802,20 +814,21 @@ async function searchFiles(q) {
 
 // The Add button under Leave these apps running: the running apps first,
 // then any app from Applications.
-function addKeepRunning(sender) {
+function addKeepRunning(sender: WebContents) {
   const listed = new Set([...settings.get().quitApps.keepRunning, ...state().alwaysRunning]);
   const running = tasks.get().apps.filter((a) => a.path && !listed.has(a.path) && !quitter.ALWAYS.has(a.bundleId));
-  const items = [...new Map(running.map((a) => [a.path, a])).values()]
+  const items: MenuItemConstructorOptions[] = [...new Map(running.map((a) => [a.path, a])).values()]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((a) => ({ label: a.name, click: () => setKeepRunning([...settings.get().quitApps.keepRunning, a.path]) }));
   if (items.length) items.push({ type: 'separator' });
   items.push({ label: 'Choose from Applications…', click: () => chooseKeepRunning() });
-  Menu.buildFromTemplate(items).popup({ window: BrowserWindow.fromWebContents(sender) });
+  // popup takes null too, and opens on the focused window then.
+  Menu.buildFromTemplate(items).popup({ window: BrowserWindow.fromWebContents(sender) as BrowserWindow });
 }
 
 async function chooseKeepRunning() {
   app.focus({ steal: true }); // the picker is a sheet, which waits for Startbar to be in front
-  const { canceled, filePaths } = await dialog.showOpenDialog(windows.settings, {
+  const { canceled, filePaths } = await dialog.showOpenDialog(onSettings(), {
     title: 'Leave Apps Running',
     buttonLabel: 'Add',
     defaultPath: '/Applications',
@@ -825,14 +838,14 @@ async function chooseKeepRunning() {
   if (!canceled) setKeepRunning([...settings.get().quitApps.keepRunning, ...filePaths]);
 }
 
-function setKeepRunning(list) {
+function setKeepRunning(list: string[]) {
   const clean = (Array.isArray(list) ? list : []).filter((p) => typeof p === 'string' && path.isAbsolute(p));
   settings.update({ quitApps: { keepRunning: [...new Set(clean)] } });
 }
 
 async function addPins() {
   app.focus({ steal: true }); // the picker is a sheet, which waits for Startbar to be in front
-  const { canceled, filePaths } = await dialog.showOpenDialog(windows.settings, {
+  const { canceled, filePaths } = await dialog.showOpenDialog(onSettings(), {
     title: 'Pin Apps to the Bar',
     buttonLabel: 'Pin',
     defaultPath: '/Applications',
@@ -843,14 +856,15 @@ async function addPins() {
 }
 
 // Right click on a window, group or app button.
-async function showTaskMenu(target, sender) {
+async function showTaskMenu(target: Partial<TaskMenuTarget>, sender: WebContents) {
   const app = tasks.get().apps.find((a) => a.pid === target.pid);
   if (!app) return;
-  const send = (cmd, extra) => tasks.send({ cmd, ...extra });
-  const items = [];
+  // Each call below pairs cmd with the id or the pid it takes.
+  const send = (cmd: HelperCommand['cmd'], extra: { id?: string; pid?: number }) => tasks.send({ cmd, ...extra } as HelperCommand);
+  const items: MenuItemConstructorOptions[] = [];
   // The app's own New Window item, when its menus have one. A slow app
   // doesn't hold the menu up for long.
-  const found = await Promise.race([send('newWindowItem', { pid: app.pid }), new Promise((r) => setTimeout(() => r({ ok: false }), 500))]);
+  const found = await Promise.race([send('newWindowItem', { pid: app.pid }), new Promise<HelperReply>((r) => setTimeout(() => r({ ok: false }), 500))]);
   if (found.ok && found.title) items.push({ label: found.title, click: () => send('newWindow', { pid: app.pid }) }, { type: 'separator' });
   if (target.kind === 'window') {
     const win = app.windows.find((w) => w.id === target.id);
@@ -871,9 +885,10 @@ async function showTaskMenu(target, sender) {
       );
     }
   } else if (target.kind === 'group' && Array.isArray(target.ids)) {
+    // The clicks below run later, which loses the check on ids above.
     items.push(
-      { label: 'Minimize All', click: () => target.ids.forEach((id) => minimize({ cmd: 'minimize', id })) },
-      { label: 'Close All', click: () => target.ids.forEach((id) => send('close', { id })) },
+      { label: 'Minimize All', click: () => target.ids!.forEach((id) => minimize({ cmd: 'minimize', id })) },
+      { label: 'Close All', click: () => target.ids!.forEach((id) => send('close', { id })) },
       { type: 'separator' }
     );
   }
@@ -883,7 +898,7 @@ async function showTaskMenu(target, sender) {
 }
 
 // The list or the preview the window came from closes with it.
-function ungroupWindow(id) {
+function ungroupWindow(id: string) {
   windows.hideGroup();
   windows.hidePreview();
   ungrouped.ungroup(id, tasks.get());
@@ -897,8 +912,8 @@ const taskState = () => order.withOrder(ungrouped.withIds(tasks.get()));
 // renderer/shared/dragout.js. The bar under the pointer shows a slot for
 // it; dropping there pulls the window out of its group. The tip window is
 // the ghost under the cursor.
-let drag = null; // { id, pid, bar }
-function dragOut(d) {
+let drag: { id: string; pid: number; bar: BrowserWindow | null } | null = null; // { id, pid, bar }
+function dragOut(d: DragOut) {
   if (!d || typeof d !== 'object') return;
   const point = { x: Number(d.x) || 0, y: Number(d.y) || 0 };
   if (d.phase === 'start') {
@@ -909,15 +924,15 @@ function dragOut(d) {
   if (!drag) return;
   const over = windows.barAt(point);
   if (over !== drag.bar) {
-    if (drag.bar && !drag.bar.isDestroyed()) drag.bar.webContents.send('tasks:dragOver', null);
+    if (drag.bar && !drag.bar.isDestroyed()) ipc.send(drag.bar.webContents, 'tasks:dragOver', null);
     drag.bar = over;
-    if (over) over.webContents.send('tasks:dragOver', { pid: drag.pid });
+    if (over) ipc.send(over.webContents, 'tasks:dragOver', { pid: drag.pid });
   }
   if (d.phase === 'move') return windows.moveGhost(point);
   if (d.phase !== 'drop' && d.phase !== 'cancel') return;
   const { id, bar } = drag;
   drag = null;
-  if (bar && !bar.isDestroyed()) bar.webContents.send('tasks:dragOver', null);
+  if (bar && !bar.isDestroyed()) ipc.send(bar.webContents, 'tasks:dragOver', null);
   windows.hideTip();
   windows.holdPreview(false);
   if (bar && d.phase === 'drop') ungroupWindow(id);
@@ -929,23 +944,23 @@ function dragOut(d) {
 // be pictured, so it shows the last one taken, and Startbar takes one
 // right before it minimizes a window itself.
 const PREVIEW_SIZE = { width: 190, height: 120 };
-const pictures = new Map(); // window id -> { image, at }
-function takePicture(id) {
+const pictures = new Map<string, { image: string; at: number }>(); // window id -> { image, at }
+function takePicture(id: string) {
   return tasks.send({ cmd: 'thumb', id, ...PREVIEW_SIZE }).then((reply) => {
     if (!reply.ok || !reply.image) return null;
     pictures.delete(id);
     pictures.set(id, { image: reply.image, at: Date.now() });
-    if (pictures.size > 60) pictures.delete(pictures.keys().next().value);
+    if (pictures.size > 60) pictures.delete(pictures.keys().next().value!); // there are 61
     return reply.image;
   });
 }
-async function minimize(command) {
+async function minimize(command: WindowCommand) {
   if (settings.get().taskbar.previews && screenNow === 'allowed') {
     await Promise.race([takePicture(command.id), new Promise((r) => setTimeout(r, 400))]);
   }
   return tasks.send(command);
 }
-function showPreview(payload, sender) {
+function showPreview(payload: PreviewPayload, sender: WebContents) {
   const bar = windows.barOf(sender);
   windows.showPreview(payload, bar);
   takePictures(payload);
@@ -954,14 +969,14 @@ function showPreview(payload, sender) {
 // A click on a group with previews on: the pictures open and stay until a
 // click elsewhere, which the helper reports while they're up. A click on
 // the pictures or on their button is theirs to handle.
-function pinPreview(payload, sender) {
+function pinPreview(payload: PreviewPayload, sender: WebContents) {
   const bar = windows.barOf(sender);
   if (!windows.pinPreview(payload, bar)) return;
   takePictures(payload);
   tasks.setWatchClicks(true);
 }
 
-function takePictures(payload) {
+function takePictures(payload: PreviewPayload) {
   if (screenNow !== 'allowed') return;
   for (const w of payload.windows) {
     const kept = pictures.get(w.id);
@@ -976,7 +991,7 @@ function takePictures(payload) {
 // peek that arrives after the pictures went away is dropped, or nothing
 // would put it back.
 let peeking = false;
-function peek(id) {
+function peek(id: string | null) {
   if (id && settings.get().taskbar.peek && windows.previewShown()) {
     peeking = true;
     tasks.send({ cmd: 'peek', id });
@@ -987,25 +1002,25 @@ function peek(id) {
 }
 
 function wireIpc() {
-  ipcMain.on('preview:show', (e, payload) => showPreview(payload, e.sender));
-  ipcMain.on('preview:peek', (_e, id) => peek(id));
-  ipcMain.on('preview:pin', (e, payload) => pinPreview(payload, e.sender));
-  ipcMain.on('preview:size', (_e, size) => windows.sizePreview(size));
-  ipcMain.on('preview:leave', () => windows.leavePreview());
-  ipcMain.on('preview:hover', (_e, on) => windows.hoverPreview(on));
-  ipcMain.on('preview:hide', () => windows.hidePreview());
-  ipcMain.handle('state', () => state());
-  ipcMain.on('bar:start', (e) => windows.toggleMenu(windows.barOf(e.sender)));
-  ipcMain.on('bar:menu', (e) => showBarMenu(e.sender));
-  ipcMain.on('menu:hide', () => windows.hideMenu());
-  ipcMain.handle('menu:apps', () => apps.load());
-  ipcMain.handle('menu:recent', () => (settings.get().startMenu.showRecent ? apps.recent(settings.get().startMenu.recentCount) : []));
-  ipcMain.on('menu:launch', (_e, appPath) => launchApp(appPath));
-  ipcMain.on('menu:appMenu', (_e, appPath, fromRecent) => showAppMenu(appPath, !!fromRecent));
-  ipcMain.on('menu:open', (_e, target) => {
+  ipc.on('preview:show', (e, payload) => showPreview(payload, e.sender));
+  ipc.on('preview:peek', (_e, id) => peek(id));
+  ipc.on('preview:pin', (e, payload) => pinPreview(payload, e.sender));
+  ipc.on('preview:size', (_e, size) => windows.sizePreview(size));
+  ipc.on('preview:leave', () => windows.leavePreview());
+  ipc.on('preview:hover', (_e, on) => windows.hoverPreview(on));
+  ipc.on('preview:hide', () => windows.hidePreview());
+  ipc.handle('state', () => state());
+  ipc.on('bar:start', (e) => windows.toggleMenu(windows.barOf(e.sender)));
+  ipc.on('bar:menu', (e) => showBarMenu(e.sender));
+  ipc.on('menu:hide', () => windows.hideMenu());
+  ipc.handle('menu:apps', () => apps.load());
+  ipc.handle('menu:recent', () => (settings.get().startMenu.showRecent ? apps.recent(settings.get().startMenu.recentCount) : []));
+  ipc.on('menu:launch', (_e, appPath) => launchApp(appPath));
+  ipc.on('menu:appMenu', (_e, appPath, fromRecent) => showAppMenu(appPath, !!fromRecent));
+  ipc.on('menu:open', (_e, target) => {
     windows.hideMenu();
     const home = os.homedir();
-    const places = {
+    const places: Partial<Record<MenuTarget, string>> = {
       applications: '/Applications',
       documents: path.join(home, 'Documents'),
       downloads: path.join(home, 'Downloads'),
@@ -1017,28 +1032,28 @@ function wireIpc() {
     if (target === 'settings') return openSettings();
     if (places[target]) openFolder(places[target]);
   });
-  ipcMain.handle('menu:files', (_e, q) => searchFiles(q));
-  ipcMain.handle('menu:placeIcons', () => placeIcons());
-  ipcMain.handle('menu:userPicture', () => userPicture());
-  ipcMain.on('menu:openFile', (_e, file) => {
+  ipc.handle('menu:files', (_e, q) => searchFiles(q));
+  ipc.handle('menu:placeIcons', () => placeIcons());
+  ipc.handle('menu:userPicture', () => userPicture());
+  ipc.on('menu:openFile', (_e, file) => {
     if (typeof file !== 'string' || !file.startsWith(os.homedir() + path.sep)) return;
     windows.hideMenu();
     openFolder(file);
   });
-  ipcMain.on('menu:openFolder', (_e, folder) => {
+  ipc.on('menu:openFolder', (_e, folder) => {
     if (!settings.get().startMenu.folders.includes(folder)) return;
     windows.hideMenu();
     openFolder(folder);
   });
-  ipcMain.on('menu:power', (_e, action) => {
+  ipc.on('menu:power', (_e, action) => {
     windows.hideMenu();
     runPower(action);
   });
-  ipcMain.handle('settings:update', (_e, patch) => settings.update(patch));
-  ipcMain.on('settings:reset', () => resetSettings());
-  ipcMain.on('settings:resetTheme', () => resetThemeSettings());
-  ipcMain.on('settings:link', (_e, name) => {
-    const links = {
+  ipc.handle('settings:update', (_e, patch) => settings.update(patch));
+  ipc.on('settings:reset', () => resetSettings());
+  ipc.on('settings:resetTheme', () => resetThemeSettings());
+  ipc.on('settings:link', (_e, name) => {
+    const links: Record<LinkKey, string> = {
       website: 'https://pratherbytecraft.com',
       github: PKG.homepage,
       community: 'https://www.reddit.com/r/pratherbytecraft/',
@@ -1048,65 +1063,66 @@ function wireIpc() {
     if (links[name]) shell.openExternal(links[name]);
   });
   // Starts one of the other apps, or brings it forward when it's running.
-  ipcMain.on('sibling:open', (_e, key) => {
+  ipc.on('sibling:open', (_e, key) => {
     const at = SIBLINGS[key] && siblingApp(key);
     if (at) execFile('open', ['-a', at], (err) => err && console.log(`Startbar: ${key} didn't open: ${err.message}`));
   });
-  ipcMain.on('access:ask', (_e, name) => askPermission(name));
-  ipcMain.on('pins:launch', (_e, appPath) => {
+  ipc.on('access:ask', (_e, name) => askPermission(name));
+  ipc.on('pins:launch', (_e, appPath) => {
     if (pins.has(appPath)) openApp(appPath);
   });
-  ipcMain.on('pins:menu', (e, appPath) => showPinMenu(appPath, e.sender));
-  ipcMain.on('pins:set', (_e, list) => pins.set(list));
-  ipcMain.on('pins:remove', (_e, appPath) => pins.remove(appPath));
-  ipcMain.on('pins:add', () => addPins());
-  ipcMain.on('dock:hidden', (_e, hide) => setDockHidden(!!hide));
-  ipcMain.on('dock:bottom', () => moveDockToBottom());
-  ipcMain.on('folders:add', () => addFolders());
-  ipcMain.on('login:set', (_e, on) => setLoginItem(on));
-  ipcMain.on('updates:check', () => updates.check(VERSION));
-  ipcMain.on('clipboard:text', (_e, text) => clipboard.writeText(String(text)));
-  ipcMain.on('settings:export', () => exportSettings());
-  ipcMain.on('settings:import', () => importSettings());
-  ipcMain.on('folders:set', (_e, list) => setFolders(list));
-  ipcMain.on('keepRunning:add', (e) => addKeepRunning(e.sender));
-  ipcMain.on('keepRunning:set', (_e, list) => setKeepRunning(list));
+  ipc.on('pins:menu', (e, appPath) => showPinMenu(appPath, e.sender));
+  ipc.on('pins:set', (_e, list) => pins.set(list));
+  ipc.on('pins:remove', (_e, appPath) => pins.remove(appPath));
+  ipc.on('pins:add', () => addPins());
+  ipc.on('dock:hidden', (_e, hide) => setDockHidden(!!hide));
+  ipc.on('dock:bottom', () => moveDockToBottom());
+  ipc.on('folders:add', () => addFolders());
+  ipc.on('login:set', (_e, on) => setLoginItem(on));
+  ipc.on('updates:check', () => updates.check(VERSION));
+  ipc.on('clipboard:text', (_e, text) => clipboard.writeText(String(text)));
+  ipc.on('settings:export', () => exportSettings());
+  ipc.on('settings:import', () => importSettings());
+  ipc.on('folders:set', (_e, list) => setFolders(list));
+  ipc.on('keepRunning:add', (e) => addKeepRunning(e.sender));
+  ipc.on('keepRunning:set', (_e, list) => setKeepRunning(list));
   // The shortcut field records keys, so the global shortcut steps aside.
-  ipcMain.on('shortcut:pause', () => globalShortcut.unregisterAll());
-  ipcMain.on('shortcut:resume', () => {
+  ipc.on('shortcut:pause', () => globalShortcut.unregisterAll());
+  ipc.on('shortcut:resume', () => {
     registerShortcut();
     pushState();
   });
-  ipcMain.handle('tasks:get', () => taskState());
-  ipcMain.on('tasks:ungroup', (_e, id) => ungroupWindow(String(id)));
-  ipcMain.on('tasks:regroup', (_e, id) => ungrouped.regroup(String(id)));
-  ipcMain.on('tasks:order', (_e, keys) => {
+  ipc.handle('tasks:get', () => taskState());
+  ipc.on('tasks:ungroup', (_e, id) => ungroupWindow(String(id)));
+  ipc.on('tasks:regroup', (_e, id) => ungrouped.regroup(String(id)));
+  ipc.on('tasks:order', (_e, keys) => {
     if (!Array.isArray(keys)) return;
     order.set(keys, (tasks.get().apps || []).flatMap((a) => (a.windows || []).map((w) => w.id)));
   });
-  ipcMain.on('tasks:dragOut', (_e, d) => dragOut(d));
-  ipcMain.on('tasks:putAllBack', () => ungrouped.putAllBack());
-  ipcMain.handle('tasks:command', (_e, command) => (command && command.cmd === 'minimize' ? minimize(command) : tasks.send(command)));
-  ipcMain.handle('tasks:icons', (_e, paths) => apps.icons(Array.isArray(paths) ? paths : []));
-  ipcMain.on('tasks:menu', (e, target) => showTaskMenu(target || {}, e.sender));
-  ipcMain.on('tip:show', (e, { text, rect }) => windows.showTip(String(text), rect, windows.barOf(e.sender)));
-  ipcMain.on('tip:size', (_e, size) => windows.sizeTip(size));
-  ipcMain.on('tip:hide', () => windows.hideTip());
-  ipcMain.on('group:show', (e, payload) => windows.showGroup(payload, windows.barOf(e.sender)));
-  ipcMain.on('group:size', (_e, size) => windows.sizeGroup(size));
-  ipcMain.on('group:hide', () => windows.hideGroup());
-  ipcMain.on('clock:click', (e, rect) => {
+  ipc.on('tasks:dragOut', (_e, d) => dragOut(d));
+  ipc.on('tasks:putAllBack', () => ungrouped.putAllBack());
+  ipc.handle('tasks:command', (_e, command) => (command && command.cmd === 'minimize' ? minimize(command) : tasks.send(command)));
+  ipc.handle('tasks:icons', (_e, paths) => apps.icons(Array.isArray(paths) ? paths : []));
+  ipc.on('tasks:menu', (e, target) => showTaskMenu(target || {}, e.sender));
+  ipc.on('tip:show', (e, { text, rect }) => windows.showTip(String(text), rect, windows.barOf(e.sender)));
+  ipc.on('tip:size', (_e, size) => windows.sizeTip(size));
+  ipc.on('tip:hide', () => windows.hideTip());
+  ipc.on('group:show', (e, payload) => windows.showGroup(payload, windows.barOf(e.sender)));
+  ipc.on('group:size', (_e, size) => windows.sizeGroup(size));
+  ipc.on('group:hide', () => windows.hideGroup());
+  ipc.on('clock:click', (e, rect) => {
     const action = settings.get().clock.click;
     if (action === 'calendar') windows.toggleCalendar(rect, windows.barOf(e.sender));
     else if (action === 'app') shell.openPath('/System/Applications/Calendar.app');
   });
-  ipcMain.on('calendar:size', (_e, size) => windows.sizeCalendar(size));
-  ipcMain.handle('status:get', () => status.get());
-  ipcMain.on('tray:click', (e, { kind, rect }) => {
-    if (['volume', 'wifi', 'battery', 'bluetooth'].includes(kind)) windows.togglePopover(kind, rect, windows.barOf(e.sender));
+  ipc.on('calendar:size', (_e, size) => windows.sizeCalendar(size));
+  ipc.handle('status:get', () => status.get());
+  ipc.on('tray:click', (e, { kind, rect }) => {
+    // includes() leaves only the kinds with a panel.
+    if (['volume', 'wifi', 'battery', 'bluetooth'].includes(kind)) windows.togglePopover(kind as PopoverKind, rect, windows.barOf(e.sender));
     if (kind === 'shotdrawer') openShotdrawer(rect, windows.barOf(e.sender));
   });
-  ipcMain.on('tray:command', (_e, command) => {
+  ipc.on('tray:command', (_e, command) => {
     if (!command) return;
     if (command.cmd === 'setVolume') status.send({ cmd: 'setVolume', level: Math.max(0, Math.min(1, Number(command.level) || 0)) });
     if (command.cmd === 'setMuted') status.send({ cmd: 'setMuted', muted: !!command.muted });
@@ -1116,8 +1132,8 @@ function wireIpc() {
       status.send({ cmd: 'setConnected', address: command.address, on: !!command.on });
     }
   });
-  ipcMain.on('tray:settings', (_e, name) => {
-    const panes = {
+  ipc.on('tray:settings', (_e, name) => {
+    const panes: Record<PopoverKind, string> = {
       volume: 'x-apple.systempreferences:com.apple.Sound-Settings.extension',
       wifi: 'x-apple.systempreferences:com.apple.wifi-settings-extension',
       battery: 'x-apple.systempreferences:com.apple.Battery-Settings.extension',
@@ -1127,9 +1143,9 @@ function wireIpc() {
     windows.hidePopover();
     shell.openExternal(panes[name]);
   });
-  ipcMain.on('popover:size', (_e, size) => windows.sizePopover(size));
-  ipcMain.on('popover:hide', () => windows.hidePopover());
-  ipcMain.on('calendar:hide', () => windows.hideCalendar());
+  ipc.on('popover:size', (_e, size) => windows.sizePopover(size));
+  ipc.on('popover:hide', () => windows.hidePopover());
+  ipc.on('calendar:hide', () => windows.hideCalendar());
 }
 
 app.whenReady().then(() => {

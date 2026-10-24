@@ -3,19 +3,28 @@
 // stand. Keeps the latest reading, sends changes, and restarts the helper if
 // it stops. Missing pieces (no Wi-Fi, no battery, Bluetooth not allowed)
 // come through as null.
-const { spawn } = require('child_process');
-const { EventEmitter } = require('events');
-const readline = require('readline');
-const { statusHelperPath } = require('../scripts/build-helper');
+import { spawn, type ChildProcessByStdio } from 'child_process';
+import { EventEmitter } from 'events';
+import readline from 'readline';
+import type { Readable, Writable } from 'stream';
+import { statusHelperPath } from '../scripts/build-helper';
+import type { Status, TrayCommand } from '../shared/types';
+
+// What main sends the status helper: the tray's commands and its own.
+export type StatusCommand = TrayCommand | { cmd: 'access' | 'askLocation' | 'askBluetooth' | 'refresh' };
+
+// What the helper prints, one JSON object per line. Its reply to each
+// command comes too, and is skipped: the new reading is what counts.
+type StatusMessage = ({ type: 'status' } & Omit<Status, 'access'> & { access?: Status['access'] }) | { type: 'reply'; ok: boolean; error?: string };
 
 const events = new EventEmitter();
-let child = null;
+let child: ChildProcessByStdio<Writable, Readable, null> | null = null;
 let stopping = false;
 let restarts = 0;
-let status = { volume: null, wifi: null, battery: null, bluetooth: null, access: {} };
+let status: Status = { volume: null, wifi: null, battery: null, bluetooth: null, access: {} };
 
-function onLine(line) {
-  let msg;
+function onLine(line: string) {
+  let msg: StatusMessage;
   try {
     msg = JSON.parse(line);
   } catch {
@@ -26,7 +35,7 @@ function onLine(line) {
   events.emit('change', status);
 }
 
-function start() {
+export function start() {
   const helper = statusHelperPath();
   if (!helper) return;
   stopping = false;
@@ -44,7 +53,7 @@ function start() {
   });
 }
 
-function stop() {
+export function stop() {
   stopping = true;
   if (child) child.kill();
 }
@@ -52,14 +61,9 @@ function stop() {
 // { cmd: 'setVolume', level: 0.4 }, { cmd: 'setMuted', muted: true },
 // { cmd: 'setWifi', on: false }, { cmd: 'askLocation' } and the like. The new
 // reading comes back as a change.
-function send(command) {
+export function send(command: StatusCommand) {
   if (child) child.stdin.write(JSON.stringify(command) + '\n');
 }
 
-module.exports = {
-  start,
-  stop,
-  send,
-  get: () => status,
-  onChange: (fn) => events.on('change', fn)
-};
+export const get = () => status;
+export const onChange = (fn: (status: Status) => void) => events.on('change', fn);

@@ -1,10 +1,14 @@
 // The real Dock. It shares the bottom edge with the bar, so the Taskbar
 // settings page shows whether it hides itself and offers to hide it. Uses
 // the same setting as "Automatically hide and show the Dock".
-const { execFile } = require('child_process');
+import { execFile } from 'child_process';
+import type { DockStatus } from '../shared/types';
 
-function run(cmd, args) {
-  return new Promise((resolve) => {
+// How a change through System Events went.
+export type DockResult = 'ok' | 'notAllowed' | 'failed';
+
+function run(cmd: string, args: string[]) {
+  return new Promise<string | null>((resolve) => {
     execFile(cmd, args, (err, stdout) => resolve(err ? null : String(stdout).trim()));
   });
 }
@@ -13,7 +17,7 @@ function run(cmd, args) {
 const NOT_ALLOWED = -1743;
 
 // { autohide: true or false, position: bottom | left | right }
-async function status() {
+export async function status(): Promise<DockStatus> {
   const [autohide, orientation] = await Promise.all([
     run('defaults', ['read', 'com.apple.dock', 'autohide']),
     run('defaults', ['read', 'com.apple.dock', 'orientation'])
@@ -23,8 +27,8 @@ async function status() {
 
 // macOS asks once whether Startbar may control System Events. Resolves to
 // ok, notAllowed or failed.
-function tellSystemEvents(command) {
-  return new Promise((resolve) => {
+function tellSystemEvents(command: string) {
+  return new Promise<DockResult>((resolve) => {
     execFile('osascript', ['-e', `tell application "System Events" to ${command}`], (err, _out, stderr) => {
       if (!err) return resolve('ok');
       resolve(String(stderr).includes(String(NOT_ALLOWED)) ? 'notAllowed' : 'failed');
@@ -35,19 +39,18 @@ function tellSystemEvents(command) {
 // Through System Events, the way the switch in System Settings does it.
 // Writing the setting and restarting the Dock instead leaves the bar pushed
 // up off the bottom edge.
-function setAutohide(on) {
+export function setAutohide(on: boolean) {
   return tellSystemEvents(`set autohide of dock preferences to ${on}`);
 }
 
 // Minimized windows shrink toward the Dock, so on a side they fly off to
 // that side instead of down toward the bar.
-function moveToBottom() {
+export function moveToBottom() {
   return tellSystemEvents('set screen edge of dock preferences to bottom');
 }
 
 // Only reads, so the Permissions page can ask without changing anything.
-function askAutomation() {
+export function askAutomation() {
   return tellSystemEvents('get autohide of dock preferences');
 }
 
-module.exports = { status, setAutohide, moveToBottom, askAutomation };

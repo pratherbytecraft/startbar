@@ -4,21 +4,28 @@
 // a restart while its title matches. While Startbar runs the window ids are
 // kept too, so a window stays out when its title changes. The bar only sees
 // the ids, added to the task state by withIds.
-const fs = require('fs');
-const path = require('path');
-const settings = require('./settings');
+import fs from 'fs';
+import path from 'path';
+import * as settings from './settings';
+import type { TaskApp, Tasks } from '../shared/types';
 
-let saved = null; // [{ app, title }], app is the bundle id or the path
-const live = new Map(); // window id -> its entry in saved
-const listeners = new Set();
+// A window pulled out of its group: its app's key and its title.
+interface Entry {
+  app: string;
+  title: string;
+}
+
+let saved: Entry[] | null = null; // [{ app, title }], app is the bundle id or the path
+const live = new Map<string, Entry>(); // window id -> its entry in saved
+const listeners = new Set<(ids: string[]) => void>();
 
 function file() {
   return path.join(settings.dataDir(), 'ungrouped.json');
 }
 
-const appKey = (a) => a.bundleId || a.path || a.name || '';
-const isEntry = (x) => !!x && typeof x === 'object' && typeof x.app === 'string' && typeof x.title === 'string';
-const same = (x, y) => x.app === y.app && x.title === y.title;
+export const appKey = (a: Partial<Pick<TaskApp, 'bundleId' | 'path' | 'name'>>) => a.bundleId || a.path || a.name || '';
+const isEntry = (x: Partial<Entry> | null | undefined): x is Entry => !!x && typeof x === 'object' && typeof x.app === 'string' && typeof x.title === 'string';
+const same = (x: Entry, y: Entry) => x.app === y.app && x.title === y.title;
 
 function load() {
   try {
@@ -29,30 +36,30 @@ function load() {
   }
 }
 
-function get() {
-  if (!saved) load();
-  return saved;
+export function get() {
+  if (!saved) load(); // which sets saved
+  return saved!;
 }
 
-function write(next) {
+function write(next: Entry[]) {
   saved = next;
   try {
     fs.writeFileSync(file(), JSON.stringify(saved, null, 2) + '\n');
   } catch (err) {
-    console.log(`Startbar: could not save ungrouped.json: ${err.message}`);
+    console.log(`Startbar: could not save ungrouped.json: ${(err as Error).message}`);
   }
   for (const fn of listeners) fn(ids());
 }
 
-function ids() {
+export function ids() {
   return [...live.keys()];
 }
 
 // The task state with the ungrouped window ids added. A window already out
 // stays out; a new window takes a saved entry with its app and title, one
 // window per entry; a closed window drops off.
-function withIds(state) {
-  const seen = new Set();
+export function withIds<T extends Tasks>(state: T) {
+  const seen = new Set<string>();
   const taken = new Set(live.values());
   for (const a of state.apps || []) {
     const app = appKey(a);
@@ -73,7 +80,7 @@ function withIds(state) {
 
 // Pull the window with this id out of its group, remembered as the app and
 // the title it has now.
-function ungroup(id, state) {
+export function ungroup(id: string, state: Tasks) {
   if (live.has(id)) return;
   for (const a of state.apps || []) {
     const w = (a.windows || []).find((x) => x.id === id);
@@ -86,7 +93,7 @@ function ungroup(id, state) {
 }
 
 // Put the window back in its group and forget it.
-function regroup(id) {
+export function regroup(id: string) {
   const e = live.get(id);
   if (!e) return;
   live.delete(id);
@@ -96,14 +103,13 @@ function regroup(id) {
   write(list.filter((_x, i) => i !== at));
 }
 
-function putAllBack() {
+export function putAllBack() {
   live.clear();
   write([]);
 }
 
-function onChange(fn) {
+export function onChange(fn: (ids: string[]) => void) {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
 
-module.exports = { withIds, ungroup, regroup, putAllBack, ids, get, onChange, appKey };

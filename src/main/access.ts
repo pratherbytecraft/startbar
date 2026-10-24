@@ -9,18 +9,19 @@
 // switching it off and on doesn't help. So when the permission worked under
 // an older build and is off now, Startbar clears its own entry and asks once
 // more. A permission switched off by hand, under the same build, is left be.
-const { app, dialog, shell } = require('electron');
-const { execFile } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const settings = require('./settings');
-const { BUNDLE_ID } = require('../scripts/build-app');
+import { app, dialog, shell } from 'electron';
+import { execFile } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import * as settings from './settings';
+import { BUNDLE_ID } from '../scripts/build-app';
+import type { Tasks } from '../shared/types';
 
 const PANE = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility';
 
 let asking = false;
 
-async function ask({ again = false } = {}) {
+export async function ask({ again = false } = {}) {
   if (asking) return;
   asking = true;
   app.focus({ steal: true }); // Startbar has no Dock icon, so bring the dialog forward
@@ -39,17 +40,17 @@ async function ask({ again = false } = {}) {
   if (response === 0) openPane();
 }
 
-function openPane() {
+export function openPane() {
   shell.openExternal(PANE);
 }
 
 // The stamp of the Startbar.app this runs from (see scripts/build-app.js),
 // or '' when it runs as plain Electron.
-let stamp = null;
-function buildStamp() {
+let stamp: string | null = null;
+export function buildStamp() {
   if (stamp === null) {
     try {
-      stamp = JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'package.json'), 'utf8')).bundleStamp || '';
+      stamp = (JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'package.json'), 'utf8')) as { bundleStamp?: string }).bundleStamp || '';
     } catch {
       stamp = '';
     }
@@ -59,7 +60,7 @@ function buildStamp() {
 
 // Clears Startbar's entry in the Accessibility list. The next check from the
 // helper puts it back, switched off, ready to turn on.
-function forgetOldEntry(done) {
+function forgetOldEntry(done: () => void) {
   execFile('tccutil', ['reset', 'Accessibility', BUNDLE_ID], () => done());
 }
 
@@ -68,7 +69,7 @@ function forgetOldEntry(done) {
 // the bar's right click menu has the entry. Waits for the first app list and
 // a moment more, because the bar can't redraw while the dialog is up and
 // would sit empty behind it.
-function check(tasks, { restartHelper } = {}) {
+export function check(tasks: Tasks, { restartHelper }: { restartHelper?: () => void } = {}) {
   const s = settings.get();
   const now = buildStamp();
   if (tasks.accessibility === true) {
@@ -91,4 +92,4 @@ function check(tasks, { restartHelper } = {}) {
   }
 }
 
-module.exports = { ask, check, openPane, buildStamp, BUNDLE_ID };
+export { BUNDLE_ID };

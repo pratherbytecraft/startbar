@@ -1,11 +1,16 @@
 // Settings live in ~/Library/Application Support/Startbar/settings.json.
 // Missing keys fall back to the defaults, so a settings file from an older
 // version keeps working after an update.
-const { app } = require('electron');
-const fs = require('fs');
-const path = require('path');
+import { app } from 'electron';
+import fs from 'fs';
+import path from 'path';
+import type { Settings, SettingsPatch, Theme, ThemeLook } from '../shared/types';
 
-const DEFAULTS = Object.freeze({
+// Settings files are JSON from disk or from an import, walked key by key
+// before they're known to be settings.
+type Json = Record<string, any>;
+
+export const DEFAULTS = Object.freeze<Settings>({
   theme: 'system', // system | classic-2009 | classic-2001 | classic-1995
   appearance: 'auto', // auto | light | dark
   accent: 'auto', // auto | blue | purple | pink | red | orange | yellow | green | graphite
@@ -113,20 +118,20 @@ const THEME_KEYS = [
 
 // A theme's own defaults over the shared ones, used the first time it's picked
 // and by its reset.
-const THEME_DEFAULTS = {
+const THEME_DEFAULTS: Partial<Record<Theme, ThemeLook>> = {
   'classic-2001': { colors: { scheme: 'blue' } },
   'classic-1995': { colors: { scheme: 'standard' } },
   'classic-2009': { barHeight: 40, labels: 'icons-only', taskbar: { pinsPlace: 'row', showDesktop: true }, clock: { showDate: true }, colors: { scheme: 'sky' } }
 };
 
 // The THEME_KEYS of s, in the same nested shape.
-function pick(s) {
-  const out = {};
+function pick(s: Json): ThemeLook {
+  const out: Json = {};
   for (const key of THEME_KEYS) {
     const parts = key.split('.');
-    const last = parts.pop();
-    let from = s;
-    let to = out;
+    const last = parts.pop()!; // every key has at least one part
+    let from: Json = s;
+    let to: Json = out;
     for (const part of parts) {
       from = from && from[part];
       to = to[part] = to[part] || {};
@@ -138,39 +143,42 @@ function pick(s) {
 
 const THEME_SHAPE = pick(DEFAULTS);
 
-function themeDefaults(theme) {
+function themeDefaults(theme: Theme): ThemeLook {
   return merge(THEME_SHAPE, THEME_DEFAULTS[theme]);
 }
 
 // A color scheme saved before the theme had a list of them reads as the
 // theme's own default one.
-function withScheme(s) {
+function withScheme(s: Settings): Settings {
   if (s.colors.scheme !== 'default') return s;
-  return merge(s, { colors: { scheme: themeDefaults(s.theme).colors.scheme } });
+  // THEME_SHAPE has every color key, so the defaults always have a scheme.
+  return merge(s, { colors: { scheme: themeDefaults(s.theme).colors!.scheme } });
 }
 
-let dir;
-let file;
-let current;
+let dir: string;
+let file: string;
+let current: Settings;
 let fresh = false; // no settings file before this launch, a new install
-const listeners = new Set();
+const listeners = new Set<(s: Settings) => void>();
 
-function merge(base, over) {
+// over's keys on top of base, object by object. The result is read as base's
+// type: over is a patch of the same shape, or a file through clean().
+function merge<T extends object>(base: T, over: unknown): T {
   if (!over || typeof over !== 'object' || Array.isArray(over)) return base;
-  const out = { ...base };
+  const out: Json = { ...base };
   for (const key of Object.keys(over)) {
-    const b = base[key];
-    out[key] = b && typeof b === 'object' && !Array.isArray(b) ? merge(b, over[key]) : over[key];
+    const b = (base as Json)[key];
+    out[key] = b && typeof b === 'object' && !Array.isArray(b) ? merge(b, (over as Json)[key]) : (over as Json)[key];
   }
-  return out;
+  return out as T;
 }
 
-function init() {
+export function init() {
   dir = path.join(app.getPath('appData'), 'Startbar');
   file = path.join(dir, 'settings.json');
   fs.mkdirSync(dir, { recursive: true });
   fresh = !fs.existsSync(file);
-  let saved = {};
+  let saved: unknown = {};
   try {
     saved = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
@@ -184,15 +192,15 @@ function init() {
   return current;
 }
 
-function get() {
+export function get() {
   return current;
 }
 
-function firstRun() {
+export function firstRun() {
   return fresh;
 }
 
-function dataDir() {
+export function dataDir() {
   return dir;
 }
 
@@ -204,7 +212,7 @@ function save() {
   return current;
 }
 
-function update(patch) {
+export function update(patch: SettingsPatch) {
   // A new theme puts the old one's look away and brings out its own, or its
   // defaults the first time. The rest of the patch goes on top.
   if (patch && typeof patch.theme === 'string' && patch.theme !== current.theme) {
@@ -218,19 +226,19 @@ function update(patch) {
 }
 
 // The current theme's look back to its defaults. Other themes keep theirs.
-function resetTheme() {
+export function resetTheme() {
   current = merge(current, themeDefaults(current.theme));
   return save();
 }
 
 // Only the keys Startbar knows, each with the same kind of value as its
 // default. Guards an imported file.
-function clean(saved, base) {
-  const out = {};
+function clean(saved: unknown, base: Json): Json {
+  const out: Json = {};
   if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return out;
   for (const key of Object.keys(base)) {
     const b = base[key];
-    const v = saved[key];
+    const v = (saved as Json)[key];
     if (v === undefined) continue;
     if (base === DEFAULTS && key === 'themes') {
       if (v && typeof v === 'object' && !Array.isArray(v)) {
@@ -253,31 +261,30 @@ function clean(saved, base) {
 
 // The one time answers. They stay through an import and a reset, and an
 // export leaves them out.
-const ONE_TIME = ['accessibilityAsked', 'accessibilityStamp', 'hideNoteShown', 'automationAnswer', 'screenAsked', 'screenStamp'];
+const ONE_TIME: (keyof Settings)[] = ['accessibilityAsked', 'accessibilityStamp', 'hideNoteShown', 'automationAnswer', 'screenAsked', 'screenStamp'];
 
 // Everything from saved, the rest from the defaults, for an import. The one
 // time dialogs stay answered.
-function replace(saved) {
+export function replace(saved: unknown) {
   const kept = Object.fromEntries(ONE_TIME.map((key) => [key, current[key]]));
   current = withScheme(merge(merge(DEFAULTS, clean(saved, DEFAULTS)), kept));
   return save();
 }
 
 // The settings for an export file.
-function forExport() {
-  const out = { ...current };
+export function forExport() {
+  const out: Partial<Settings> = { ...current };
   for (const key of ONE_TIME) delete out[key];
   return out;
 }
 
 // Back to the defaults.
-function reset() {
+export function reset() {
   return replace({});
 }
 
-function onChange(fn) {
+export function onChange(fn: (s: Settings) => void) {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
 
-module.exports = { DEFAULTS, init, get, firstRun, update, replace, reset, resetTheme, forExport, onChange, dataDir };

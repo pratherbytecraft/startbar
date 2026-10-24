@@ -13,18 +13,18 @@
 // what it was built from (see bundleStamp).
 // Contents/Resources/app is a two file stub that loads dist/main from the
 // installed package, so an update to the package is picked up as is.
-const { spawnSync } = require('child_process');
-const crypto = require('crypto');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+import { spawnSync } from 'child_process';
+import crypto from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
-const BUNDLE_ID = 'com.pratherbytecraft.startbar';
+export const BUNDLE_ID = 'com.pratherbytecraft.startbar';
 
 // Homebrew keeps each version in its own Cellar folder and links the current
 // one at opt/startbar. The bundle points at the opt path, so it stays the
 // same across brew upgrades and macOS keeps its Accessibility permission.
-function stableRoot(dir) {
+function stableRoot(dir: string) {
   const m = dir.match(/^(.*)\/Cellar\/startbar\/[^/]+\/(.*)$/);
   if (!m) return dir;
   const opt = `${m[1]}/opt/startbar/${m[2]}`;
@@ -38,13 +38,13 @@ const mainScript = path.join(root, 'dist', 'main', 'index.js');
 const userBundle = path.join(os.homedir(), 'Applications', 'Startbar.app');
 const localBundle = path.join(root, 'bundle', 'Startbar.app');
 
-function run(cmd, args) {
+function run(cmd: string, args: string[]) {
   const res = spawnSync(cmd, args, { encoding: 'utf8' });
   if (res.status !== 0) throw new Error(`${cmd} ${args.join(' ')}: ${(res.stderr || res.stdout).trim()}`);
   return res.stdout;
 }
 
-function plistValue(bundle, key) {
+function plistValue(bundle: string, key: string) {
   const res = spawnSync('plutil', ['-extract', key, 'raw', '-o', '-', path.join(bundle, 'Contents', 'Info.plist')], {
     encoding: 'utf8'
   });
@@ -67,7 +67,7 @@ function bundleStamp() {
 }
 
 // The stub a built bundle carries, or null when it isn't one of ours.
-function bundleStub(bundle) {
+function bundleStub(bundle: string): { startbarPackage?: string; bundleStamp?: string } | null {
   try {
     if (plistValue(bundle, 'CFBundleIdentifier') !== BUNDLE_ID) return null;
     return JSON.parse(fs.readFileSync(path.join(bundle, 'Contents', 'Resources', 'app', 'package.json'), 'utf8'));
@@ -78,7 +78,7 @@ function bundleStub(bundle) {
 
 // The Startbar.app built for this package, or null when there isn't one or
 // it was built from an older icon, script or Electron.
-function appPath() {
+export function appPath() {
   for (const bundle of [userBundle, localBundle]) {
     const stub = bundleStub(bundle);
     if (stub && stub.startbarPackage === root && stub.bundleStamp === bundleStamp()) return bundle;
@@ -103,7 +103,7 @@ function pickDest() {
   }
 }
 
-function writeStub(dest) {
+function writeStub(dest: string) {
   const stubDir = path.join(dest, 'Contents', 'Resources', 'app');
   fs.mkdirSync(stubDir, { recursive: true });
   const stubPkg = {
@@ -117,7 +117,7 @@ function writeStub(dest) {
   fs.writeFileSync(path.join(stubDir, 'package.json'), JSON.stringify(stubPkg, null, 2) + '\n');
   fs.writeFileSync(
     path.join(stubDir, 'index.js'),
-    `// Written by startbar/scripts/build-app.js. Loads Startbar from the installed package.
+    `// Written by startbar/src/scripts/build-app.ts. Loads Startbar from the installed package.
 const fs = require('fs');
 const target = ${JSON.stringify(mainScript)};
 if (fs.existsSync(target)) {
@@ -137,9 +137,9 @@ if (fs.existsSync(target)) {
   );
 }
 
-function setPlist(dest) {
+function setPlist(dest: string) {
   const plist = path.join(dest, 'Contents', 'Info.plist');
-  const set = (key, type, value) => run('plutil', ['-replace', key, `-${type}`, String(value), plist]);
+  const set = (key: string, type: string, value: string) => run('plutil', ['-replace', key, `-${type}`, String(value), plist]);
   set('CFBundleName', 'string', 'Startbar');
   set('CFBundleDisplayName', 'string', 'Startbar');
   set('CFBundleIdentifier', 'string', BUNDLE_ID);
@@ -161,9 +161,9 @@ function setPlist(dest) {
   }
 }
 
-function build({ quiet = false } = {}) {
+export function build({ quiet = false } = {}) {
   if (process.platform !== 'darwin') return null;
-  const log = (msg) => quiet || console.log(msg);
+  const log = (msg: string) => quiet || console.log(msg);
   let dest = pickDest();
   try {
     const src = electronApp();
@@ -186,7 +186,7 @@ function build({ quiet = false } = {}) {
     log(`Startbar: app built at ${dest}`);
     return dest;
   } catch (err) {
-    log(`Startbar: the app bundle was not built, Startbar will run as Electron.\n${err.message}`);
+    log(`Startbar: the app bundle was not built, Startbar will run as Electron.\n${(err as Error).message}`);
     return null;
   }
 }
@@ -194,4 +194,3 @@ function build({ quiet = false } = {}) {
 // Without Electron yet (see fix-electron.js), the first run builds the app.
 if (require.main === module && !process.env.ELECTRON_SKIP_BINARY_DOWNLOAD) build();
 
-module.exports = { build, appPath, BUNDLE_ID };

@@ -2,23 +2,24 @@
 // renderer/shared/order.js), saved in order.json next to pins.json. Apps
 // keep their place across restarts. Windows are kept by id, which lasts as
 // long as the window, so a closed window's key is dropped.
-const fs = require('fs');
-const path = require('path');
-const settings = require('./settings');
+import fs from 'fs';
+import path from 'path';
+import * as settings from './settings';
+import type { Tasks } from '../shared/types';
 
 const MAX = 400;
-let saved = null;
-const listeners = new Set();
+let saved: string[] | null = null;
+const listeners = new Set<(order: string[]) => void>();
 
 function file() {
   return path.join(settings.dataDir(), 'order.json');
 }
 
-function get() {
+export function get() {
   if (saved) return saved;
   try {
     const list = JSON.parse(fs.readFileSync(file(), 'utf8'));
-    saved = Array.isArray(list) ? list.filter((k) => typeof k === 'string' && /^(app|win):/.test(k)) : [];
+    saved = Array.isArray(list) ? list.filter((k: unknown) => typeof k === 'string' && /^(app|win):/.test(k)) : [];
   } catch {
     saved = [];
   }
@@ -27,10 +28,10 @@ function get() {
 
 // The keys on the bar now, in their new order, with every saved key that
 // isn't on the bar put back after the key it followed before.
-function merge(old, shown) {
+export function merge(old: string[], shown: string[]) {
   const on = new Set(shown);
   const out = [...shown];
-  let prev = null;
+  let prev: string | null = null;
   for (const k of old) {
     if (on.has(k)) {
       prev = k;
@@ -44,24 +45,23 @@ function merge(old, shown) {
 
 // shown is the bar's keys in the order it was dragged into, open is the ids
 // of every window open now.
-function set(shown, open) {
+export function set(shown: unknown[], open: string[]) {
   const ids = new Set(open.map(String));
-  const keys = shown.filter((k) => typeof k === 'string' && /^(app|win):/.test(k));
+  const keys = shown.filter((k): k is string => typeof k === 'string' && /^(app|win):/.test(k));
   saved = merge(get(), keys).filter((k) => !k.startsWith('win:') || ids.has(k.slice(4))).slice(0, MAX);
   try {
     fs.writeFileSync(file(), JSON.stringify(saved, null, 2) + '\n');
   } catch (err) {
-    console.log(`Startbar: could not save order.json: ${err.message}`);
+    console.log(`Startbar: could not save order.json: ${(err as Error).message}`);
   }
   for (const fn of listeners) fn(saved);
 }
 
 // The task state with the saved order added, for the bars.
-const withOrder = (state) => ({ ...state, order: get() });
+export const withOrder = <T extends Tasks>(state: T) => ({ ...state, order: get() });
 
-function onChange(fn) {
+export function onChange(fn: (order: string[]) => void) {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
 
-module.exports = { get, set, merge, withOrder, onChange };

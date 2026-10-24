@@ -1,31 +1,60 @@
 // The running apps and their windows, from `startbar-helper windows`.
 // Keeps the latest list, sends window commands, and restarts the helper if
 // it stops. The bar draws its buttons from this list.
-const { spawn } = require('child_process');
-const { EventEmitter } = require('events');
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
-const { helperPath } = require('../scripts/build-helper');
+import { spawn, type ChildProcessByStdio } from 'child_process';
+import { EventEmitter } from 'events';
+import fs from 'fs';
+import path from 'path';
+import readline from 'readline';
+import type { Readable, Writable } from 'stream';
+import { helperPath } from '../scripts/build-helper';
+import type { HelperReply, Point, TaskApp, TaskCommand, Tasks } from '../shared/types';
+
+// One area per bar for keepOff: the bottom of the menu bar, the top of the
+// bar, and the screen it's on.
+export interface KeepOffArea {
+  top: number;
+  bottom: number;
+  screen: { x: number; y: number; w: number; h: number };
+}
+
+// What main sends the helper, the pages' commands and its own. See the list
+// at the top of WindowWatcher in helper/startbar-helper.swift.
+export type HelperCommand =
+  | TaskCommand
+  | { cmd: 'unpeek' | 'askScreen' | 'refresh' }
+  | { cmd: 'thumb'; id: string; width: number; height: number }
+  | { cmd: 'hasWindows'; pid: number; ids: string[] }
+  | { cmd: 'keepOff'; areas: KeepOffArea[] }
+  | { cmd: 'spaces'; all: boolean }
+  | { cmd: 'watchClicks' | 'clickThrough'; on: boolean }
+  | { cmd: 'postClick'; x: number; y: number };
+
+// What the helper prints, one JSON object per line.
+type HelperMessage =
+  | { type: 'permission'; accessibility: boolean }
+  | { type: 'state'; apps: TaskApp[] }
+  | { type: 'click'; x: number; y: number }
+  | ({ type: 'reply' } & HelperReply);
 
 const events = new EventEmitter();
-const pending = new Map(); // seq -> resolve
-let child = null;
+const pending = new Map<number, (reply: HelperReply) => void>(); // seq -> resolve
+let child: ChildProcessByStdio<Writable, Readable, null> | null = null;
 let stopping = false;
 let restarts = 0;
 let relaunch = false;
 let seq = 0;
-let state = { accessibility: null, apps: [] };
-let keepOff = { cmd: 'keepOff', areas: [] }; // resent to every new helper
-let spaces = { cmd: 'spaces', all: false }; // this one too
-let watchClicks = { cmd: 'watchClicks', on: false }; // and this one
-let clickThrough = { cmd: 'clickThrough', on: false }; // and this one
-let rawApps = []; // the helper's list, before held back Finder windows come out
+let state: Tasks = { accessibility: null, apps: [] };
+let keepOff: { cmd: 'keepOff'; areas: KeepOffArea[] } = { cmd: 'keepOff', areas: [] }; // resent to every new helper
+let spaces = { cmd: 'spaces' as const, all: false }; // this one too
+let watchClicks = { cmd: 'watchClicks' as const, on: false }; // and this one
+let clickThrough = { cmd: 'clickThrough' as const, on: false }; // and this one
+let rawApps: TaskApp[] = []; // the helper's list, before held back Finder windows come out
 
 // Apps that /Applications only links to (Safari, which lives in a system
 // folder since macOS 13) come from the helper at their real path. They're
 // given the link's path, the one the Start menu and the pins use.
-let links = null;
+let links: Map<string, string> | null = null;
 function linkedApps() {
   if (links) return links;
   links = new Map();
@@ -41,13 +70,13 @@ function linkedApps() {
   return links;
 }
 
-function update(patch) {
+function update(patch: Partial<Tasks>) {
   state = { ...state, ...patch };
   events.emit('change', state);
 }
 
-function onLine(line) {
-  let msg;
+function onLine(line: string) {
+  let msg: HelperMessage;
   try {
     msg = JSON.parse(line);
   } catch {
@@ -63,20 +92,21 @@ function onLine(line) {
     // place instead of relying on a process that began without it.
     if (wasOff && msg.accessibility) restart();
   } else if (msg.type === 'state') {
-    rawApps = msg.apps.map((a) => (linkedApps().has(a.path) ? { ...a, path: linkedApps().get(a.path) } : a));
+    rawApps = msg.apps.map((a) => (linkedApps().has(a.path) ? { ...a, path: linkedApps().get(a.path)! } : a));
     update({ apps: heldBack(rawApps) });
   } else if (msg.type === 'click') {
     events.emit('click', { x: Number(msg.x) || 0, y: Number(msg.y) || 0 });
   } else if (msg.type === 'reply') {
-    const resolve = pending.get(msg.seq);
+    // A reply without a seq finds nothing.
+    const resolve = pending.get(msg.seq as number);
     if (resolve) {
-      pending.delete(msg.seq);
+      pending.delete(msg.seq as number);
       resolve(msg);
     }
   }
 }
 
-function start() {
+export function start() {
   const helper = helperPath();
   if (!helper) {
     console.log('Startbar: the helper is missing, so the bar has no window buttons.');
@@ -109,7 +139,7 @@ function start() {
   });
 }
 
-function restart() {
+export function restart() {
   if (!child) return;
   relaunch = true;
   child.kill();
@@ -119,15 +149,16 @@ function restart() {
 // window's button waits a second. The windows Filedrawer takes over close
 // before then and never flash on the bar; the ones it leaves to Finder show.
 const HOLD = 1000;
-let holdFinder = () => false;
-const finderSeen = new Map(); // window id -> when it was first listed
+let holdFinder: (apps: TaskApp[]) => boolean = () => false;
+const finderSeen = new Map<string, number>(); // window id -> when it was first listed
 let firstList = true;
-let holdTimer = null;
+let holdTimer: NodeJS.Timeout | undefined;
 
-function heldBack(apps) {
+// Exported for the tests.
+export function heldBack(apps: TaskApp[]): TaskApp[] {
   const now = Date.now();
   const finder = apps.find((a) => a.bundleId === 'com.apple.finder');
-  const ids = new Set();
+  const ids = new Set<string>();
   for (const w of finder ? finder.windows : []) {
     ids.add(w.id);
     // The windows open when Startbar starts aren't new.
@@ -136,28 +167,29 @@ function heldBack(apps) {
   for (const id of finderSeen.keys()) if (!ids.has(id)) finderSeen.delete(id);
   firstList = false;
   if (!finder || !holdFinder(apps)) return apps;
-  const young = finder.windows.filter((w) => now - finderSeen.get(w.id) < HOLD);
+  // Every window of finder was put in finderSeen above.
+  const young = finder.windows.filter((w) => now - finderSeen.get(w.id)! < HOLD);
   if (!young.length) return apps;
-  const oldest = Math.max(...young.map((w) => now - finderSeen.get(w.id)));
+  const oldest = Math.max(...young.map((w) => now - finderSeen.get(w.id)!));
   clearTimeout(holdTimer);
   holdTimer = setTimeout(() => update({ apps: heldBack(rawApps) }), HOLD - oldest + 20);
   return apps.map((a) => (a === finder ? { ...a, windows: a.windows.filter((w) => !young.includes(w)) } : a));
 }
 
 // fn(apps) says whether new Finder windows are held back right now.
-function setHoldFinder(fn) {
+export function setHoldFinder(fn: (apps: TaskApp[]) => boolean) {
   holdFinder = fn;
 }
 
-function stop() {
+export function stop() {
   stopping = true;
   if (child) child.kill();
 }
 
 // Sends one command, for example { cmd: 'activate', id: 'w123' } or
 // { cmd: 'quitApp', pid: 501 }. Resolves to the helper's reply.
-function send(command) {
-  return new Promise((resolve) => {
+export function send(command: HelperCommand) {
+  return new Promise<HelperReply>((resolve) => {
     if (!child) return resolve({ ok: false, error: 'the helper is not running' });
     const id = ++seq;
     const timer = setTimeout(() => {
@@ -175,13 +207,13 @@ function send(command) {
 // Where the bars are, so the helper can move windows up off them, one area
 // per bar. An empty list stops it, for example while the bar is hidden or
 // the setting is off.
-function setKeepOff(areas) {
+export function setKeepOff(areas: KeepOffArea[]) {
   keepOff = { cmd: 'keepOff', areas: areas || [] };
   if (child) send(keepOff);
 }
 
 // Whether the helper also lists windows on other Spaces.
-function setSpaces(all) {
+export function setSpaces(all: boolean) {
   if (spaces.all === !!all) return;
   spaces = { cmd: 'spaces', all: !!all };
   if (child) send(spaces);
@@ -189,7 +221,7 @@ function setSpaces(all) {
 
 // Whether the helper reports every mouse down anywhere, see onClick. Used
 // while a preview is pinned open, to close it on a click elsewhere.
-function setWatchClicks(on) {
+export function setWatchClicks(on: boolean) {
   if (watchClicks.on === !!on) return;
   watchClicks = { cmd: 'watchClicks', on: !!on };
   if (child) send(watchClicks);
@@ -198,24 +230,12 @@ function setWatchClicks(on) {
 // Whether a click on a window that isn't in front brings it forward and
 // lands as a click. The helper's tap needs Accessibility, so main turns
 // this on only while the permission is there.
-function setClickThrough(on) {
+export function setClickThrough(on: boolean) {
   if (clickThrough.on === !!on) return;
   clickThrough = { cmd: 'clickThrough', on: !!on };
   if (child) send(clickThrough);
 }
 
-module.exports = {
-  start,
-  setKeepOff,
-  setSpaces,
-  setWatchClicks,
-  setClickThrough,
-  setHoldFinder,
-  heldBack, // for the tests
-  stop,
-  restart,
-  send,
-  get: () => state,
-  onChange: (fn) => events.on('change', fn),
-  onClick: (fn) => events.on('click', fn)
-};
+export const get = () => state;
+export const onChange = (fn: (state: Tasks) => void) => events.on('change', fn);
+export const onClick = (fn: (point: Point) => void) => events.on('click', fn);

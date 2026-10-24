@@ -25,9 +25,11 @@ function serve() {
 }
 
 // What the main process sends as state, with every setting at its default.
+// The defaults come from the built main process in dist (test:pages builds
+// first), since Cypress can't load the TypeScript source.
 function startbarState() {
   require('../support/electron');
-  const { DEFAULTS } = require('../../src/main/settings');
+  const { DEFAULTS } = require('../../dist/main/settings');
   return {
     settings: JSON.parse(JSON.stringify(DEFAULTS)),
     pins: [],

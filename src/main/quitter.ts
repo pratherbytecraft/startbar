@@ -9,24 +9,25 @@
 // last window in the same list: the window list can come back empty for
 // every app at once behind the lock screen, and that isn't a person closing
 // windows.
-const { execFile } = require('child_process');
-const tasks = require('./tasks');
-const settings = require('./settings');
+import { execFile } from 'child_process';
+import * as tasks from './tasks';
+import * as settings from './settings';
+import type { TaskApp, Tasks } from '../shared/types';
 
-const ALWAYS = new Set(['com.apple.finder', 'com.pratherbytecraft.filedrawer', 'com.pratherbytecraft.startbar']);
+export const ALWAYS = new Set(['com.apple.finder', 'com.pratherbytecraft.filedrawer', 'com.pratherbytecraft.startbar']);
 const WAIT = 1000;
 const AFTER_UNLOCK = 5000; // windows take a moment to show again
 
 let lockedUntil = 0; // Infinity while the screen is locked
 
-const last = new Map(); // pid -> the window ids in the previous list
-const timers = new Map(); // pid -> the wait before quitting it
+const last = new Map<number, string[]>(); // pid -> the window ids in the previous list
+const timers = new Map<number, NodeJS.Timeout>(); // pid -> the wait before quitting it
 
-function leftRunning(app) {
+function leftRunning(app: TaskApp) {
   return ALWAYS.has(app.bundleId) || settings.get().quitApps.keepRunning.includes(app.path);
 }
 
-function cancel(pid) {
+function cancel(pid: number) {
   clearTimeout(timers.get(pid));
   timers.delete(pid);
 }
@@ -36,15 +37,15 @@ function locked() {
 }
 
 // From the main process, when the screen locks and unlocks.
-function setLocked(on) {
+export function setLocked(on: boolean) {
   lockedUntil = on ? Infinity : Date.now() + AFTER_UNLOCK;
   for (const pid of [...timers.keys()]) cancel(pid);
 }
 
-function watch(state) {
+function watch(state: Tasks) {
   const on = settings.get().quitApps.on && state.accessibility === true && !locked();
-  const alive = new Set();
-  const closed = []; // apps that lost their last window in this list
+  const alive = new Set<number>();
+  const closed: { pid: number; ids: string[] }[] = []; // apps that lost their last window in this list
   for (const app of state.apps) {
     alive.add(app.pid);
     const ids = app.windows.map((w) => w.id);
@@ -69,7 +70,7 @@ function watch(state) {
   }
 }
 
-async function quit(pid, ids) {
+async function quit(pid: number, ids: string[]) {
   timers.delete(pid);
   const state = tasks.get();
   const app = state.apps.find((a) => a.pid === pid);
@@ -85,7 +86,7 @@ async function quit(pid, ids) {
 // the settings window opens or comes forward; onChange runs when it differs.
 let swiftQuit = false;
 
-function checkSwiftQuit(onChange) {
+export function checkSwiftQuit(onChange: () => void) {
   execFile('pgrep', ['-x', 'Swift Quit'], (err) => {
     if (swiftQuit === !err) return;
     swiftQuit = !err;
@@ -93,8 +94,8 @@ function checkSwiftQuit(onChange) {
   });
 }
 
-function start() {
+export function start() {
   tasks.onChange(watch);
 }
 
-module.exports = { start, setLocked, checkSwiftQuit, swiftQuitRunning: () => swiftQuit, ALWAYS };
+export const swiftQuitRunning = () => swiftQuit;

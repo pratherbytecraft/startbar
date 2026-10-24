@@ -5,15 +5,15 @@
 // Startbar.app is opened through Launch Services (`open`), not run directly,
 // so macOS treats it as its own app. Run directly from Terminal, macOS would
 // check Terminal's Accessibility permission instead of Startbar's.
-const { spawn, spawnSync } = require('child_process');
-const path = require('path');
+import { spawn, spawnSync } from 'child_process';
+import path from 'path';
 
 if (process.platform !== 'darwin') {
   console.error('Startbar runs on macOS only.');
   process.exit(1);
 }
 
-const { appPath, build, BUNDLE_ID } = require('../scripts/build-app');
+import { appPath, build, BUNDLE_ID } from '../scripts/build-app';
 const args = process.argv.slice(2);
 const foreground = args.includes('--foreground');
 
@@ -28,7 +28,7 @@ function terminalPath() {
 
 // Fallback when the bundle wasn't built: plain Electron, shown as Electron.
 function runElectron() {
-  const electron = require('electron'); // the path to the Electron binary when required from Node
+  const electron: string = require('electron'); // the path to the Electron binary when required from Node
   const child = spawn(electron, [path.join(__dirname, '..', '..'), ...args], {
     detached: !foreground,
     stdio: foreground ? 'inherit' : 'ignore',
@@ -41,7 +41,7 @@ function runElectron() {
   }
 }
 
-function runBundle(bundle) {
+function runBundle(bundle: string) {
   const openArgs = ['-a', bundle];
   const tty = foreground ? terminalPath() : null;
   if (tty) openArgs.unshift('-W', '--stdout', tty, '--stderr', tty);

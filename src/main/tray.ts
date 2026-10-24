@@ -2,17 +2,28 @@
 // hidden, so there is always a way back. The glyph is drawn here as a
 // template image (a screen with a bar along the bottom), so macOS tints it
 // for the light or dark menu bar.
-const { Tray, Menu, nativeImage } = require('electron');
+import { Tray, Menu, nativeImage } from 'electron';
+import type { Settings } from '../shared/types';
 
 const SIZE = 18; // points
 const SCALE = 2;
 
-let tray = null;
+let tray: Tray | null = null;
+
+// What the menu bar icon's menu does, and whether the bar is hidden.
+export interface TrayActions {
+  hidden: boolean;
+  toggleBar: () => void;
+  openMenu: () => void;
+  settings: () => void;
+  about: () => void;
+  quit: () => void;
+}
 
 function glyph() {
   const px = SIZE * SCALE;
   const buf = Buffer.alloc(px * px * 4);
-  const fill = (x0, y0, x1, y1) => {
+  const fill = (x0: number, y0: number, x1: number, y1: number) => {
     for (let y = y0; y < y1; y++) {
       for (let x = x0; x < x1; x++) buf.writeUInt32LE(0xff000000, (y * px + x) * 4);
     }
@@ -29,7 +40,7 @@ function glyph() {
 }
 
 // actions: { hidden, toggleBar, openMenu, settings, about, quit }
-function build(actions) {
+function build(actions: TrayActions) {
   return Menu.buildFromTemplate([
     actions.hidden
       ? { label: 'Show the Bar', click: actions.toggleBar }
@@ -45,7 +56,7 @@ function build(actions) {
 
 // mode is the menuBarIcon setting: hidden (only while the bar is hidden) or
 // always.
-function update(mode, actions) {
+export function update(mode: Settings['menuBarIcon'], actions: TrayActions) {
   const show = actions.hidden || mode === 'always';
   if (!show) {
     if (tray) tray.destroy();
@@ -59,4 +70,3 @@ function update(mode, actions) {
   tray.setContextMenu(build(actions));
 }
 
-module.exports = { update };

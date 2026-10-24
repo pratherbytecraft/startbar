@@ -3,7 +3,11 @@ const assert = require('node:assert/strict');
 const { tempAppData } = require('../support/electron');
 const timers = require('../support/timers');
 const settings = require('../../src/main/settings');
-const tasks = require('../../src/main/tasks');
+// The quitter reaches the window list through tasks, whose exports are
+// read only now that it's TypeScript. A writable copy takes its place in
+// the module cache, so the quitter loads the copy and its stand-ins below.
+const tasks = { ...require('../../src/main/tasks') };
+require.cache[require.resolve('../../src/main/tasks')].exports = tasks;
 
 // The window list comes from these instead of the helper.
 let watcher = null;

@@ -1,17 +1,18 @@
 // Home folder search for the Start menu, through Spotlight (mdfind). Only
 // one search runs at a time; a new one stops the last.
-const { spawn } = require('child_process');
-const os = require('os');
-const path = require('path');
-const readline = require('readline');
+import { spawn, type ChildProcess } from 'child_process';
+import os from 'os';
+import path from 'path';
+import readline from 'readline';
+import type { FileHit } from '../shared/types';
 
 const SHOWN = 8; // results in the menu
 const READ = 80; // lines read from mdfind before it's stopped
 
-let child = null;
+let child: ChildProcess | null = null;
 
 // Hidden folders, ~/Library, app bundles and node_modules are noise here.
-function keep(file, home) {
+function keep(file: string, home: string) {
   const rel = path.relative(home, file);
   if (!rel || rel.startsWith('..')) return false;
   const parts = rel.split(path.sep);
@@ -20,22 +21,22 @@ function keep(file, home) {
 }
 
 // Names that start with the search first, then shallower paths.
-function rank(list, q) {
+function rank(list: string[], q: string) {
   const lower = q.toLowerCase();
-  const score = (file) => (path.basename(file).toLowerCase().startsWith(lower) ? 0 : 1);
-  const depth = (file) => file.split(path.sep).length;
+  const score = (file: string) => (path.basename(file).toLowerCase().startsWith(lower) ? 0 : 1);
+  const depth = (file: string) => file.split(path.sep).length;
   return list.sort((a, b) => score(a) - score(b) || depth(a) - depth(b) || a.localeCompare(b));
 }
 
 // Resolves to [{ path, name, where }], where is the folder it's in, as ~/...
-function search(query) {
+export function search(query: string): Promise<Omit<FileHit, 'icon'>[]> {
   if (child) child.kill();
   child = null;
   const q = String(query || '').trim();
   if (q.length < 2) return Promise.resolve([]);
   const home = os.homedir();
   return new Promise((resolve) => {
-    const found = [];
+    const found: string[] = [];
     const proc = spawn('mdfind', ['-onlyin', home, '-name', q]);
     child = proc;
     readline.createInterface({ input: proc.stdout }).on('line', (line) => {
@@ -53,4 +54,3 @@ function search(query) {
   });
 }
 
-module.exports = { search };

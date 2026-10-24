@@ -1,9 +1,9 @@
 // Compiles the Swift helper at install time. If swiftc is missing the install
 // still succeeds and Startbar runs in a reduced way (icons from Electron,
 // no window buttons), with a note in the log on how to get the full set.
-const { spawnSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import { spawnSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 
 // Two folders down from the package, in src/scripts and in dist/scripts.
 const root = path.join(__dirname, '..', '..');
@@ -16,11 +16,11 @@ const out = path.join(root, 'helper', 'startbar-helper');
 const statusApp = path.join(root, 'helper', 'status.noindex', 'Startbar.app');
 const statusBin = path.join(statusApp, 'Contents', 'MacOS', 'startbar-helper');
 
-function helperPath() {
+export function helperPath() {
   return fs.existsSync(out) ? out : null;
 }
 
-function statusHelperPath() {
+export function statusHelperPath() {
   return fs.existsSync(statusBin) ? statusBin : helperPath();
 }
 
@@ -57,7 +57,7 @@ function buildStatusApp() {
   return spawnSync('codesign', ['--force', '--sign', '-', `-r=${STATUS_RULE}`, statusApp]).status === 0;
 }
 
-function build({ quiet = false } = {}) {
+export function build({ quiet = false } = {}) {
   if (process.platform !== 'darwin') return null;
   const which = spawnSync('xcrun', ['--find', 'swiftc'], { encoding: 'utf8' });
   if (which.status !== 0) {
@@ -82,4 +82,3 @@ function build({ quiet = false } = {}) {
 
 if (require.main === module) build();
 
-module.exports = { build, helperPath, statusHelperPath };
