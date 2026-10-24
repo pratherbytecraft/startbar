@@ -406,6 +406,7 @@ export function hidePreview() {
   }
   if (preview && preview.isVisible()) preview.hide();
   for (const fn of hideHooks) fn();
+  syncBars();
 }
 
 // With previews on, a click on a group opens its pictures and keeps them
@@ -684,14 +685,16 @@ export function hidePopover() {
 // Hide the Bar wins. Over a full screen app (when the bars step aside for
 // those) and with auto hide on, a bar shows while the mouse is at its edge
 // or on it, or while something opened from it is up: the Start menu, a
-// group list, the calendar, a tray panel or a right click menu.
+// group list, the calendar, a tray panel, window previews or a right click
+// menu.
 function barWanted(entry: BarEntry) {
   if (barHidden) return false;
   if (!autoHide && !(fullScreenOn.has(entry.displayId) && !overFullScreen)) return true;
   if (entry.peek || entry.holds > 0) return true;
   const open = (win: BrowserWindow | null, anchorBar: BrowserWindow | null | undefined) => win && win.isVisible() && anchorBar === entry.win;
   return open(menu, menuBar) || open(group, groupAnchor && groupAnchor.bar)
-    || open(calendar, calendarAnchor && calendarAnchor.bar) || open(popover, popoverAnchor && popoverAnchor.bar);
+    || open(calendar, calendarAnchor && calendarAnchor.bar) || open(popover, popoverAnchor && popoverAnchor.bar)
+    || open(preview, previewAnchor && previewAnchor.bar);
 }
 
 // The bar fades in and out when it hides on its own (auto hide or a full
