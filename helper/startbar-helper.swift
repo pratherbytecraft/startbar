@@ -269,6 +269,9 @@ final class WindowWatcher {
     var counter = 0
     var lastLine = ""
     var keepOff: [(top: CGFloat, bottom: CGFloat, screen: CGRect)] = []
+    var screens: [CGRect] = [] // every display's frame, top left origin, from the last scan
+    var frontBounds: [(pid: pid_t, bounds: CGRect)] = [] // normal level windows on screen, front to back
+    var coverSeen = Set<String>() // borderless windows seen over a whole display, kept on the bar after
     var nudgeTried: [String: CGRect] = [:] // window id -> its frame after a move that didn't clear the bar
     var emitPending = false
     var allSpaces = false
@@ -546,11 +549,15 @@ final class WindowWatcher {
         var onScreen = Set<CGWindowID>()
         var all: [(pid_t, CGWindowID, CGRect)] = []
         var order: [(pid: pid_t, id: CGWindowID)] = []
+        var frontList: [(pid: pid_t, bounds: CGRect)] = []
         if let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
             for info in list {
                 guard let id = info[kCGWindowNumber as String] as? CGWindowID else { continue }
                 onScreen.insert(id)
-                if (info[kCGWindowLayer as String] as? Int) == 0, let pid = info[kCGWindowOwnerPID as String] as? pid_t { order.append((pid, id)) }
+                if (info[kCGWindowLayer as String] as? Int) == 0, let pid = info[kCGWindowOwnerPID as String] as? pid_t {
+                    order.append((pid, id))
+                    if let dict = info[kCGWindowBounds as String] as? NSDictionary, let bounds = CGRect(dictionaryRepresentation: dict) { frontList.append((pid, bounds)) }
+                }
             }
         }
         // A minimize is reported once its animation ends, and a scan during
@@ -558,6 +565,7 @@ final class WindowWatcher {
         // before.
         if let first = frontOrder.first, !order.contains(where: { $0.id == first.id }) { frontGone = (frontOrder, Date()) }
         frontOrder = order
+        frontBounds = frontList
         if let list = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
             for info in list {
                 guard (info[kCGWindowLayer as String] as? Int) == 0,
@@ -583,6 +591,12 @@ final class WindowWatcher {
             front = previous
         }
         let server = trusted ? windowServerList() : (onScreen: Set<CGWindowID>(), all: [])
+        let height = NSScreen.screens.first?.frame.height ?? 0
+        screens = NSScreen.screens.map { CGRect(x: $0.frame.minX, y: height - $0.frame.maxY, width: $0.frame.width, height: $0.frame.height) }
+        if trusted {
+            let ids = Set(server.all.map { "w\($0.id)" })
+            coverSeen = coverSeen.filter { ids.contains($0) }
+        }
         var out: [[String: Any]] = []
         var alive = Set<pid_t>()
         for app in regularApps() {
@@ -644,13 +658,23 @@ final class WindowWatcher {
                 return backOff(pid)
             }
             let subrole = subroleValue as? String
-            guard subrole == kAXStandardWindowSubrole || subrole == kAXDialogSubrole else { continue }
-            let standard = subrole == kAXStandardWindowSubrole
             let frame = axFrame(window)
             var windowId: CGWindowID = 0
             if _AXUIElementGetWindow(window, &windowId) != .success || windowId == 0, let frame {
                 windowId = server.all.first { $0.pid == pid && $0.bounds == frame }?.id ?? 0
             }
+            // Games draw their own full screen mode as a borderless window
+            // over the whole display, which macOS doesn't give a window
+            // type. Such a window counts as a full screen one, and keeps its
+            // button if it stops covering the display (a display change).
+            // Only a normal level window, not an app's overlay.
+            let covering = frame.map(coversScreen) ?? false
+            if subrole != kAXStandardWindowSubrole && subrole != kAXDialogSubrole {
+                guard windowId != 0, server.all.contains(where: { $0.id == windowId }),
+                      covering || coverSeen.contains("w\(windowId)") else { continue }
+                if covering { coverSeen.insert("w\(windowId)") }
+            }
+            let standard = subrole != kAXDialogSubrole
             // A window seen before keeps its place, even when it comes back as
             // a different element (listed now, found by token before).
             var item: Known
@@ -672,7 +696,7 @@ final class WindowWatcher {
             if !minimized || !seenBefore { item.standard = standard }
             after.append(item)
             let onScreen = windowId != 0 && server.onScreen.contains(windowId)
-            if onScreen, let frame { nudge(window, id: item.id, frame: frame) }
+            if onScreen, !covering, let frame { nudge(window, id: item.id, frame: frame) }
             out.append([
                 "id": item.id,
                 "order": item.order,
@@ -680,7 +704,7 @@ final class WindowWatcher {
                 "minimized": minimized,
                 "focused": focused.map { CFEqual($0, window) } ?? false,
                 "onScreen": onScreen,
-                "fullScreen": axBool(window, "AXFullScreen"),
+                "fullScreen": onScreen && (covering || axBool(window, "AXFullScreen")) && inFront(pid, frame),
                 "otherSpace": elsewhere[windowId].map { CFEqual($0, window) } ?? false,
                 "x": Int(frame?.origin.x ?? 0), "y": Int(frame?.origin.y ?? 0),
                 "w": Int(frame?.size.width ?? 0), "h": Int(frame?.size.height ?? 0)
@@ -691,6 +715,19 @@ final class WindowWatcher {
         busyUntil[pid] = nil
         busyCount[pid] = nil
         return out
+    }
+
+    // The app's windows are the frontmost on the display this frame is on,
+    // so a full screen window behind another app's window doesn't count.
+    func inFront(_ pid: pid_t, _ frame: CGRect?) -> Bool {
+        guard let frame, let display = screens.first(where: { $0.contains(CGPoint(x: frame.midX, y: frame.midY)) }) else { return true }
+        guard let top = frontBounds.first(where: { $0.bounds.width > 1 && $0.bounds.height > 1 && $0.bounds.intersects(display) }) else { return true }
+        return top.pid == pid
+    }
+
+    // A window over the whole of one display, menu bar row included.
+    func coversScreen(_ frame: CGRect) -> Bool {
+        screens.contains { frame.minX <= $0.minX + 1 && frame.minY <= $0.minY + 1 && frame.maxX >= $0.maxX - 1 && frame.maxY >= $0.maxY - 1 }
     }
 
     // Keeps a window off the bar. macOS has no way to reserve the space, so
@@ -805,13 +842,18 @@ final class WindowWatcher {
             return subrole == kAXStandardWindowSubrole || subrole == kAXDialogSubrole
         }
         if list.contains(where: isWindow) { return true }
+        // A game's borderless window has no window type but is still a window.
+        let server = windowServerList()
+        if list.contains(where: { window in
+            var id: CGWindowID = 0
+            return _AXUIElementGetWindow(window, &id) == .success && server.onScreen.contains(id) && server.all.contains { $0.id == id }
+        }) { return true }
         let displays = CGSCopyManagedDisplaySpaces(CGSMainConnectionID()) as? [[String: Any]] ?? []
         let current = Set(displays.compactMap { ($0["Current Space"] as? [String: Any])?["ManagedSpaceID"] as? Int })
         let placed = { (id: CGWindowID) -> Bool in
             let spaces = (CGSCopySpacesForWindows(CGSMainConnectionID(), 7, [id] as CFArray) as? [Int]) ?? []
             return !spaces.isEmpty && current.isDisjoint(with: spaces)
         }
-        let server = windowServerList()
         let mine = server.all.filter { $0.pid == pid }.map(\.id)
         if mine.contains(where: { ids.contains("w\($0)") && placed($0) }) { return true }
         return otherSpaceWindows(pid, listed: list, server: server).contains { placed($0.key) || axBool($0.value, kAXMinimizedAttribute) }
