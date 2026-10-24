@@ -4,7 +4,7 @@
 // (npm run test:helper does).
 const { spawn } = require('child_process');
 const readline = require('readline');
-const { helperPath } = require('../../scripts/build-helper');
+const { helperPath } = require('../../src/scripts/build-helper');
 
 function run(...args) {
   const bin = helperPath();

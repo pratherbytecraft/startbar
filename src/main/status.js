@@ -6,7 +6,7 @@
 const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 const readline = require('readline');
-const { statusHelperPath } = require('../../scripts/build-helper');
+const { statusHelperPath } = require('../scripts/build-helper');
 
 const events = new EventEmitter();
 let child = null;

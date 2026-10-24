@@ -10,3 +10,4 @@ npm-debug.log*
 bundle/
 test/cypress/screenshots/
 test/cypress/downloads/
+dist/

@@ -5,7 +5,8 @@ const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const root = path.join(__dirname, '..');
+// Two folders down from the package, in src/scripts and in dist/scripts.
+const root = path.join(__dirname, '..', '..');
 const src = path.join(root, 'helper', 'startbar-helper.swift');
 const out = path.join(root, 'helper', 'startbar-helper');
 // macOS gives the Location permission, which the Wi-Fi name needs, to the

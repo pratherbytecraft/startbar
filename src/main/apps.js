@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const readline = require('readline');
 const settings = require('./settings');
-const { helperPath } = require('../../scripts/build-helper');
+const { helperPath } = require('../scripts/build-helper');
 
 const APP_DIRS = [
   '/Applications',

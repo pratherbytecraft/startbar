@@ -25,8 +25,8 @@ const order = require('./order');
 // it stays the same across updates (see scripts/build-app.js).
 const PKG = require('../../package.json');
 const VERSION = PKG.version;
-const { helperPath } = require('../../scripts/build-helper');
-const { appPath } = require('../../scripts/build-app');
+const { helperPath } = require('../scripts/build-helper');
+const { appPath } = require('../scripts/build-app');
 
 // The line that updates this copy, for the About page: Homebrew keeps what
 // it installs in its Cellar folder, npm in a node_modules folder.

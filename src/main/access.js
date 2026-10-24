@@ -14,7 +14,7 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const settings = require('./settings');
-const { BUNDLE_ID } = require('../../scripts/build-app');
+const { BUNDLE_ID } = require('../scripts/build-app');
 
 const PANE = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility';
 

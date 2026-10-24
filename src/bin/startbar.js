@@ -29,7 +29,7 @@ function terminalPath() {
 // Fallback when the bundle wasn't built: plain Electron, shown as Electron.
 function runElectron() {
   const electron = require('electron'); // the path to the Electron binary when required from Node
-  const child = spawn(electron, [path.join(__dirname, '..'), ...args], {
+  const child = spawn(electron, [path.join(__dirname, '..', '..'), ...args], {
     detached: !foreground,
     stdio: foreground ? 'inherit' : 'ignore',
     env
