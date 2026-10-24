@@ -941,21 +941,34 @@ function dragOut(d: DragOut) {
 // Window pictures for the hover previews, from the window helper. A fresh
 // one is taken after a few seconds; until then the kept one is shown, so
 // moving back and forth between buttons is quick. A minimized window can't
-// be pictured, so it shows the last one taken, and Startbar takes one
-// right before it minimizes a window itself.
+// be pictured, so it shows the last one taken. The bar asks for one when
+// the mouse comes onto a window's button, so a click that minimizes it
+// finds one ready, and Startbar waits briefly for one otherwise.
 const PREVIEW_SIZE = { width: 190, height: 120 };
 const pictures = new Map<string, { image: string; at: number }>(); // window id -> { image, at }
+const taking = new Map<string, Promise<string | null>>(); // window id -> the picture on its way
 function takePicture(id: string) {
-  return tasks.send({ cmd: 'thumb', id, ...PREVIEW_SIZE }).then((reply) => {
+  const going = taking.get(id);
+  if (going) return going;
+  const next = tasks.send({ cmd: 'thumb', id, ...PREVIEW_SIZE }).then((reply) => {
+    taking.delete(id);
     if (!reply.ok || !reply.image) return null;
     pictures.delete(id);
     pictures.set(id, { image: reply.image, at: Date.now() });
     if (pictures.size > 60) pictures.delete(pictures.keys().next().value!); // there are 61
     return reply.image;
   });
+  taking.set(id, next);
+  return next;
+}
+function warmPicture(id: string) {
+  const kept = pictures.get(id);
+  if (screenNow !== 'allowed' || (kept && Date.now() - kept.at < 3000)) return;
+  takePicture(id);
 }
 async function minimize(command: WindowCommand) {
-  if (settings.get().taskbar.previews && screenNow === 'allowed') {
+  const kept = pictures.get(command.id);
+  if (settings.get().taskbar.previews && screenNow === 'allowed' && !(kept && Date.now() - kept.at < 10000)) {
     await Promise.race([takePicture(command.id), new Promise((r) => setTimeout(r, 400))]);
   }
   return tasks.send(command);
@@ -1007,6 +1020,7 @@ function wireIpc() {
   ipc.on('preview:pin', (e, payload) => pinPreview(payload, e.sender));
   ipc.on('preview:size', (_e, size) => windows.sizePreview(size));
   ipc.on('preview:leave', () => windows.leavePreview());
+  ipc.on('preview:warm', (_e, id) => warmPicture(id));
   ipc.on('preview:hover', (_e, on) => windows.hoverPreview(on));
   ipc.on('preview:hide', () => windows.hidePreview());
   ipc.handle('state', () => state());

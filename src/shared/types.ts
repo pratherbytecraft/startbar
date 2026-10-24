@@ -470,6 +470,7 @@ export interface Sends {
   'preview:show': [payload: PreviewPayload];
   'preview:pin': [payload: PreviewPayload];
   'preview:leave': [];
+  'preview:warm': [id: string];
   'preview:hide': [];
   'preview:hover': [on: boolean];
   'preview:peek': [id: string | null];
@@ -573,6 +574,7 @@ export interface StartbarApi {
   showPreview(payload: PreviewPayload): void;
   pinPreview(payload: PreviewPayload): void;
   leavePreview(): void;
+  warmPicture(id: string): void;
   hidePreview(): void;
   previewHover(on: boolean): void;
   previewPeek(id: string | null): void;

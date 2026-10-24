@@ -605,7 +605,10 @@
     });
     b.addEventListener('mouseenter', () => {
       if (moving || tasksEl.matches('.reordering, .regrouping')) return;
-      // With previews on, the preview has the title, so no tooltip.
+      // With previews on, the preview has the title, so no tooltip. A
+      // window that's on screen is pictured now, so a click that minimizes
+      // it doesn't wait for a picture.
+      if (previewsOn() && item.kind === 'window' && !item.win.minimized) api.warmPicture(item.win.id);
       if (previewsOn() && item.kind !== 'app') return schedulePreview(item, b);
       if (!state.settings.taskbar.titleOnHover) return;
       clearTimeout(tipTimer);

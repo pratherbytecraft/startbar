@@ -73,6 +73,7 @@ const api: StartbarApi = {
   showPreview: (payload) => send('preview:show', payload),
   pinPreview: (payload) => send('preview:pin', payload),
   leavePreview: () => send('preview:leave'),
+  warmPicture: (id) => send('preview:warm', id),
   hidePreview: () => send('preview:hide'),
   previewHover: (on) => send('preview:hover', on),
   previewPeek: (id) => send('preview:peek', id), // null puts things back
