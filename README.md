@@ -68,6 +68,8 @@ The tray shows Bluetooth, the volume, Wi-Fi and the battery next to the clock. C
 
 ![The calendar above the clock](https://raw.githubusercontent.com/pratherbytecraft/startbar/main/docs/screenshots/calendar-system.png)
 
+The bar steps aside for a full screen app, a game in its own full screen mode included. Move the mouse to the bottom edge to bring it up. This can be turned off on the Taskbar page.
+
 With more than one display, each display gets its own bar with that display's windows. The bar can also show windows from every Space, and clicking one switches to its Space.
 
 Open Startbar Settings from the Start menu or by right clicking the bar. Everything above is set there, with a preview of the bar that changes as you go. Settings also has Open at login (on from the first launch), export and import of your settings, and buttons that hide the Dock or move it to the bottom.

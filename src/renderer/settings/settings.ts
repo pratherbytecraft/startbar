@@ -176,7 +176,7 @@
           rows: [
             { label: 'Show Desktop strip at the right end', note: 'Click it to hide every app, and again to bring them back.',
               control: { type: 'toggle', key: 'taskbar.showDesktop' } },
-            { label: 'Hide the bar when an app is full screen', control: { type: 'toggle', key: 'taskbar.hideInFullScreen' } },
+            { label: 'Hide the bar when an app is full screen', note: 'Games in their own full screen mode count too. Move the mouse to the bottom edge to bring the bar up.', control: { type: 'toggle', key: 'taskbar.hideInFullScreen' } },
             { label: 'Hide the bar until the mouse reaches the bottom edge', note: 'The bar also comes up while the Start menu is open.',
               control: { type: 'toggle', key: 'taskbar.autoHide' } },
             { label: 'Move windows up when they would cover the bar', note: "macOS can't reserve space for the bar, so Startbar nudges windows instead.",

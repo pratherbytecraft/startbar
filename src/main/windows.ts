@@ -20,6 +20,9 @@ interface BarEntry {
   peek: boolean;
   peekTimer: NodeJS.Timeout | undefined;
   holds: number;
+  home: Rect; // where the bar sits when it's up
+  edgeSince: number | undefined; // when the mouse got to the bottom edge
+  fade: NodeJS.Timeout | undefined;
 }
 
 // The button a popup belongs to: where it is in its bar, and the bar, which
@@ -38,6 +41,8 @@ const POPOVER_WIDTH = 260;
 const TIP_MARGIN = 8; // room around the tooltip for its shadow
 const EDGE = 2; // auto hide: how close to the bottom the mouse has to get
 const LEAVE_DELAY = 600; // auto hide: how long the bar stays after the mouse leaves
+const REVEAL_DELAY = 350; // auto hide: how long the mouse rests at the edge before the bar comes up
+const BAR_FADE = 160; // how long the bar takes to fade in or out
 
 const preload = path.join(__dirname, '..', 'preload.js');
 const renderer = (name: string) => path.join(__dirname, '..', 'renderer', name, 'index.html');
@@ -184,13 +189,15 @@ function createBar(settings: Settings, display: Display) {
   });
   bar.setAlwaysOnTop(true, 'floating');
   onAllSpaces(bar);
-  const entry: BarEntry = { win: bar, displayId: display.id, peek: false, peekTimer: undefined, holds: 0 };
+  const entry: BarEntry = { win: bar, displayId: display.id, peek: false, peekTimer: undefined, holds: 0,
+    home: barBounds(settings, display), edgeSince: undefined, fade: undefined };
   bars.set(display.id, entry);
   bar.loadFile(renderer('bar'));
   bar.webContents.on('did-finish-load', () => sendPlace(entry));
   bar.once('ready-to-show', () => syncBar(entry));
   bar.on('closed', () => {
     clearTimeout(entry.peekTimer);
+    clearInterval(entry.fade);
     if (bars.get(entry.displayId) === entry) bars.delete(entry.displayId);
   });
   return bar;
@@ -214,7 +221,10 @@ function syncDisplays(settings: Settings) {
   for (const display of wanted) {
     const entry = bars.get(display.id);
     if (!entry) createBar(settings, display);
-    else entry.win.setBounds(barBounds(settings, display));
+    else {
+      entry.home = barBounds(settings, display);
+      entry.win.setBounds(entry.home);
+    }
   }
   for (const entry of bars.values()) sendPlace(entry);
 }
@@ -671,27 +681,77 @@ export function hidePopover() {
 
 // MARK: showing and hiding the bars
 
-// Hide the Bar wins, then a full screen app on that display when the bars
-// hide for those. With auto hide on, a bar shows while the mouse is at its
-// edge or on it, or while something opened from it is up: the Start menu,
-// a group list, the calendar, a tray panel or a right click menu.
+// Hide the Bar wins. Over a full screen app (when the bars step aside for
+// those) and with auto hide on, a bar shows while the mouse is at its edge
+// or on it, or while something opened from it is up: the Start menu, a
+// group list, the calendar, a tray panel or a right click menu.
 function barWanted(entry: BarEntry) {
-  if (barHidden || (fullScreenOn.has(entry.displayId) && !overFullScreen)) return false;
-  if (!autoHide) return true;
+  if (barHidden) return false;
+  if (!autoHide && !(fullScreenOn.has(entry.displayId) && !overFullScreen)) return true;
   if (entry.peek || entry.holds > 0) return true;
   const open = (win: BrowserWindow | null, anchorBar: BrowserWindow | null | undefined) => win && win.isVisible() && anchorBar === entry.win;
   return open(menu, menuBar) || open(group, groupAnchor && groupAnchor.bar)
     || open(calendar, calendarAnchor && calendarAnchor.bar) || open(popover, popoverAnchor && popoverAnchor.bar);
 }
 
+// The bar fades in and out when it hides on its own (auto hide or a full
+// screen app), and comes and goes at once otherwise. A fade changes only
+// how clear the window is, which macOS draws smoothly where moving the
+// window each frame stutters. Not with Reduce motion on.
+const fading = new Set<BarEntry>(); // bars fading out to hide
 function syncBar(entry: BarEntry) {
   if (entry.win.isDestroyed()) return;
   const want = barWanted(entry);
-  if (want && !entry.win.isVisible()) entry.win.showInactive();
-  else if (!want && entry.win.isVisible()) {
+  const fades = (autoHide || fullScreenOn.has(entry.displayId)) && !barHidden
+    && !systemPreferences.getAnimationSettings().prefersReducedMotion;
+  if (want && (!entry.win.isVisible() || fading.has(entry))) {
+    if (!fades) {
+      stopFade(entry);
+      entry.win.setOpacity(1);
+      entry.win.showInactive();
+      return;
+    }
+    if (!entry.win.isVisible()) {
+      entry.win.setOpacity(0);
+      entry.win.showInactive();
+    }
+    fadeTo(entry, 1);
+  } else if (!want && entry.win.isVisible() && !fading.has(entry)) {
     if (tipAnchor && tipAnchor.bar === entry.win) hideTip();
-    entry.win.hide();
+    if (!fades) {
+      stopFade(entry);
+      entry.win.hide();
+      entry.win.setOpacity(1);
+      return;
+    }
+    fadeTo(entry, 0);
   }
+}
+
+function stopFade(entry: BarEntry) {
+  clearInterval(entry.fade);
+  entry.fade = undefined;
+  fading.delete(entry);
+}
+
+// Fades the bar from where it is now to clear or solid, easing out, and
+// hides it at the end of a fade to clear.
+function fadeTo(entry: BarEntry, to: 0 | 1) {
+  stopFade(entry);
+  if (to === 0) fading.add(entry);
+  const from = entry.win.getOpacity();
+  const start = Date.now();
+  entry.fade = setInterval(() => {
+    if (entry.win.isDestroyed()) return stopFade(entry);
+    const t = Math.min(1, (Date.now() - start) / BAR_FADE);
+    entry.win.setOpacity(from + (to - from) * (1 - (1 - t) ** 3));
+    if (t < 1) return;
+    stopFade(entry);
+    if (to === 0) {
+      entry.win.hide();
+      entry.win.setOpacity(1);
+    }
+  }, 1000 / 60);
 }
 
 function syncBars() {
@@ -706,8 +766,13 @@ function watchEdge() {
     const inX = p.x >= bounds.x && p.x < bounds.x + bounds.width;
     const inDisplay = inX && p.y >= bounds.y && p.y < bounds.y + bounds.height;
     const atEdge = inDisplay && p.y >= bounds.y + bounds.height - EDGE;
-    const onBar = inDisplay && entry.win.isVisible() && p.y >= entry.win.getBounds().y;
-    if (atEdge || onBar) {
+    const onBar = inDisplay && entry.win.isVisible() && !fading.has(entry) && p.y >= entry.home.y;
+    // The mouse rests at the edge a moment before the bar comes up, so
+    // passing by doesn't bring it.
+    if (!atEdge) entry.edgeSince = undefined;
+    else if (entry.edgeSince === undefined) entry.edgeSince = Date.now();
+    const rested = atEdge && Date.now() - entry.edgeSince! >= REVEAL_DELAY;
+    if (rested || onBar || (atEdge && entry.peek)) {
       clearTimeout(entry.peekTimer);
       entry.peekTimer = undefined;
       if (!entry.peek) {
@@ -724,9 +789,11 @@ function watchEdge() {
   }
 }
 
-function setAutoHide(on: boolean) {
-  if (!!on === autoHide) return;
-  autoHide = !!on;
+// The edge is watched while auto hide is on or a bar is stepping aside for
+// a full screen app.
+function syncEdgeWatch() {
+  const want = autoHide || (fullScreenOn.size > 0 && !overFullScreen);
+  if (want === !!edgeWatch) return;
   clearInterval(edgeWatch);
   edgeWatch = undefined;
   for (const entry of bars.values()) {
@@ -734,7 +801,13 @@ function setAutoHide(on: boolean) {
     entry.peekTimer = undefined;
     entry.peek = false;
   }
-  if (autoHide) edgeWatch = setInterval(watchEdge, 80);
+  if (want) edgeWatch = setInterval(watchEdge, 80);
+}
+
+function setAutoHide(on: boolean) {
+  if (!!on === autoHide) return;
+  autoHide = !!on;
+  syncEdgeWatch();
   syncBars();
 }
 
@@ -757,6 +830,7 @@ export function holdBar(barWin: BrowserWindow | null) {
 function setOverFullScreen(show: boolean) {
   if (show === overFullScreen) return;
   overFullScreen = show;
+  syncEdgeWatch();
   syncBars();
 }
 
@@ -765,6 +839,7 @@ export function setFullScreenDisplays(ids: number[]) {
   const next = new Set(ids);
   if (next.size === fullScreenOn.size && [...next].every((id) => fullScreenOn.has(id))) return;
   fullScreenOn = next;
+  syncEdgeWatch();
   syncBars();
 }
 
@@ -773,7 +848,7 @@ export function barAreas() {
   if (barHidden) return [];
   return [...bars.values()].filter((e) => !e.win.isDestroyed()).map((entry) => {
     const display = displayById(entry.displayId);
-    return { top: display.workArea.y, bottom: entry.win.getBounds().y, screen: display.bounds };
+    return { top: display.workArea.y, bottom: entry.home.y, screen: display.bounds };
   });
 }
 
