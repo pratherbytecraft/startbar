@@ -23,7 +23,8 @@ const order = require('./order');
 
 // From the package, not app.getVersion(): Startbar.app carries no version so
 // it stays the same across updates (see scripts/build-app.js).
-const VERSION = require('../../package.json').version;
+const PKG = require('../../package.json');
+const VERSION = PKG.version;
 const { helperPath } = require('../../scripts/build-helper');
 const { appPath } = require('../../scripts/build-app');
 
@@ -1038,8 +1039,11 @@ function wireIpc() {
   ipcMain.on('settings:resetTheme', () => resetThemeSettings());
   ipcMain.on('settings:link', (_e, name) => {
     const links = {
+      website: 'https://pratherbytecraft.com',
+      github: PKG.homepage,
+      community: 'https://www.reddit.com/r/pratherbytecraft/',
       kofi: 'https://ko-fi.com/prathercc',
-      issues: 'https://github.com/pratherbytecraft/startbar/issues'
+      issues: PKG.bugs.url
     };
     if (links[name]) shell.openExternal(links[name]);
   });

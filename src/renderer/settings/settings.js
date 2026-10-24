@@ -837,39 +837,65 @@
     return out;
   }
 
+  // Startbar's own icon, from design/app-icon.svg.
+  const STARTBAR_ICON = '<svg viewBox="0 0 120 120"><defs><linearGradient id="ar1" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9fa8ff"/><stop offset=".55" stop-color="#5865F2"/><stop offset="1" stop-color="#4c46d6"/></linearGradient><linearGradient id="ag1" x1="0" y1="44" x2="0" y2="76" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#b6f47a"/><stop offset="1" stop-color="#2fae57"/></linearGradient></defs><circle cx="60" cy="60" r="54" fill="#0b0e1a" stroke="url(#ar1)" stroke-width="5"/><rect x="22" y="44" width="76" height="32" rx="16" fill="url(#ag1)"/><rect x="22" y="44" width="76" height="32" rx="16" fill="none" stroke="#0b0e1a" stroke-opacity=".25" stroke-width="2"/><circle cx="40" cy="60" r="8" fill="#0b0e1a"/><path d="M52 55 H84 M52 65 H74" stroke="#0b0e1a" stroke-width="5" stroke-linecap="round"/></svg>';
+
+  // The About page, the same as Shotdrawer's and Filedrawer's: the icon,
+  // name and version, the links, then Updates.
   function aboutPage() {
     const box = node('div', 'about');
-    const icon = node('div', 'icon');
-    icon.innerHTML = '<svg viewBox="0 0 20 20"><rect x="2" y="3" width="16" height="14" rx="2" fill="#fff"/><rect x="4.5" y="9" width="11" height="1.6" rx=".8" fill="#1c2541"/><rect x="4.5" y="12.2" width="7" height="1.6" rx=".8" fill="#1c2541"/></svg>';
-    const version = node('p');
+    const icon = node('div', 'logo');
+    icon.innerHTML = STARTBAR_ICON;
+    const version = node('div', 'ver');
     syncs.push(() => { version.textContent = 'Version ' + state.version; });
     const links = node('div', 'links');
-    const kofi = button({ text: 'Support on Ko-fi', click: () => api.openLink('kofi') });
-    kofi.classList.add('primary');
-    links.append(kofi, button({ text: 'Report an Issue', click: () => api.openLink('issues') }), button({ text: 'Check for Updates', click: () => api.checkUpdates() }));
-    const update = node('p', 'update');
+    for (const [key, text] of [['website', 'Website'], ['github', 'GitHub'], ['community', 'Community'], ['kofi', 'Ko-fi']]) {
+      const b = node('span', 'pill', text);
+      b.addEventListener('click', () => api.openLink(key));
+      links.append(b);
+    }
+    box.append(icon, node('div', 'name', 'Startbar'), node('div', 'by', 'by Prather Bytecraft'), version, links);
+
+    const updates = node('div', 'group');
+    const check = node('div', 'row');
+    const checkLbl = node('div', 'lbl', 'Updates');
+    const line = node('small');
+    checkLbl.append(line);
+    const checkCtl = node('div', 'ctl');
+    checkCtl.append(button({ text: 'Check Now', click: () => api.checkUpdates() }));
+    check.append(checkLbl, checkCtl);
     syncs.push(() => {
       const u = state.update || { state: 'idle' };
-      update.textContent = {
+      line.textContent = {
         checking: 'Checking…',
         current: 'Startbar is up to date.',
-        available: `Version ${u.latest} is available. Run the line below in Terminal, then quit Startbar and open it again.`,
-        failed: "Couldn't reach npm to check. Try again later."
-      }[u.state] || '';
-      update.classList.toggle('available', u.state === 'available');
+        available: `Version ${u.latest} is out. Run the line below in Terminal, then quit Startbar and open it again.`,
+        failed: "The check didn't go through. Try again in a bit."
+      }[u.state] || 'Startbar checks for a newer version now and then.';
+      line.classList.toggle('available', u.state === 'available');
     });
     // The line matches how this copy was installed, Homebrew or npm.
-    const install = node('p', 'install', 'Update with ');
+    const install = node('div', 'row');
+    const installLbl = node('div', 'lbl', 'Update with');
     const command = node('code');
+    const small = node('small');
+    small.append(command);
+    installLbl.append(small);
+    const installCtl = node('div', 'ctl');
     const copy = button({ text: 'Copy', click: () => {
       api.copyText(state.updateCommand);
       copy.textContent = 'Copied';
       setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
     } });
+    installCtl.append(copy);
+    install.append(installLbl, installCtl);
     syncs.push(() => { command.textContent = state.updateCommand; });
-    install.append(command, copy);
-    box.append(icon, node('h1', null, 'Startbar'), version, node('p', null, 'A taskbar for macOS. Free to use. Prather Bytecraft.'), links, update, install);
-    return box;
+    updates.append(check, install);
+    return [box, updates];
+  }
+
+  function copyright() {
+    return node('div', 'about-copy', '© 2026 Prather Bytecraft. All rights reserved.');
   }
 
   // The other two apps' icons, from their design/app-icon.svg.
@@ -948,7 +974,7 @@
     navEl.querySelectorAll('a').forEach((a) => a.classList.toggle('on', a.dataset.page === id));
     previewEl.classList.toggle('hidden', !!p.about || p.preview === false);
     reset();
-    const children = p.about ? [aboutPage(), ...siblingsGroup()] : groups(p.groups);
+    const children = p.about ? [...aboutPage(), ...siblingsGroup(), copyright()] : groups(p.groups);
     if (p.note) children.push(node('div', 'foot-note', p.note));
     draw(children, p.title);
     contentEl.scrollTop = 0;

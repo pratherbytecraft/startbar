@@ -120,17 +120,18 @@ input[type=range] { accent-color: var(--accent); width: 170px; }
 .paths.unused > .row.fixed { opacity: .25; }
 .paths + .row, .row + .paths > .row:first-child { border-top: 1px solid var(--row-line); }
 
-/* about */
-.about { text-align: center; padding: 20px 0 6px; }
-.about .icon { width: 84px; height: 84px; border-radius: 20px; margin: 0 auto 12px; background: linear-gradient(160deg, var(--accent), #5bc0be); box-shadow: 0 8px 20px rgba(0, 0, 0, .3); display: grid; place-items: center; }
-.about .icon svg { width: 46px; height: 46px; }
-.about h1 { font-size: 20px; margin: 0; }
-.about p { color: var(--muted); margin: 4px 0; font-size: 12px; }
-.about .links { display: flex; gap: 8px; justify-content: center; margin: 14px 0 6px; }
-.about p.update { min-height: 16px; }
-.about p.update.available { color: var(--text); font-weight: 600; }
-.about code { font-family: ui-monospace, Menlo, monospace; font-size: 11px; user-select: text; }
-.about p.install { display: flex; align-items: center; justify-content: center; gap: 8px; }
+/* about, the same as Shotdrawer's and Filedrawer's */
+.about { text-align: center; padding: 26px 20px 14px; }
+.about .logo svg { width: 84px; height: 84px; display: block; margin: 0 auto; }
+.about .name { font-size: 22px; font-weight: 700; margin-top: 8px; }
+.about .by { font-weight: 500; margin-top: 2px; background: linear-gradient(90deg, #9fa8ff, #5865F2); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.about .ver { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.about .links { display: flex; justify-content: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.about .pill { padding: 5px 12px; border-radius: 14px; background: rgba(128, 128, 128, .18); font-size: 12px; font-weight: 500; cursor: default; }
+.about .pill:hover { background: rgba(128, 128, 128, .28); }
+.row .lbl small.available { color: var(--text); font-weight: 600; }
+.row .lbl code { font-family: ui-monospace, Menlo, monospace; font-size: 11px; user-select: text; }
+.about-copy { text-align: center; font-size: 11px; color: var(--muted); margin: 22px 0 6px; }
 .sib .sib-icon { width: 36px; height: 36px; flex: none; }
 .sib .sib-icon svg { width: 100%; height: 100%; display: block; }
 .sib .lbl { font-weight: 600; }

@@ -122,11 +122,22 @@ describe('settings window', () => {
       state.update = { state: 'available', latest: '9.9.10' };
     });
     open('About');
-    cy.contains('#pages .update', 'Version 9.9.10 is available. Run the line below in Terminal, then quit Startbar and open it again.');
-    cy.get('#pages .install code').should('have.text', 'brew upgrade startbar');
-    cy.get('#pages .install').contains('.btn', 'Copy').click();
+    cy.contains('#pages .row', 'Updates').should('contain', 'Version 9.9.10 is out. Run the line below in Terminal, then quit Startbar and open it again.');
+    cy.contains('#pages .row', 'Update with').find('code').should('have.text', 'brew upgrade startbar');
+    cy.contains('#pages .row', 'Update with').contains('.btn', 'Copy').click().should('have.text', 'Copied');
     cy.calls('copyText').should('deep.equal', [['brew upgrade startbar']]);
-    cy.get('#pages .install .btn').should('have.text', 'Copied');
+    cy.contains('#pages .row', 'Updates').contains('.btn', 'Check Now').click();
+    cy.calls('checkUpdates').should('have.length', 1);
+  });
+
+  it('About has the icon, version and the four links', () => {
+    cy.page('settings/index.html');
+    open('About');
+    cy.get('#pages .about .logo svg').should('exist');
+    cy.get('#pages .about .by').should('have.text', 'by Prather Bytecraft');
+    for (const name of ['Website', 'GitHub', 'Community', 'Ko-fi']) cy.contains('#pages .about .pill', name).click();
+    cy.calls('openLink').should('deep.equal', [['website'], ['github'], ['community'], ['kofi']]);
+    cy.contains('#pages .about-copy', 'All rights reserved.');
   });
 
   it('the tray\'s Shotdrawer switch shows only once Shotdrawer is installed', () => {
